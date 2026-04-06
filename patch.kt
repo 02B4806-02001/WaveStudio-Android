@@ -1,0 +1,6 @@
+package com.example.oscope
+// ... (imports) ...
+internal class NewTriggerEngine(
+    private val nominalWindowSize: Int = 512,
+) {
+    // ...
