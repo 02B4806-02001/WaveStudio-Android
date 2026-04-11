@@ -492,10 +492,10 @@ fun OscopeApp(
     var filteredDisplayScale by remember { mutableStateOf(ampScale) }
 
     // ===== 竖屏：两条波形高度可调（标题行控件） =====
-    val waveHeightMin = 60
+    val waveHeightMin = 50
     val waveHeightMax = 150
     val waveHeightStep = 10
-    var rawWaveHeightDp by remember { mutableIntStateOf(90) }
+    var rawWaveHeightDp by remember { mutableIntStateOf(80) }
     var filteredWaveHeightDp by remember { mutableIntStateOf(110) }
 
     fun clampWaveHeight(v: Int): Int {
@@ -809,6 +809,7 @@ fun OscopeApp(
 
                 OutlinedButton(
                     onClick = { showRefRaw = !showRefRaw },
+                    modifier = Modifier.height(36.dp),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(if (showRefRaw) "隐藏" else "显示", color = Color.Black)
@@ -916,6 +917,7 @@ fun OscopeApp(
 
                 OutlinedButton(
                     onClick = { showRefFiltered = !showRefFiltered },
+                    modifier = Modifier.height(36.dp),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(if (showRefFiltered) "隐藏" else "显示", color = Color.Black)
@@ -1680,6 +1682,33 @@ fun OscopeApp(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
+                            text = "测试模式",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.widthIn(min = 64.dp)
+                        )
+                        Box {
+                            OutlinedButton(
+                                onClick = { audioViewModel.toggleVvvfTestSignal() },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(if (useTestSignal) "测试中" else "测试")
+                            }
+                        }
+
+                        Text(
+                            text = "使用静态测试信号",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
                             text = "测试波形",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.widthIn(min = 64.dp)
@@ -1708,34 +1737,7 @@ fun OscopeApp(
                         }
 
                         Text(
-                            text = "可切换SPWM异步调制或同步1分频",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "测试模式",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.widthIn(min = 64.dp)
-                        )
-                        Box {
-                            OutlinedButton(
-                                onClick = { audioViewModel.toggleVvvfTestSignal() },
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text(if (useTestSignal) "测试中" else "测试")
-                            }
-                        }
-
-                        Text(
-                            text = "点击切换测试信号（SPWM）",
+                            text = "可切换异步SPWM或方波调制",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                             modifier = Modifier.weight(1f)
@@ -2658,7 +2660,7 @@ private fun CaptureDiagnosticsLine(
                 "%.1f",
                 waveformFps
             )
-        } read=$lastReadSamples max=$lastMaxAbsPcm",
+        } read=$lastReadSamples max=$lastMaxAbsPcm/32767",
         style = MaterialTheme.typography.bodySmall,
         color = if (audioInputAlive) Color(0xFF2E7D32) else Color(0xFFC62828),
         modifier = modifier.fillMaxWidth()

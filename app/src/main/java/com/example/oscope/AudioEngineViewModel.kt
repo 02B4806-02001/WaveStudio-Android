@@ -334,7 +334,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         val modulationAmp: Float,
     ) {
         SPWM_18("异步SPWM", 18f, 0.5f),
-        SPWM_3_M2_5("同步1分频", 3f, 2.5f),
+        SPWM_3_M2_5("方波调制", 3f, 2.5f),
     }
 
     private val _testSignalPreset = MutableStateFlow(TestSignalPreset.SPWM_18)
