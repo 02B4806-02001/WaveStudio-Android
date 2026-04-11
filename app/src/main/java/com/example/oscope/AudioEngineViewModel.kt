@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.nio.ByteOrder
 import kotlin.math.PI
 import kotlin.math.abs
@@ -54,6 +56,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         private const val KEY_RECORDING_FORMAT = "recording_format"
         private const val KEY_RECORDING_SAMPLE_RATE = "recording_sample_rate"
         private const val KEY_WAVEFORM_PUBLISH_RATE_HZ = "waveform_publish_rate_hz"
+
+        fun maxEqQForGainDb(gainDb: Float): Float {
+            val a = abs(gainDb).coerceAtLeast(1e-3f)
+            val a20 = 10f.pow(a / 20f)
+            val a40 = 10f.pow(a / 40f)
+            val denom = (a40 - 1f).let { it * it }
+            if (denom <= 1e-6f) return 100f
+            return (((a20 + 1f) / denom) - 0.03f).coerceAtLeast(0.2f)
+        }
     }
 
     enum class PublishRateOption(val hz: Int) {
@@ -168,7 +179,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
-    private var _triggerEnabled = false
+    @Volatile private var _triggerEnabled = false
     fun setTriggerEnabled(enabled: Boolean) {
         _triggerEnabled = enabled
     }
@@ -183,13 +194,13 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     val recordings: StateFlow<List<RecordedClip>> = _recordings.asStateFlow()
 
     // 低通/高通：统一从 EQ bands(L/H) 派生（仍保留这四个 StateFlow 以兼容 MainActivity 现有 UI）
-    private val _lowPassEnabled = MutableStateFlow(false)
+    private val _lowPassEnabled = MutableStateFlow(true)
     val lowPassEnabled: StateFlow<Boolean> = _lowPassEnabled.asStateFlow()
 
     private val _lowPassCutoff = MutableStateFlow(20000f)
     val lowPassCutoff: StateFlow<Float> = _lowPassCutoff.asStateFlow()
 
-    private val _highPassEnabled = MutableStateFlow(false)
+    private val _highPassEnabled = MutableStateFlow(true)
     val highPassEnabled: StateFlow<Boolean> = _highPassEnabled.asStateFlow()
 
     private val _highPassCutoff = MutableStateFlow(50f)
@@ -213,6 +224,30 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _publishedWaveformSpanMs = MutableStateFlow(20f)
     val publishedWaveformSpanMs: StateFlow<Float> = _publishedWaveformSpanMs.asStateFlow()
+
+    private val _publishedWaveformFps = MutableStateFlow(0f)
+    val publishedWaveformFps: StateFlow<Float> = _publishedWaveformFps.asStateFlow()
+
+    private var waveformPublishWindowStartMs = 0L
+    private var waveformPublishFrameCount = 0
+
+    private fun resetWaveformPublishStats() {
+        waveformPublishWindowStartMs = 0L
+        waveformPublishFrameCount = 0
+        _publishedWaveformFps.value = 0f
+    }
+
+    private fun markWaveformPublished() {
+        val nowMs = SystemClock.elapsedRealtime()
+        if (waveformPublishWindowStartMs == 0L) waveformPublishWindowStartMs = nowMs
+        waveformPublishFrameCount++
+        val elapsedMs = nowMs - waveformPublishWindowStartMs
+        if (elapsedMs >= 500L) {
+            _publishedWaveformFps.value = (waveformPublishFrameCount * 1000f / elapsedMs).coerceAtLeast(0f)
+            waveformPublishFrameCount = 0
+            waveformPublishWindowStartMs = nowMs
+        }
+    }
 
     // ===== UI state: EQ graph dragging (to disable surrounding scroll while dragging nodes) =====
     private val _eqGraphDragging = MutableStateFlow(false)
@@ -327,16 +362,16 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         val q: Float = DEFAULT_EQ_Q,
     )
 
-    private val _eqEnabled = MutableStateFlow(false)
+    private val _eqEnabled = MutableStateFlow(true)
     val eqEnabled: StateFlow<Boolean> = _eqEnabled.asStateFlow()
 
     private val _eqBands = MutableStateFlow(
         listOf(
             // Keep original 4-band EQ layout (do not change defaults)
-            EqBand(id = 0, label = "1", type = EqBandType.PEAK, enabled = false, freqHz = 50f, gainDb = 0f, q = DEFAULT_EQ_Q),
-            EqBand(id = 1, label = "2", type = EqBandType.PEAK, enabled = false, freqHz = 300f, gainDb = 0f, q = DEFAULT_EQ_Q),
-            EqBand(id = 2, label = "3", type = EqBandType.PEAK, enabled = false, freqHz = 1200f, gainDb = 0f, q = DEFAULT_EQ_Q),
-            EqBand(id = 3, label = "4", type = EqBandType.PEAK, enabled = false, freqHz = 6000f, gainDb = 0f, q = DEFAULT_EQ_Q),
+            EqBand(id = 0, label = "1", type = EqBandType.LOW_SHELF, enabled = true, freqHz = 200f, gainDb = 0f, q = 0.3f),
+            EqBand(id = 1, label = "2", type = EqBandType.PEAK, enabled = true, freqHz = 800f, gainDb = 0f, q = 0.6f),
+            EqBand(id = 2, label = "3", type = EqBandType.PEAK, enabled = true, freqHz = 2000f, gainDb = 0f, q = 0.6f),
+            EqBand(id = 3, label = "4", type = EqBandType.HIGH_SHELF, enabled = true, freqHz = 5000f, gainDb = 0f, q = 0.3f),
         )
     )
     val eqBands: StateFlow<List<EqBand>> = _eqBands.asStateFlow()
@@ -366,12 +401,21 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun setEqBandGainDb(id: Int, gainDb: Float) {
-        _eqBands.update { list -> list.map { if (it.id == id) it.copy(gainDb = gainDb) else it } }
+        _eqBands.update { list ->
+            list.map { band ->
+                if (band.id != id) band
+                else band.copy(gainDb = gainDb.coerceIn(-24f, 24f))
+            }
+        }
     }
 
     fun setEqBandQ(id: Int, q: Float) {
-        val safeQ = q.coerceIn(0.2f, 6f)
-        _eqBands.update { list -> list.map { if (it.id == id) it.copy(q = safeQ) else it } }
+        _eqBands.update { list ->
+            list.map { band ->
+                if (band.id != id) band
+                else band.copy(q = q.coerceIn(0.2f, 6f))
+            }
+        }
     }
 
     fun setEqBandType(id: Int, type: EqBandType) {
@@ -379,7 +423,16 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun resetEq() {
-        _eqBands.value = _eqBands.value.map { it.copy(enabled = false, gainDb = 0f, q = DEFAULT_EQ_Q) }
+        _eqEnabled.value = true
+        _eqBands.value = _eqBands.value.map { band ->
+            when (band.id) {
+                0 -> band.copy(type = EqBandType.LOW_SHELF, enabled = true, freqHz = 200f, gainDb = 0f, q = 0.3f)
+                1 -> band.copy(type = EqBandType.PEAK, enabled = true, freqHz = 800f, gainDb = 0f, q = 0.6f)
+                2 -> band.copy(type = EqBandType.PEAK, enabled = true, freqHz = 2000f, gainDb = 0f, q = 0.6f)
+                3 -> band.copy(type = EqBandType.HIGH_SHELF, enabled = true, freqHz = 5000f, gainDb = 0f, q = 0.3f)
+                else -> band.copy(enabled = true, gainDb = 0f, q = DEFAULT_EQ_Q)
+            }
+        }
     }
 
     // ===== Filtered recording (PCM -> filter -> AAC -> M4A) =====
@@ -483,16 +536,14 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         _isImportingAudio.value = true
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                val decoded = decodeAudioToMonoFloat(context, uri)
-                if (decoded.samples.isEmpty()) {
+                val decoded = decodeAudioToMonoTempPcm(context, uri)
+                if (!decoded.pcmFile.exists() || decoded.pcmFile.length() < 2L) {
                     _engineError.value = "导入失败：音频解码后为空"
+                    clearImportedSignalData(decoded)
                     return@launch
                 }
 
                 _engineError.value = null
-                importedSignalData = decoded
-                _importedAudioLabel.value = decoded.label
-
                 stopPlayback()
                 if (_isRecording.value) stopRecording()
                 stopVvvfTestJob()
@@ -501,6 +552,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 stopImportedSignalInput()
                 stopEngine()
 
+                importedSignalData = decoded
+                _importedAudioLabel.value = decoded.label
                 _useImportedSignal.value = true
                 _isRunning.value = true
                 startImportedSignalJob()
@@ -527,12 +580,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         _audioInputAlive.value = false
         _lastReadSamples.value = 0
         _lastMaxAbsPcm.value = 0
+        clearImportedSignalData(importedSignalData)
+        importedSignalData = null
     }
 
     fun startEngine(context: Context) {
         if (_isRunning.value) return
 
         _engineError.value = null
+        resetWaveformPublishStats()
 
         val granted = ContextCompat.checkSelfPermission(
             context,
@@ -948,23 +1004,31 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
                         // 监听开启时优先保流畅：降低每帧下采样点数与额外抓取长度。
                         val monitorOn = _isMonitoring.value
+                        val triggerArmed = _triggerEnabled
                         val extraPoints = when {
+                            monitorOn && triggerArmed -> 128
                             monitorOn -> 0
                             busyRealtimePath -> 96
                             else -> 192
                         }
-                        val targetPoints = if (monitorOn) 384 else 512 + extraPoints
+                        val targetPoints = when {
+                            monitorOn && triggerArmed -> 640
+                            monitorOn -> 384
+                            else -> 512 + extraPoints
+                        }
 
                         // We need more source samples to fill this larger target while keeping same time scale.
                         // windowSamples represents the user's "30ms" setting.
                         // We want to fetch 1.5 * 30ms so we have extra tail.
                         val extraSamplesRatio = when {
+                            monitorOn && triggerArmed -> 0.20f
                             monitorOn -> 0.0f
                             busyRealtimePath -> 0.20f
                             else -> 0.45f
                         }
                         val extraSamples = (windowSamples * extraSamplesRatio).toInt()
-                        val fetchSamples = min(ringSize, windowSamples + extraSamples)
+                        val minTriggerSamples = if (triggerArmed) 640 else 0
+                        val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
                         val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
                         val publishedSpanMs = if (windowSamples > 0) {
                             _windowMs.value * (fetchSamples.toFloat() / windowSamples.toFloat())
@@ -1011,6 +1075,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         _filteredWaveform.value = downFiltered
                         _immersiveFilteredWaveform.value = immersiveFiltered
                         _publishedWaveformSpanMs.value = publishedSpanMs.coerceAtLeast(_windowMs.value)
+                        markWaveformPublished()
                     }
 
                     // ===== 写入“滤波后音频”到录音文件（实时跟随参数变化） =====
@@ -1038,12 +1103,21 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     private data class ImportedAudioData(
         val sampleRate: Int,
-        val samples: FloatArray,
+        val pcmFile: File,
         val label: String,
     )
 
+    private fun clearImportedSignalData(data: ImportedAudioData?) {
+        val file = data?.pcmFile ?: return
+        try {
+            if (file.exists()) file.delete()
+        } catch (_: Throwable) {
+        }
+    }
+
     private fun startVvvfTestJob() {
         if (testJob != null) return
+        resetWaveformPublishStats()
         testJob = viewModelScope.launch(Dispatchers.Default) {
             // 固定 50Hz 基频：用当前 windowMs 来决定显示窗口
             while (isActive && _useTestSignal.value) {
@@ -1082,6 +1156,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 _filteredWaveform.value = downFiltered
                 _immersiveFilteredWaveform.value = immersiveFiltered
                 _publishedWaveformSpanMs.value = publishedSpanMs
+                markWaveformPublished()
 
                 _audioInputAlive.value = true
                 _lastReadSamples.value = samples.size
@@ -1101,13 +1176,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private fun startImportedSignalJob() {
         if (importedSignalJob != null) return
         val data = importedSignalData ?: return
+        resetWaveformPublishStats()
         importedSignalJob = viewModelScope.launch(Dispatchers.Default) {
+            var raf: RandomAccessFile? = null
             try {
-                val source = data.samples
-                if (source.isEmpty()) {
+                val sourceFile = data.pcmFile
+                val sourceBytes = sourceFile.length().coerceAtLeast(0L)
+                if (!sourceFile.exists() || sourceBytes < 2L) {
                     _useImportedSignal.value = false
                     return@launch
                 }
+
+                raf = RandomAccessFile(sourceFile, "r")
 
                 val importSampleRate = data.sampleRate.coerceAtLeast(8000)
                 sampleRate = importSampleRate
@@ -1167,19 +1247,44 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     return track
                 }
 
-                var srcPos = 0
                 var ringWrite = 0
                 var ringSize = 0
                 var lastUiUpdateAt = 0L
 
                 val chunkSize = inBlock.size
                 val chunk = FloatArray(chunkSize)
+                val chunkBytes = ByteArray(chunkSize * 2)
+                var filePosBytes = 0L
+
+                fun fillChunkBytes(): Int {
+                    val localRaf = raf ?: return 0
+                    var filled = 0
+                    while (filled < chunkBytes.size && isActive && _useImportedSignal.value) {
+                        if (filePosBytes >= sourceBytes) filePosBytes = 0L
+                        localRaf.seek(filePosBytes)
+                        val maxRead = minOf((sourceBytes - filePosBytes).toInt(), chunkBytes.size - filled)
+                        val read = localRaf.read(chunkBytes, filled, maxRead)
+                        if (read <= 0) {
+                            filePosBytes = 0L
+                            continue
+                        }
+                        filled += read
+                        filePosBytes += read.toLong()
+                    }
+                    return filled
+                }
 
                 while (isActive && _useImportedSignal.value) {
+                    val bytesRead = fillChunkBytes()
+                    if (bytesRead < chunkBytes.size) {
+                        if (bytesRead <= 0) break
+                    }
+
                     for (i in 0 until chunkSize) {
-                        chunk[i] = source[srcPos]
-                        srcPos++
-                        if (srcPos >= source.size) srcPos = 0
+                        val lo = chunkBytes[i * 2].toInt() and 0xFF
+                        val hi = chunkBytes[i * 2 + 1].toInt()
+                        val sample = ((hi shl 8) or lo).toShort().toInt()
+                        chunk[i] = (sample / 32768f).coerceIn(-1f, 1f)
                     }
 
                     var maxAbs = 0
@@ -1237,12 +1342,20 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     }
 
                     val track = ensureMonitorStarted()
+                    val monitorActive = track != null
                     if (track != null) {
                         try {
                             val out = filteredOutShort
                             val pcm = out ?: monitorSilence
-                            val written = track.write(pcm, 0, chunkSize, AudioTrack.WRITE_NON_BLOCKING)
-                            if (written < 0) throw IllegalStateException("AudioTrack.write failed: $written")
+                            var offset = 0
+                            while (offset < chunkSize) {
+                                val written = track.write(pcm, offset, chunkSize - offset)
+                                when {
+                                    written > 0 -> offset += written
+                                    written == 0 -> Thread.yield()
+                                    else -> throw IllegalStateException("AudioTrack.write failed: $written")
+                                }
+                            }
                         } catch (_: Throwable) {
                             try { track.release() } catch (_: Throwable) {}
                             monitorTrack = null
@@ -1294,6 +1407,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             _filteredWaveform.value = downFiltered
                             _immersiveFilteredWaveform.value = immersiveFiltered
                             _publishedWaveformSpanMs.value = publishedSpanMs.coerceAtLeast(_windowMs.value)
+                            markWaveformPublished()
                         }
                     }
 
@@ -1303,8 +1417,12 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         }
                     }
 
-                    // 导入输入没有 AudioRecord 的天然节流，统一按实时节拍推进，避免忙等导致卡顿。
-                    delay((chunkSize * 1000L / sampleRate).coerceAtLeast(8L))
+                    // 导入输入没有 AudioRecord 的天然节流：
+                    // - 有监听输出时交给 AudioTrack 的阻塞写入来节拍；
+                    // - 没监听时再用固定间隔避免忙等。
+                    if (!monitorActive) {
+                        delay((chunkSize * 1000L / sampleRate).coerceAtLeast(8L))
+                    }
                 }
             } finally {
                 _isRunning.value = false
@@ -1318,7 +1436,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         importedSignalJob = null
     }
 
-    private fun decodeAudioToMonoFloat(context: Context, uri: Uri): ImportedAudioData {
+    private fun decodeAudioToMonoTempPcm(context: Context, uri: Uri): ImportedAudioData {
         val extractor = MediaExtractor()
         val afd = context.contentResolver.openAssetFileDescriptor(uri, "r")
             ?: throw IllegalStateException("无法打开音频文件")
@@ -1350,90 +1468,97 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         val info = MediaCodec.BufferInfo()
         var sawInputEos = false
         var sawOutputEos = false
-
-        var out = FloatArray(262144)
-        var outLen = 0
         var outChannels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceAtLeast(1)
         var outSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceAtLeast(8000)
         var outEncoding = AudioFormat.ENCODING_PCM_16BIT
 
-        fun append(v: Float) {
-            if (outLen >= out.size) out = out.copyOf(out.size * 2)
-            out[outLen++] = v
-        }
+        val outFile = File.createTempFile("oscope_import_", ".pcm", context.cacheDir)
+        var success = false
 
         try {
-            while (!sawOutputEos) {
-                if (!sawInputEos) {
-                    val inIndex = codec.dequeueInputBuffer(10_000)
-                    if (inIndex >= 0) {
-                        val inBuf = codec.getInputBuffer(inIndex)
-                        if (inBuf != null) {
-                            val sampleSize = extractor.readSampleData(inBuf, 0)
-                            if (sampleSize < 0) {
-                                codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                                sawInputEos = true
-                            } else {
-                                codec.queueInputBuffer(inIndex, 0, sampleSize, extractor.sampleTime, 0)
-                                extractor.advance()
-                            }
-                        }
-                    }
+            FileOutputStream(outFile).buffered().use { out ->
+                fun writeSample(v: Float) {
+                    val pcm = (v.coerceIn(-1f, 1f) * 32767f).toInt().coerceIn(-32768, 32767)
+                    out.write(pcm and 0xFF)
+                    out.write((pcm ushr 8) and 0xFF)
                 }
 
-                when (val outIndex = codec.dequeueOutputBuffer(info, 10_000)) {
-                    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        val f = codec.outputFormat
-                        outChannels = f.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceAtLeast(1)
-                        outSampleRate = f.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceAtLeast(8000)
-                        outEncoding = if (f.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
-                            f.getInteger(MediaFormat.KEY_PCM_ENCODING)
-                        } else {
-                            AudioFormat.ENCODING_PCM_16BIT
-                        }
-                    }
-                    MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
-                    else -> if (outIndex >= 0) {
-                        val outBuf = codec.getOutputBuffer(outIndex)
-                        if (outBuf != null && info.size > 0) {
-                            val data = ByteArray(info.size)
-                            outBuf.position(info.offset)
-                            outBuf.limit(info.offset + info.size)
-                            outBuf.get(data)
-
-                            if (outEncoding == AudioFormat.ENCODING_PCM_FLOAT) {
-                                val bb = java.nio.ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
-                                val frameCount = info.size / (4 * outChannels)
-                                for (f in 0 until frameCount) {
-                                    var s = 0f
-                                    for (c in 0 until outChannels) s += bb.float
-                                    append((s / outChannels).coerceIn(-1f, 1f))
-                                }
-                            } else {
-                                val bb = java.nio.ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
-                                val frameCount = info.size / (2 * outChannels)
-                                for (f in 0 until frameCount) {
-                                    var s = 0f
-                                    for (c in 0 until outChannels) s += (bb.short.toInt() / 32768f)
-                                    append((s / outChannels).coerceIn(-1f, 1f))
+                while (!sawOutputEos) {
+                    if (!sawInputEos) {
+                        val inIndex = codec.dequeueInputBuffer(10_000)
+                        if (inIndex >= 0) {
+                            val inBuf = codec.getInputBuffer(inIndex)
+                            if (inBuf != null) {
+                                val sampleSize = extractor.readSampleData(inBuf, 0)
+                                if (sampleSize < 0) {
+                                    codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                    sawInputEos = true
+                                } else {
+                                    codec.queueInputBuffer(inIndex, 0, sampleSize, extractor.sampleTime, 0)
+                                    extractor.advance()
                                 }
                             }
                         }
-                        codec.releaseOutputBuffer(outIndex, false)
-                        if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) sawOutputEos = true
+                    }
+
+                    when (val outIndex = codec.dequeueOutputBuffer(info, 10_000)) {
+                        MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            val f = codec.outputFormat
+                            outChannels = f.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceAtLeast(1)
+                            outSampleRate = f.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceAtLeast(8000)
+                            outEncoding = if (f.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                                f.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                            } else {
+                                AudioFormat.ENCODING_PCM_16BIT
+                            }
+                        }
+                        MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
+                        else -> if (outIndex >= 0) {
+                            val outBuf = codec.getOutputBuffer(outIndex)
+                            if (outBuf != null && info.size > 0) {
+                                val data = ByteArray(info.size)
+                                outBuf.position(info.offset)
+                                outBuf.limit(info.offset + info.size)
+                                outBuf.get(data)
+
+                                if (outEncoding == AudioFormat.ENCODING_PCM_FLOAT) {
+                                    val bb = java.nio.ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+                                    val frameCount = info.size / (4 * outChannels)
+                                    for (f in 0 until frameCount) {
+                                        var s = 0f
+                                        for (c in 0 until outChannels) s += bb.float
+                                        writeSample(s / outChannels)
+                                    }
+                                } else {
+                                    val bb = java.nio.ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+                                    val frameCount = info.size / (2 * outChannels)
+                                    for (f in 0 until frameCount) {
+                                        var s = 0f
+                                        for (c in 0 until outChannels) s += (bb.short.toInt() / 32768f)
+                                        writeSample(s / outChannels)
+                                    }
+                                }
+                            }
+                            codec.releaseOutputBuffer(outIndex, false)
+                            if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) sawOutputEos = true
+                        }
                     }
                 }
+                success = true
             }
         } finally {
             try { codec.stop() } catch (_: Throwable) {}
             try { codec.release() } catch (_: Throwable) {}
             extractor.release()
             try { afd.close() } catch (_: Throwable) {}
+            if (!success) {
+                try { outFile.delete() } catch (_: Throwable) {}
+            }
         }
 
         return ImportedAudioData(
             sampleRate = outSampleRate,
-            samples = out.copyOf(outLen),
+            pcmFile = outFile,
             label = resolveDisplayName(context, uri),
         )
     }
@@ -1536,7 +1661,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         WAV(
             label = "wav",
             extension = "wav",
-            muxerFormat = MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4, // unused
+            muxerFormat = MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4,
             mimeType = "audio/raw",
             usesMuxer = false
         ),

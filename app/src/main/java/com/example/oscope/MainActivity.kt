@@ -193,8 +193,7 @@ fun OscopeApp(
     }
 
     // ===== 仅给沉浸模式用的最小状态集合（避免大量无关 state 更新导致全屏重组/掉帧） =====
-    val immersiveFilteredWaveform by audioViewModel.immersiveFilteredWaveform.collectAsStateWithLifecycle()
-    val immersiveRawWaveform by audioViewModel.rawWaveform.collectAsStateWithLifecycle()
+    val immersiveFilteredWaveform = audioViewModel.immersiveFilteredWaveform
     val immersiveWaveformSpanMs by audioViewModel.publishedWaveformSpanMs.collectAsStateWithLifecycle()
     val immersiveWindowMs by audioViewModel.windowMs.collectAsStateWithLifecycle()
     val immersiveAmpScale by audioViewModel.ampScale.collectAsStateWithLifecycle()
@@ -552,7 +551,7 @@ fun OscopeApp(
     val lowPassDisplayHz = rememberDisplayLowPass(
         target = lowPassDisplayHzTarget,
         resetKey = "lowPassHz",
-        alpha = 0.24f,
+        alpha = 0.44f,
         snapThreshold = 1f,
     )
 
@@ -562,7 +561,7 @@ fun OscopeApp(
     val highPassDisplayHz = rememberDisplayLowPass(
         target = highPassDisplayHzTarget,
         resetKey = "highPassHz",
-        alpha = 0.24f,
+        alpha = 0.44f,
         snapThreshold = 0.25f,
     )
 
@@ -661,7 +660,6 @@ fun OscopeApp(
                 landscapeLocked = landscapeLocked,
                 onToggleLock = { landscapeLocked = !landscapeLocked },
                 filteredWaveform = immersiveFilteredWaveform,
-                rawWaveform = immersiveRawWaveform,
                 useTestSignal = useTestSignal,
                 filteredDisplayScale = filteredDisplayScale,
                 showRefFiltered = showRefFiltered,
@@ -809,6 +807,15 @@ fun OscopeApp(
                     modifier = Modifier.weight(1f)
                 )
 
+                OutlinedButton(
+                    onClick = { showRefRaw = !showRefRaw },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(if (showRefRaw) "隐藏" else "显示", color = Color.Black)
+                }
+
+                Spacer(Modifier.width(8.dp))
+
                 // Height control (70..130, step 10)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
@@ -901,11 +908,20 @@ fun OscopeApp(
             ) {
                 Text(
                     // 处理后波形标题：仅显示缩放（与示例一致）
-                    text = "处理后波形 ${rawScaleText}x",
+                    text = "处理后波形 ${filteredScaleText}x",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
+
+                OutlinedButton(
+                    onClick = { showRefFiltered = !showRefFiltered },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(if (showRefFiltered) "隐藏" else "显示", color = Color.Black)
+                }
+
+                Spacer(Modifier.width(8.dp))
 
                 // Height control (70..130, step 10)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1107,7 +1123,7 @@ fun OscopeApp(
                                 useImportedSignal -> "音频输入"
                                 else -> "导入音频"
                             },
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis
@@ -1278,7 +1294,7 @@ fun OscopeApp(
                 // ===== 处理后增益（仅滑块，手势不再控制） =====
                 run {
                     val gainDb = gainToDb(filterGain)
-                    val displayGainDb = rememberDisplayLowPass(gainDb, resetKey = "filterGainDb", alpha = 0.24f, snapThreshold = 0.03f)
+                    val displayGainDb = rememberDisplayLowPass(gainDb, resetKey = "filterGainDb", alpha = 0.44f, snapThreshold = 0.03f)
                     val displayGainX = dbToGain(displayGainDb)
                     val gainDbText = String.format(Locale.US, "%+.1f", displayGainDb)
                     val gainXText = String.format(Locale.US, "%.1f", displayGainX)
@@ -1345,7 +1361,7 @@ fun OscopeApp(
 
                 // ===== 时间窗口（滑块 + 重置） =====
                 run {
-                    val displayWindowMs = rememberDisplayLowPass(windowMs, resetKey = "windowMs", alpha = 0.24f, snapThreshold = 0.05f)
+                    val displayWindowMs = rememberDisplayLowPass(windowMs, resetKey = "windowMs", alpha = 0.44f, snapThreshold = 0.05f)
                     val winText = if (displayWindowMs < 10f) String.format(Locale.US, "%.1f", displayWindowMs) else String.format(Locale.US, "%.0f", displayWindowMs)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1796,20 +1812,21 @@ fun OscopeApp(
                         modifier = Modifier.verticalScroll(aboutDialogScrollState),
                         verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text("Wave Studio v0.11.2 by 磁拾音器研究所")
+                        Text("Wave Studio v0.11.3 by 磁拾音器研究所")
                         Text("提示：使用前请授予麦克风权限。")
+                        Text("")
+                        Text("0.11.3版本主要更新内容如下：")
+                        Text("- 加回“显示/隐藏参考线”按钮")
+                        Text("- 滤波器与均衡器改为默认开启")
+                        Text("- 均衡器 Shelf 模式下限制有效Q值")
+                        Text("- 修复了一些情况下的掉帧问题")
+                        Text("- 修复了导入音频时监听卡顿的问题")
+                        Text("- 改动了一些细节")
                         Text("")
                         Text("0.11.2版本主要更新内容如下：")
                         Text("- 修复了监听模式卡顿的问题")
                         Text("")
-                        Text("0.11.1版本主要更新内容如下：")
-                        Text("- 导入音频可直接替换，无需停止")
-                        Text("- 去掉导入音频 5 分钟截断限制")
-                        Text("- 优化了导入后卡顿/断续问题")
-                        Text("- Trigger 模式帧率提高")
-                        Text("- 修复了均衡器Q值太大时的异常")
-                        Text("")
-                        Text("参与开发人员（B站名）：02B4806長-02001、某地铁迷_、莓喵の小风扇、TEG-28WG01等")
+                        Text("参与开发人员（B站名）：02B4806長-02001、某地铁迷_、莓喵の小风扇、TEP-28WG01等")
                         Text("")
                         Text("磁拾音器QQ交流群：762852552")
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1887,8 +1904,7 @@ private fun ImmersiveScreen(
     setLandscape: (Boolean) -> Unit,
     landscapeLocked: Boolean,
     onToggleLock: () -> Unit,
-    filteredWaveform: FloatArray,
-    rawWaveform: FloatArray,
+    filteredWaveform: StateFlow<FloatArray>,
     useTestSignal: Boolean,
     filteredDisplayScale: Float,
     showRefFiltered: Boolean,
@@ -1930,6 +1946,7 @@ private fun ImmersiveScreen(
     val currentGestureMode by rememberUpdatedState(gestureMode)
     val currentAmpScale by rememberUpdatedState(ampScale)
     val currentWindowMs by rememberUpdatedState(windowMs)
+    val filteredSamples by filteredWaveform.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val triggerPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -2114,8 +2131,7 @@ private fun ImmersiveScreen(
                 .padding(bottom = 12.dp, start = 12.dp, end = 12.dp)
         ) {
             val immersiveRef = filteredDisplayScale.coerceAtLeast(1e-4f)
-            val immersiveSamples = filteredWaveform
-            val triggeredWindowAndResult = buildTriggeredWindow(immersiveSamples, triggerMode, waveformSpanMs)
+            val triggeredWindowAndResult = buildTriggeredWindow(filteredSamples, triggerMode, waveformSpanMs)
             val displaySamples = triggeredWindowAndResult.first
             val triggerResult = triggeredWindowAndResult.second
 
@@ -2192,6 +2208,15 @@ private fun ImmersiveScreen(
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                 ) {
                     Text(if (triggerUseAutocorr) "增强·开" else "增强·关", color = Color.White)
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                OutlinedButton(
+                    onClick = onToggleShowRef,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Text(if (showRefFiltered) "隐藏参考线" else "显示参考线", color = Color.White)
                 }
             }
         } else {
@@ -2624,14 +2649,22 @@ private fun CaptureDiagnosticsLine(
     val audioInputAlive by audioViewModel.audioInputAlive.collectAsStateWithLifecycle()
     val lastReadSamples by audioViewModel.lastReadSamples.collectAsStateWithLifecycle()
     val lastMaxAbsPcm by audioViewModel.lastMaxAbsPcm.collectAsStateWithLifecycle()
+    val waveformFps by audioViewModel.publishedWaveformFps.collectAsStateWithLifecycle()
 
     Text(
-        text = "alive=$audioInputAlive read=$lastReadSamples maxAbs=$lastMaxAbsPcm ",
+        text = "wf_fps=${
+            String.format(
+                Locale.US,
+                "%.1f",
+                waveformFps
+            )
+        } read=$lastReadSamples max=$lastMaxAbsPcm",
         style = MaterialTheme.typography.bodySmall,
         color = if (audioInputAlive) Color(0xFF2E7D32) else Color(0xFFC62828),
         modifier = modifier.fillMaxWidth()
     )
 }
+
 
 // ===== Slider mapping helpers (top-level) =====
 fun sliderToHz(v01: Float, minHz: Float, maxHz: Float): Float {
@@ -2888,7 +2921,7 @@ private fun EqPanel(
     sampleRate: Int,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        var expanded by remember { mutableStateOf(true) }
+        var expanded by remember { mutableStateOf(false) }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2916,21 +2949,26 @@ private fun EqPanel(
 
         if (!enabled || !expanded) return
 
-        val freqMin = 5f
+        val freqMin = 20f
         val freqMax = 20000f
         val gainMin = -24f
         val gainMax = 24f
         val qMin = 0.2f
-        val qMax = 6f
 
         var selectedId by remember { mutableStateOf(bands.firstOrNull()?.id ?: 0) }
         LaunchedEffect(bands) {
             if (bands.none { it.id == selectedId } && bands.isNotEmpty()) selectedId = bands.first().id
         }
         val sel = bands.firstOrNull { it.id == selectedId } ?: return
-        val displaySelFreq = rememberDisplayLowPass(sel.freqHz, resetKey = "eq-freq-${sel.id}", alpha = 0.24f, snapThreshold = 0.2f)
-        val displaySelGainDb = rememberDisplayLowPass(sel.gainDb, resetKey = "eq-gain-${sel.id}", alpha = 0.24f, snapThreshold = 0.03f)
-        val displaySelQ = rememberDisplayLowPass(sel.q, resetKey = "eq-q-${sel.id}", alpha = 0.24f, snapThreshold = 0.01f)
+        val qMax = 6f
+        val effectiveSelQ = when (sel.type) {
+            AudioEngineViewModel.EqBandType.PEAK -> sel.q
+            AudioEngineViewModel.EqBandType.LOW_SHELF,
+            AudioEngineViewModel.EqBandType.HIGH_SHELF -> sel.q.coerceAtMost(AudioEngineViewModel.maxEqQForGainDb(sel.gainDb))
+        }
+        val displaySelFreq = rememberDisplayLowPass(sel.freqHz, resetKey = "eq-freq-${sel.id}", alpha = 0.44f, snapThreshold = 0.2f)
+        val displaySelGainDb = rememberDisplayLowPass(sel.gainDb, resetKey = "eq-gain-${sel.id}", alpha = 0.44f, snapThreshold = 0.03f)
+        val displaySelQ = rememberDisplayLowPass(effectiveSelQ, resetKey = "eq-q-${sel.id}", alpha = 0.44f, snapThreshold = 0.01f)
 
         EqResponseGraph(
             modifier = Modifier
@@ -3015,17 +3053,17 @@ private fun EqPanel(
 
                     DropdownMenu(expanded = modeMenu, onDismissRequest = { modeMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("Peak") },
-                            onClick = {
-                                modeMenu = false
-                                onBandType(sel.id, AudioEngineViewModel.EqBandType.PEAK)
-                            }
-                        )
-                        DropdownMenuItem(
                             text = { Text("Low Shelf") },
                             onClick = {
                                 modeMenu = false
                                 onBandType(sel.id, AudioEngineViewModel.EqBandType.LOW_SHELF)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Peak") },
+                            onClick = {
+                                modeMenu = false
+                                onBandType(sel.id, AudioEngineViewModel.EqBandType.PEAK)
                             }
                         )
                         DropdownMenuItem(
@@ -3112,7 +3150,7 @@ private fun EqPanel(
                 ) {
                     ClickToEditNumberText(
                         text = "Q ${String.format(Locale.US, "%.2f", displaySelQ)}",
-                        initialText = String.format(Locale.US, "%.2f", sel.q),
+                        initialText = String.format(Locale.US, "%.2f", effectiveSelQ),
                         title = "设置第${sel.label}段 Q",
                         unit = "Q",
                         parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(qMin, qMax) },
@@ -3232,8 +3270,12 @@ private fun computeEqResponse(bands: List<AudioEngineViewModel.EqBand>, freqs: F
     val coefs = bands.filter { it.enabled }
         .map { b ->
             val centerHz = b.freqHz.coerceAtLeast(1f)
-            val qOrSlope = b.q.coerceIn(0.01f, 50f)
             val gainDb = b.gainDb.coerceIn(-60f, 60f) // clamp wide just for computation
+            val qOrSlope = when (b.type) {
+                AudioEngineViewModel.EqBandType.PEAK -> b.q.coerceIn(0.01f, 6f)
+                AudioEngineViewModel.EqBandType.LOW_SHELF,
+                AudioEngineViewModel.EqBandType.HIGH_SHELF -> b.q.coerceIn(0.01f, 6f).coerceAtMost(AudioEngineViewModel.maxEqQForGainDb(gainDb))
+            }
 
             val w0 = (2f * PI.toFloat() * centerHz) / sampleRate.toFloat()
             val cosW0 = cos(w0)
