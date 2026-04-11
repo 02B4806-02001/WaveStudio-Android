@@ -194,13 +194,13 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     val recordings: StateFlow<List<RecordedClip>> = _recordings.asStateFlow()
 
     // 低通/高通：统一从 EQ bands(L/H) 派生（仍保留这四个 StateFlow 以兼容 MainActivity 现有 UI）
-    private val _lowPassEnabled = MutableStateFlow(true)
+    private val _lowPassEnabled = MutableStateFlow(false)
     val lowPassEnabled: StateFlow<Boolean> = _lowPassEnabled.asStateFlow()
 
     private val _lowPassCutoff = MutableStateFlow(20000f)
     val lowPassCutoff: StateFlow<Float> = _lowPassCutoff.asStateFlow()
 
-    private val _highPassEnabled = MutableStateFlow(true)
+    private val _highPassEnabled = MutableStateFlow(false)
     val highPassEnabled: StateFlow<Boolean> = _highPassEnabled.asStateFlow()
 
     private val _highPassCutoff = MutableStateFlow(50f)
@@ -927,11 +927,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     // Always display real microphone input.
 
                      // 写入 ring buffer（raw + filtered）。
-                     // 监听/录音路径已经做过实时滤波时，UI 直接复用该结果，避免重复整窗滤波导致掉帧。
+                     // 监听路径下优先复用 float 域的 filteredBlock，避免 short 量化回写导致波形细节损失。
                      for (i in 0 until read) {
                         val raw = (shortBuf[i] / 32768f).coerceIn(-1f, 1f)
-                        val filtered = if (needFilteredBlock && filteredOutShort != null) {
-                            (filteredOutShort[i] / 32768f).coerceIn(-1f, 1f)
+                        val filtered = if (needFilteredBlock) {
+                            filteredBlock[i].coerceIn(-1f, 1f)
                         } else {
                             raw
                         }
@@ -1002,18 +1002,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         // Simpler hack in View side implies we have the data.
                         // Currently we don't. 'downsamplePeakFloatArray' outputs exactly 'targetPoints'.
 
-                        // 监听开启时优先保流畅：降低每帧下采样点数与额外抓取长度。
+                        // 监听开启时也保持足够的显示密度，避免“波形像被低通/过度平滑”。
                         val monitorOn = _isMonitoring.value
                         val triggerArmed = _triggerEnabled
                         val extraPoints = when {
                             monitorOn && triggerArmed -> 128
-                            monitorOn -> 0
+                            monitorOn -> 128
                             busyRealtimePath -> 96
                             else -> 192
                         }
                         val targetPoints = when {
                             monitorOn && triggerArmed -> 640
-                            monitorOn -> 384
+                            monitorOn -> 512
                             else -> 512 + extraPoints
                         }
 
@@ -1022,7 +1022,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         // We want to fetch 1.5 * 30ms so we have extra tail.
                         val extraSamplesRatio = when {
                             monitorOn && triggerArmed -> 0.20f
-                            monitorOn -> 0.0f
+                            monitorOn -> 0.20f
                             busyRealtimePath -> 0.20f
                             else -> 0.45f
                         }

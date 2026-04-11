@@ -195,7 +195,6 @@ fun OscopeApp(
     // ===== 仅给沉浸模式用的最小状态集合（避免大量无关 state 更新导致全屏重组/掉帧） =====
     val immersiveFilteredWaveform = audioViewModel.immersiveFilteredWaveform
     val immersiveWaveformSpanMs by audioViewModel.publishedWaveformSpanMs.collectAsStateWithLifecycle()
-    val immersiveWindowMs by audioViewModel.windowMs.collectAsStateWithLifecycle()
     val immersiveAmpScale by audioViewModel.ampScale.collectAsStateWithLifecycle()
 
     val startupNoteText = "拾音器的倍率要满足两个波形的幅值均不能超过±0dB参考线，避免削波。" +
@@ -399,9 +398,8 @@ fun OscopeApp(
         return if (v < 100f) String.format(Locale.US, "%.0f", v) else v.toInt().toString()
     }
 
-    // ===== 0dB 参考线显示开关（竖屏默认隐藏） =====
-    var showRefRaw by remember { mutableStateOf(false) }
-    var showRefFiltered by remember { mutableStateOf(false) }
+    // ===== 0dB 参考线显示开关（竖屏默认开启） =====
+    var showRefWaveforms by rememberSaveable { mutableStateOf(true) }
 
     // ===== Recording settings UI state =====
     val recordingFormat by audioViewModel.recordingFormat.collectAsStateWithLifecycle()
@@ -495,8 +493,8 @@ fun OscopeApp(
     val waveHeightMin = 50
     val waveHeightMax = 150
     val waveHeightStep = 10
-    var rawWaveHeightDp by remember { mutableIntStateOf(80) }
-    var filteredWaveHeightDp by remember { mutableIntStateOf(110) }
+    var rawWaveHeightDp by rememberSaveable { mutableIntStateOf(80) }
+    var filteredWaveHeightDp by rememberSaveable { mutableIntStateOf(110) }
 
     fun clampWaveHeight(v: Int): Int {
         val clamped = v.coerceIn(waveHeightMin, waveHeightMax)
@@ -603,7 +601,7 @@ fun OscopeApp(
     val playingId by audioViewModel.playingId.collectAsStateWithLifecycle()
 
     // 录音列表弹窗状态
-    var showRecordList by remember { mutableStateOf(false) }
+    var showRecordList by rememberSaveable { mutableStateOf(false) }
 
     // 阶数选项：1..8（任意整数）
     val orderOptions = (1..8).toList()
@@ -662,8 +660,8 @@ fun OscopeApp(
                 filteredWaveform = immersiveFilteredWaveform,
                 useTestSignal = useTestSignal,
                 filteredDisplayScale = filteredDisplayScale,
-                showRefFiltered = showRefFiltered,
-                onToggleShowRef = { showRefFiltered = !showRefFiltered },
+                showRefWaveforms = showRefWaveforms,
+                onToggleShowRef = { showRefWaveforms = !showRefWaveforms },
                 ampMin = ampMin,
                 ampMax = ampMax,
                 windowMinMs = windowMinMs,
@@ -676,7 +674,6 @@ fun OscopeApp(
                 onGestureWindow = { gestureWindow = it },
                 gestureMode = gestureMode,
                 onGestureMode = { gestureMode = it },
-                windowMs = immersiveWindowMs,
                 waveformSpanMs = immersiveWaveformSpanMs,
                 ampScale = immersiveAmpScale,
                 onAmpScale = { v ->
@@ -807,14 +804,6 @@ fun OscopeApp(
                     modifier = Modifier.weight(1f)
                 )
 
-                OutlinedButton(
-                    onClick = { showRefRaw = !showRefRaw },
-                    modifier = Modifier.height(36.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(if (showRefRaw) "隐藏" else "显示", color = Color.Black)
-                }
-
                 Spacer(Modifier.width(8.dp))
 
                 // Height control (70..130, step 10)
@@ -896,7 +885,7 @@ fun OscopeApp(
                      samplesFlow = audioViewModel.rawWaveform,
                      ampScale = rawDisplayScale,
                      lineColor = Color.Blue,
-                     showReference = showRefRaw,
+                      showReference = showRefWaveforms,
                      referenceAmpNormalized = rawDisplayScale.coerceAtLeast(1e-4f),
                      referenceColor = Color(0x22000000),
                      modifier = Modifier.fillMaxSize()
@@ -914,14 +903,6 @@ fun OscopeApp(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-
-                OutlinedButton(
-                    onClick = { showRefFiltered = !showRefFiltered },
-                    modifier = Modifier.height(36.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(if (showRefFiltered) "隐藏" else "显示", color = Color.Black)
-                }
 
                 Spacer(Modifier.width(8.dp))
 
@@ -1002,7 +983,7 @@ fun OscopeApp(
                      samplesFlow = audioViewModel.filteredWaveform,
                      ampScale = filteredDisplayScale,
                      lineColor = Color.Red,
-                     showReference = showRefFiltered,
+                     showReference = showRefWaveforms,
                      referenceAmpNormalized = filteredDisplayScale.coerceAtLeast(1e-4f),
                      referenceColor = Color(0x22FF0000),
                      modifier = Modifier.fillMaxSize()
@@ -1552,129 +1533,10 @@ fun OscopeApp(
                     )
                 }
 
-                // ===== Recording format & sample rate (bottom of main page) =====
+                // ===== Test modes (top of this settings block) =====
                 run {
-                    var fmtMenu by remember { mutableStateOf(false) }
-                    val srOptions = listOf(16000, 22050, 32000, 44100, 48000)
-                    var srMenu by remember { mutableStateOf(false) }
-                    val publishRateOptions = AudioEngineViewModel.PublishRateOption.entries
-                    var publishRateMenu by remember { mutableStateOf(false) }
                     val testSignalOptions = AudioEngineViewModel.TestSignalPreset.entries
                     var testSignalMenu by remember { mutableStateOf(false) }
-
-                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "录音格式",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.widthIn(min = 64.dp)
-                        )
-                        Box {
-                            OutlinedButton(
-                                onClick = { fmtMenu = true },
-                                enabled = !isRecording,
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text(recordingFormat.label)
-                            }
-                            DropdownMenu(expanded = fmtMenu, onDismissRequest = { fmtMenu = false }) {
-                                listOf(
-                                    AudioEngineViewModel.RecordingFormat.WAV,
-                                    AudioEngineViewModel.RecordingFormat.M4A_AAC,
-                                ).forEach { fmt ->
-                                    DropdownMenuItem(
-                                        text = { Text(fmt.label) },
-                                        onClick = {
-                                            fmtMenu = false
-                                            audioViewModel.setRecordingFormat(fmt)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.weight(1f))
-
-                        Text(
-                            text = "采样率",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Box {
-                            OutlinedButton(
-                                onClick = { srMenu = true },
-                                enabled = !isRecording,
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text("${recordingSampleRate}Hz")
-                            }
-                            DropdownMenu(expanded = srMenu, onDismissRequest = { srMenu = false }) {
-                                srOptions.forEach { sr ->
-                                    DropdownMenuItem(
-                                        text = { Text("${sr}Hz") },
-                                        onClick = {
-                                            srMenu = false
-                                            audioViewModel.setRecordingSampleRate(sr)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (isRecording) {
-                        Text(
-                            text = "录音中无法修改格式/采样率",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "波形刷新率",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.widthIn(min = 64.dp)
-                        )
-                        Box {
-                            OutlinedButton(
-                                onClick = { publishRateMenu = true },
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text("${publishRateOption.hz}Hz")
-                            }
-                            DropdownMenu(
-                                expanded = publishRateMenu,
-                                onDismissRequest = { publishRateMenu = false }
-                            ) {
-                                publishRateOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text("${option.hz}Hz") },
-                                        onClick = {
-                                            publishRateMenu = false
-                                            audioViewModel.setPublishRateOption(option)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        Text(
-                            text = "越高越流畅，但更耗性能",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1738,6 +1600,147 @@ fun OscopeApp(
 
                         Text(
                             text = "可切换异步SPWM或方波调制",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+
+                    val fmtMenuState = remember { mutableStateOf(false) }
+                    val srMenuState = remember { mutableStateOf(false) }
+                    val publishRateMenuState = remember { mutableStateOf(false) }
+                    val srOptions = listOf(16000, 22050, 32000, 44100, 48000)
+                    val publishRateOptions = AudioEngineViewModel.PublishRateOption.entries
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "波形 0dB 参考线",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.widthIn(min = 64.dp)
+                        )
+                        Switch(
+                            checked = showRefWaveforms,
+                            onCheckedChange = { showRefWaveforms = it }
+                        )
+                        Text(
+                            text = if (showRefWaveforms) "显示" else "隐藏",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "录音格式",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.widthIn(min = 64.dp)
+                        )
+                        Box {
+                            OutlinedButton(
+                                onClick = { fmtMenuState.value = true },
+                                enabled = !isRecording,
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(recordingFormat.label)
+                            }
+                            DropdownMenu(expanded = fmtMenuState.value, onDismissRequest = { fmtMenuState.value = false }) {
+                                listOf(
+                                    AudioEngineViewModel.RecordingFormat.WAV,
+                                    AudioEngineViewModel.RecordingFormat.M4A_AAC,
+                                ).forEach { fmt ->
+                                    DropdownMenuItem(
+                                        text = { Text(fmt.label) },
+                                        onClick = {
+                                            fmtMenuState.value = false
+                                            audioViewModel.setRecordingFormat(fmt)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.weight(1f))
+
+                        Text(
+                            text = "采样率",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Box {
+                            OutlinedButton(
+                                onClick = { srMenuState.value = true },
+                                enabled = !isRecording,
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text("${recordingSampleRate}Hz")
+                            }
+                            DropdownMenu(expanded = srMenuState.value, onDismissRequest = { srMenuState.value = false }) {
+                                srOptions.forEach { sr ->
+                                    DropdownMenuItem(
+                                        text = { Text("${sr}Hz") },
+                                        onClick = {
+                                            srMenuState.value = false
+                                            audioViewModel.setRecordingSampleRate(sr)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (isRecording) {
+                        Text(
+                            text = "录音中无法修改格式/采样率",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "波形刷新率",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.widthIn(min = 64.dp)
+                        )
+                        Box {
+                            OutlinedButton(
+                                onClick = { publishRateMenuState.value = true },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text("${publishRateOption.hz}Hz")
+                            }
+                            DropdownMenu(
+                                expanded = publishRateMenuState.value,
+                                onDismissRequest = { publishRateMenuState.value = false }
+                            ) {
+                                publishRateOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text("${option.hz}Hz") },
+                                        onClick = {
+                                            publishRateMenuState.value = false
+                                            audioViewModel.setPublishRateOption(option)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = "越高越流畅，但更耗性能",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                             modifier = Modifier.weight(1f)
@@ -1814,8 +1817,13 @@ fun OscopeApp(
                         modifier = Modifier.verticalScroll(aboutDialogScrollState),
                         verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text("Wave Studio v0.11.3 by 磁拾音器研究所")
+                        Text("Wave Studio v0.11.4 by 磁拾音器研究所")
                         Text("提示：使用前请授予麦克风权限。")
+                        Text("")
+                        Text("0.11.4版本主要更新内容如下：")
+                        Text("- 滤波器改为默认关闭")
+                        Text("- 修复了监听模式卡顿的问题")
+                        Text("- 修复了一些其他 bug")
                         Text("")
                         Text("0.11.3版本主要更新内容如下：")
                         Text("- 加回“显示/隐藏参考线”按钮")
@@ -1824,9 +1832,6 @@ fun OscopeApp(
                         Text("- 修复了一些情况下的掉帧问题")
                         Text("- 修复了导入音频时监听卡顿的问题")
                         Text("- 改动了一些细节")
-                        Text("")
-                        Text("0.11.2版本主要更新内容如下：")
-                        Text("- 修复了监听模式卡顿的问题")
                         Text("")
                         Text("参与开发人员（B站名）：02B4806長-02001、某地铁迷_、莓喵の小风扇、TEP-28WG01等")
                         Text("")
@@ -1909,7 +1914,7 @@ private fun ImmersiveScreen(
     filteredWaveform: StateFlow<FloatArray>,
     useTestSignal: Boolean,
     filteredDisplayScale: Float,
-    showRefFiltered: Boolean,
+    showRefWaveforms: Boolean,
     onToggleShowRef: () -> Unit,
     ampMin: Float,
     ampMax: Float,
@@ -1923,7 +1928,6 @@ private fun ImmersiveScreen(
     onGestureWindow: (Float) -> Unit,
     gestureMode: Int,
     onGestureMode: (Int) -> Unit,
-    windowMs: Float,
     waveformSpanMs: Float,
     ampScale: Float,
     onAmpScale: (Float) -> Unit,
@@ -1947,7 +1951,6 @@ private fun ImmersiveScreen(
     val currentGestureWindow by rememberUpdatedState(gestureWindow)
     val currentGestureMode by rememberUpdatedState(gestureMode)
     val currentAmpScale by rememberUpdatedState(ampScale)
-    val currentWindowMs by rememberUpdatedState(windowMs)
     val filteredSamples by filteredWaveform.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val triggerPrefs = remember(context) {
@@ -2073,7 +2076,7 @@ private fun ImmersiveScreen(
                     onDragStart = {
                         onGestureOverlayVisible(true)
                         onGestureAmp(currentAmpScale)
-                        onGestureWindow(currentWindowMs)
+                        onGestureWindow(currentGestureWindow)
                         onGestureMode(0)
                     },
                     onDragEnd = {
@@ -2142,7 +2145,7 @@ private fun ImmersiveScreen(
                 ampScale = filteredDisplayScale,
                 lineColor = Color.White,
                 modifier = Modifier.fillMaxSize(),
-                showReferenceWhenBelow1x = showRefFiltered,
+                showReferenceWhenBelow1x = showRefWaveforms,
                 referenceAmpNormalized = immersiveRef,
                 referenceColor = Color(0x44FFFFFF),
                 referenceDashed = true,
@@ -2218,7 +2221,7 @@ private fun ImmersiveScreen(
                     onClick = onToggleShowRef,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                 ) {
-                    Text(if (showRefFiltered) "隐藏参考线" else "显示参考线", color = Color.White)
+                    Text(if (showRefWaveforms) "隐藏参考线" else "显示参考线", color = Color.White)
                 }
             }
         } else {
@@ -2923,7 +2926,7 @@ private fun EqPanel(
     sampleRate: Int,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        var expanded by remember { mutableStateOf(false) }
+        var expanded by rememberSaveable { mutableStateOf(false) }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
