@@ -306,7 +306,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     /** 引擎错误信息（用于直接在界面提示用户） */
     val engineError: StateFlow<String?> = _engineError.asStateFlow()
 
-     private val _filterGain = MutableStateFlow(1f)
+    private val _filterGain = MutableStateFlow(1f)
     /** 手动滤波增益（autoGain 关闭时使用；或者作为 autoGain 的额外倍率） */
     val filterGain: StateFlow<Float> = _filterGain.asStateFlow()
 
@@ -667,11 +667,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             monitorRecordFilter = RtBiquadCascade(sampleRate)
             val captureBufferBytes = chosenBufferBytes ?: return
             val monitorTargetBlockBytes = (sampleRate / 50) * 2 // 20ms, mono 16bit
-             if (requestedRate != sampleRate) {
-                 _engineError.value = "设备不支持 ${requestedRate}Hz，已自动切换到 ${sampleRate}Hz"
-             } else {
-                 _engineError.value = null
-             }
+            if (requestedRate != sampleRate) {
+                _engineError.value = "设备不支持 ${requestedRate}Hz，已自动切换到 ${sampleRate}Hz"
+            } else {
+                _engineError.value = null
+            }
 
             _audioInitOk.value = true
             _audioState.value = record.state
@@ -787,12 +787,12 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     val now = SystemClock.elapsedRealtime()
                     val significantChange =
                         alive != lastPublishedAlive ||
-                        readSamples != lastPublishedRead ||
-                        kotlin.math.abs(maxAbs - lastPublishedMaxAbs) >= 512
+                                readSamples != lastPublishedRead ||
+                                kotlin.math.abs(maxAbs - lastPublishedMaxAbs) >= 512
                     val publishIntervalMs = currentPublishIntervalMs()
                     val shouldPublish = force ||
-                        alive != lastPublishedAlive ||
-                        (significantChange && now - lastDiagPublishAt >= publishIntervalMs)
+                            alive != lastPublishedAlive ||
+                            (significantChange && now - lastDiagPublishAt >= publishIntervalMs)
                     if (!shouldPublish) return
 
                     lastDiagPublishAt = now
@@ -805,8 +805,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     _audioInputAlive.value = alive
                 }
 
-                 while (isActive && _isRunning.value) {
-                      val read = record.read(shortBuf, 0, readBlockSamples)
+                while (isActive && _isRunning.value) {
+                    val read = record.read(shortBuf, 0, readBlockSamples)
 
                     // 诊断节流输出：每 2s 打一次
                     val now = SystemClock.elapsedRealtime()
@@ -849,86 +849,86 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     consecutiveZeroReads = 0
 
                     // ===== 监听/录音共享：把当前 block 做滤波（用于监听输出 + 写入录音） =====
-                     val needFilteredBlock = _isMonitoring.value || (_isRecording.value && (recordingCodec != null || wavOut != null))
-                     if (needFilteredBlock) {
-                          try {
-                             // short -> float（复用 buffer）
-                              for (i in 0 until read) {
-                                 inBlock[i] = (shortBuf[i] / 32768f).coerceIn(-1f, 1f)
-                             }
+                    val needFilteredBlock = _isMonitoring.value || (_isRecording.value && (recordingCodec != null || wavOut != null))
+                    if (needFilteredBlock) {
+                        try {
+                            // short -> float（复用 buffer）
+                            for (i in 0 until read) {
+                                inBlock[i] = (shortBuf[i] / 32768f).coerceIn(-1f, 1f)
+                            }
 
-                             // 更新系数（如参数变化）并就地滤波
-                             monitorRecordFilter.update(
-                                 sampleRate = sampleRate,
-                                 lowPassEnabled = lowPassEnabled.value,
-                                 lowPassCutoffHz = lowPassCutoff.value,
-                                 lowPassOrder = lowPassOrder.value,
-                                 highPassEnabled = highPassEnabled.value,
-                                 highPassCutoffHz = highPassCutoff.value,
-                                 highPassOrder = highPassOrder.value,
-                                 filterGain = filterGain.value,
-                                 eqEnabled = eqEnabled.value,
-                                 eqBands = eqBands.value,
-                             )
-                             monitorRecordFilter.process(inBlock, filteredBlock, read)
+                            // 更新系数（如参数变化）并就地滤波
+                            monitorRecordFilter.update(
+                                sampleRate = sampleRate,
+                                lowPassEnabled = lowPassEnabled.value,
+                                lowPassCutoffHz = lowPassCutoff.value,
+                                lowPassOrder = lowPassOrder.value,
+                                highPassEnabled = highPassEnabled.value,
+                                highPassCutoffHz = highPassCutoff.value,
+                                highPassOrder = highPassOrder.value,
+                                filterGain = filterGain.value,
+                                eqEnabled = eqEnabled.value,
+                                eqBands = eqBands.value,
+                            )
+                            monitorRecordFilter.process(inBlock, filteredBlock, read)
 
-                             if (filteredOutShort == null || filteredOutShort.size < read) {
-                                 filteredOutShort = ShortArray(read)
-                             }
-                             val outShort = filteredOutShort
+                            if (filteredOutShort == null || filteredOutShort.size < read) {
+                                filteredOutShort = ShortArray(read)
+                            }
+                            val outShort = filteredOutShort
 
-                             for (i in 0 until read) {
+                            for (i in 0 until read) {
                                 val v = filteredBlock[i].coerceIn(-1f, 1f)
                                 outShort[i] = (v * 32767f).toInt().coerceIn(-32768, 32767).toShort()
-                             }
-                         } catch (_: Throwable) {
-                             filteredOutShort = null
-                         }
-                     } else {
-                         filteredOutShort = null
-                     }
+                            }
+                        } catch (_: Throwable) {
+                            filteredOutShort = null
+                        }
+                    } else {
+                        filteredOutShort = null
+                    }
 
-                      // 监听：尽早写 PCM 到 AudioTrack（减少延迟、避免后面处理阻塞）
-                      val track = ensureMonitorStarted()
-                      if (track != null) {
-                          try {
-                             // 监听：强制使用滤波后的数据（如果滤波失败，则静音这一帧，避免“回退原始”造成听感错乱）
-                             val out = filteredOutShort
-                             val pcm = out ?: monitorSilence
-                             var offset = 0
-                             while (offset < read) {
-                                 val written = track.write(pcm, offset, read - offset, AudioTrack.WRITE_NON_BLOCKING)
-                                 if (written > 0) {
-                                     offset += written
-                                 } else if (written == 0) {
-                                     break
-                                 } else {
-                                     throw IllegalStateException("AudioTrack.write failed: $written")
-                                 }
-                             }
-                          } catch (_: Throwable) {
-                              try { track.release() } catch (_: Throwable) {}
-                              monitorTrack = null
-                          }
-                      }
+                    // 监听：尽早写 PCM 到 AudioTrack（减少延迟、避免后面处理阻塞）
+                    val track = ensureMonitorStarted()
+                    if (track != null) {
+                        try {
+                            // 监听：强制使用滤波后的数据（如果滤波失败，则静音这一帧，避免“回退原始”造成听感错乱）
+                            val out = filteredOutShort
+                            val pcm = out ?: monitorSilence
+                            var offset = 0
+                            while (offset < read) {
+                                val written = track.write(pcm, offset, read - offset, AudioTrack.WRITE_NON_BLOCKING)
+                                if (written > 0) {
+                                    offset += written
+                                } else if (written == 0) {
+                                    break
+                                } else {
+                                    throw IllegalStateException("AudioTrack.write failed: $written")
+                                }
+                            }
+                        } catch (_: Throwable) {
+                            try { track.release() } catch (_: Throwable) {}
+                            monitorTrack = null
+                        }
+                    }
 
                     var maxAbs = 0
                     for (i in 0 until read) {
-                         val v = abs(shortBuf[i].toInt())
-                         if (v > maxAbs) maxAbs = v
-                     }
-                     if (maxAbs > 0) {
-                         lastNonZeroAt = SystemClock.elapsedRealtime()
-                     }
-                     val alive = (SystemClock.elapsedRealtime() - lastNonZeroAt) <= 300L
-                     publishCaptureDiagnostics(read, maxAbs, alive)
+                        val v = abs(shortBuf[i].toInt())
+                        if (v > maxAbs) maxAbs = v
+                    }
+                    if (maxAbs > 0) {
+                        lastNonZeroAt = SystemClock.elapsedRealtime()
+                    }
+                    val alive = (SystemClock.elapsedRealtime() - lastNonZeroAt) <= 300L
+                    publishCaptureDiagnostics(read, maxAbs, alive)
 
                     // NOTE: No synthetic injection in normal '开始' mode.
                     // Always display real microphone input.
 
-                     // 写入 ring buffer（raw + filtered）。
-                     // 监听路径下优先复用 float 域的 filteredBlock，避免 short 量化回写导致波形细节损失。
-                     for (i in 0 until read) {
+                    // 写入 ring buffer（raw + filtered）。
+                    // 监听路径下优先复用 float 域的 filteredBlock，避免 short 量化回写导致波形细节损失。
+                    for (i in 0 until read) {
                         val raw = (shortBuf[i] / 32768f).coerceIn(-1f, 1f)
                         val filtered = if (needFilteredBlock) {
                             filteredBlock[i].coerceIn(-1f, 1f)
@@ -939,14 +939,14 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         ringFiltered[ringWrite] = filtered
                         ringWrite = (ringWrite + 1) % ring.size
                         if (ringSize < ring.size) ringSize++
-                     }
+                    }
 
                     // ===== UI 波形更新限流：避免每个 audio block 都触发 Compose 重组造成卡顿 =====
                     val nowUi = SystemClock.elapsedRealtime()
                     val busyRealtimePath = _isMonitoring.value || (_isRecording.value && (recordingCodec != null || wavOut != null))
-                    
+
                     val actualPublishIntervalMs = currentPublishIntervalMs()
-                    
+
                     if (nowUi - lastUiUpdateAt >= actualPublishIntervalMs) {
                         lastUiUpdateAt = nowUi
 
@@ -1085,7 +1085,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             writeRecordingPcm(out, read)
                         }
                     }
-                 }
+                }
             }
         } catch (e: SecurityException) {
             _engineError.value = "录音权限异常：${e.message}"
@@ -1732,46 +1732,46 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         return PublishRateOption.entries.firstOrNull { it.hz == hz } ?: PublishRateOption.HZ_20
     }
 
-     private fun ensureRecordingDownsampleBuffer(minLen: Int): ShortArray {
-         if (recordingDownsampleBuffer.size < minLen) {
-             recordingDownsampleBuffer = ShortArray(minLen)
-         }
-         return recordingDownsampleBuffer
-     }
+    private fun ensureRecordingDownsampleBuffer(minLen: Int): ShortArray {
+        if (recordingDownsampleBuffer.size < minLen) {
+            recordingDownsampleBuffer = ShortArray(minLen)
+        }
+        return recordingDownsampleBuffer
+    }
 
-     private fun ensureRecordingPcmBytesBuffer(minBytes: Int): ByteArray {
-         if (recordingPcmBytesBuffer.size < minBytes) {
-             recordingPcmBytesBuffer = ByteArray(minBytes)
-         }
-         return recordingPcmBytesBuffer
-     }
+    private fun ensureRecordingPcmBytesBuffer(minBytes: Int): ByteArray {
+        if (recordingPcmBytesBuffer.size < minBytes) {
+            recordingPcmBytesBuffer = ByteArray(minBytes)
+        }
+        return recordingPcmBytesBuffer
+    }
 
-     private fun downsampleNearest(pcm16: ShortArray, len: Int, srcRate: Int, dstRate: Int): Pair<ShortArray, Int> {
-         if (dstRate == srcRate) return pcm16 to len
-         if (dstRate <= 0 || srcRate <= 0) return pcm16 to len
-         // Never upsample above capture rate here. Fake upsampling creates misleading spectra
-         // and obvious artifacts in WAV files.
-         if (dstRate >= srcRate) return pcm16 to len
-         val outLen = ((len.toLong() * dstRate.toLong()) / srcRate.toLong()).toInt().coerceAtLeast(1)
-          val out = ensureRecordingDownsampleBuffer(outLen)
-         for (i in 0 until outLen) {
-             val srcIndex = ((i.toLong() * srcRate.toLong()) / dstRate.toLong()).toInt().coerceIn(0, len - 1)
-             out[i] = pcm16[srcIndex]
-         }
-         return out to outLen
-     }
+    private fun downsampleNearest(pcm16: ShortArray, len: Int, srcRate: Int, dstRate: Int): Pair<ShortArray, Int> {
+        if (dstRate == srcRate) return pcm16 to len
+        if (dstRate <= 0 || srcRate <= 0) return pcm16 to len
+        // Never upsample above capture rate here. Fake upsampling creates misleading spectra
+        // and obvious artifacts in WAV files.
+        if (dstRate >= srcRate) return pcm16 to len
+        val outLen = ((len.toLong() * dstRate.toLong()) / srcRate.toLong()).toInt().coerceAtLeast(1)
+        val out = ensureRecordingDownsampleBuffer(outLen)
+        for (i in 0 until outLen) {
+            val srcIndex = ((i.toLong() * srcRate.toLong()) / dstRate.toLong()).toInt().coerceIn(0, len - 1)
+            out[i] = pcm16[srcIndex]
+        }
+        return out to outLen
+    }
 
-     private fun pcm16ToLeBytes(pcm: ShortArray, len: Int): Pair<ByteArray, Int> {
-         val byteCount = len * 2
-         val bytes = ensureRecordingPcmBytesBuffer(byteCount)
-         var bi = 0
-         for (i in 0 until len) {
-             val v = pcm[i].toInt()
-             bytes[bi++] = (v and 0xFF).toByte()
-             bytes[bi++] = ((v ushr 8) and 0xFF).toByte()
-         }
-         return bytes to byteCount
-     }
+    private fun pcm16ToLeBytes(pcm: ShortArray, len: Int): Pair<ByteArray, Int> {
+        val byteCount = len * 2
+        val bytes = ensureRecordingPcmBytesBuffer(byteCount)
+        var bi = 0
+        for (i in 0 until len) {
+            val v = pcm[i].toInt()
+            bytes[bi++] = (v and 0xFF).toByte()
+            bytes[bi++] = ((v ushr 8) and 0xFF).toByte()
+        }
+        return bytes to byteCount
+    }
 
     fun startRecording(context: Context) {
         if (!_isRunning.value && !_useImportedSignal.value) return
@@ -1791,7 +1791,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
             val effectiveSr = sampleRate
             startFilteredRecording(outFile, fmt, effectiveSr)
-             _isRecording.value = true
+            _isRecording.value = true
         } catch (t: Throwable) {
             _engineError.value = "录音启动失败：${t.message ?: t.javaClass.simpleName}"
             // Avoid blocking UI, release in background
@@ -1959,10 +1959,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
         recordingCodec = codec
         recordingMuxer = muxer
-     }
+    }
 
-     /** Feed filtered PCM16 mono into encoder or WAV file. Called from capture coroutine thread. */
-     private fun writeRecordingPcm(pcm16: ShortArray, len: Int) {
+    /** Feed filtered PCM16 mono into encoder or WAV file. Called from capture coroutine thread. */
+    private fun writeRecordingPcm(pcm16: ShortArray, len: Int) {
         if (!_isRecording.value) return
 
         // WAV path
@@ -1996,33 +1996,33 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
         var offset = 0
         while (offset < byteCount) {
-             val inIndex = try { codec.dequeueInputBuffer(0) } catch (_: Throwable) { -1 }
-             if (inIndex < 0) break
+            val inIndex = try { codec.dequeueInputBuffer(0) } catch (_: Throwable) { -1 }
+            if (inIndex < 0) break
 
-             val inBuf = codec.getInputBuffer(inIndex) ?: break
-             inBuf.clear()
+            val inBuf = codec.getInputBuffer(inIndex) ?: break
+            inBuf.clear()
 
-              val toWrite = min(inBuf.remaining(), byteCount - offset)
-             inBuf.put(bytes, offset, toWrite)
+            val toWrite = min(inBuf.remaining(), byteCount - offset)
+            inBuf.put(bytes, offset, toWrite)
 
-             val frames = toWrite / 2 // mono 16-bit
-             val ptsUs = recordingPtsUs
-             val srForPts = dstRate.takeIf { it > 0 } ?: sampleRate
-             recordingPtsUs += (frames * 1_000_000L) / srForPts
+            val frames = toWrite / 2 // mono 16-bit
+            val ptsUs = recordingPtsUs
+            val srForPts = dstRate.takeIf { it > 0 } ?: sampleRate
+            recordingPtsUs += (frames * 1_000_000L) / srForPts
 
-             codec.queueInputBuffer(inIndex, 0, toWrite, ptsUs, 0)
-             offset += toWrite
+            codec.queueInputBuffer(inIndex, 0, toWrite, ptsUs, 0)
+            offset += toWrite
 
-             // Drain a bit on the same thread to keep encoder from backing up
-             try {
-                 while (drainRecordingEncoderOnce(codec, recordingMuxer ?: break)) {
-                     // keep draining
-                 }
-             } catch (_: Throwable) {
-                 break
-             }
-         }
-     }
+            // Drain a bit on the same thread to keep encoder from backing up
+            try {
+                while (drainRecordingEncoderOnce(codec, recordingMuxer ?: break)) {
+                    // keep draining
+                }
+            } catch (_: Throwable) {
+                break
+            }
+        }
+    }
 
     private fun startWavRecording(outFile: File, targetSampleRate: Int) {
         wavSampleRate = targetSampleRate.coerceIn(8000, sampleRate)
@@ -2203,10 +2203,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
 
-         val gain = _filterGain.value.coerceIn(0.1f, 100f)
-         if (gain == 1f) return out
-         return out.map { it * gain }
-     }
+        val gain = _filterGain.value.coerceIn(0.1f, 100f)
+        if (gain == 1f) return out
+        return out.map { it * gain }
+    }
 
     private fun firstOrderLowPass(input: List<Float>, sampleRate: Int, cutoffHz: Float): List<Float> {
         if (input.isEmpty()) return emptyList()
@@ -2755,25 +2755,25 @@ private class RtBiquadCascade(private var sampleRate: Int) {
             lastEqBands = eqBands
 
             if (eqEnabled && eqBands.isNotEmpty()) {
-                 val active = eqBands.filter { it.enabled }
-                 eqCoefs = active.map { b ->
-                     val fc = b.freqHz.coerceIn(5f, sampleRate / 2f - 1f)
-                     val g = b.gainDb
-                     val qOrSlope = b.q
-                     when (b.type) {
-                         AudioEngineViewModel.EqBandType.PEAK -> rtDesignPeakingEq(sampleRate, fc, qOrSlope, g)
-                         AudioEngineViewModel.EqBandType.LOW_SHELF -> rtDesignLowShelf(sampleRate, fc, qOrSlope, g)
-                         AudioEngineViewModel.EqBandType.HIGH_SHELF -> rtDesignHighShelf(sampleRate, fc, qOrSlope, g)
-                     }
-                 }
-                 // Resize state arrays if needed (preserve old states where possible?)
-                 // Simpler to just resize. If size grows, new slots are 0.
-                 if (eqZ1.size < eqCoefs.size) {
-                     eqZ1 = FloatArray(eqCoefs.size)
-                     eqZ2 = FloatArray(eqCoefs.size)
-                 }
-                 // If size shrinks, we just use the first N slots. old states in e.g. slot 0 might not match slot 0's new band
-                 // but transient artifact is acceptable for realtime slider dragging.
+                val active = eqBands.filter { it.enabled }
+                eqCoefs = active.map { b ->
+                    val fc = b.freqHz.coerceIn(5f, sampleRate / 2f - 1f)
+                    val g = b.gainDb
+                    val qOrSlope = b.q
+                    when (b.type) {
+                        AudioEngineViewModel.EqBandType.PEAK -> rtDesignPeakingEq(sampleRate, fc, qOrSlope, g)
+                        AudioEngineViewModel.EqBandType.LOW_SHELF -> rtDesignLowShelf(sampleRate, fc, qOrSlope, g)
+                        AudioEngineViewModel.EqBandType.HIGH_SHELF -> rtDesignHighShelf(sampleRate, fc, qOrSlope, g)
+                    }
+                }
+                // Resize state arrays if needed (preserve old states where possible?)
+                // Simpler to just resize. If size grows, new slots are 0.
+                if (eqZ1.size < eqCoefs.size) {
+                    eqZ1 = FloatArray(eqCoefs.size)
+                    eqZ2 = FloatArray(eqCoefs.size)
+                }
+                // If size shrinks, we just use the first N slots. old states in e.g. slot 0 might not match slot 0's new band
+                // but transient artifact is acceptable for realtime slider dragging.
             } else {
                 eqCoefs = emptyList()
             }

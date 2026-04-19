@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">WaveStudio</string>
+
+    <!-- Common -->
+    <string name="common_confirm">OK</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_close">Close</string>
+    <string name="common_reset">Reset</string>
+    <string name="common_expand">Expand</string>
+    <string name="common_collapse">Collapse</string>
+    <string name="common_enabled">Enabled</string>
+
+    <!-- Actions -->
+    <string name="action_import">Import</string>
+    <string name="action_export">Export</string>
+    <string name="action_share">Share</string>
+    <string name="action_share_direct">Share Now</string>
+    <string name="action_default">Default</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_record">Record</string>
+    <string name="action_restore_default">Restore Defaults</string>
+
+    <!-- Modes / UI -->
+    <string name="mode_immersive">Immersive</string>
+    <string name="mode_normal">Normal</string>
+    <string name="about_title">About</string>
+    <string name="exit_title">Exit</string>
+    <string name="exit_confirm_message">Are you sure you want to exit?</string>
+
+    <string name="share_title_generic">Share</string>
+    <string name="share_title_recording">Share Recording</string>
+
+    <!-- Presets -->
+    <string name="preset_menu_title">Preset</string>
+    <string name="preset_import_failed_empty">Import failed: file is empty</string>
+    <string name="preset_import_success">Preset imported</string>
+    <string name="preset_import_success_named">Preset imported: %1$s</string>
+    <string name="preset_import_success_prefix">Preset imported: </string>
+    <string name="preset_import_failed_with_message">Import failed: %1$s</string>
+    <string name="preset_import_failed_prefix">Import failed: </string>
+    <string name="preset_export_success">Preset exported</string>
+    <string name="preset_export_failed_with_message">Export failed: %1$s</string>
+    <string name="preset_export_failed_prefix">Export failed: </string>
+    <string name="preset_share_title">Share Preset</string>
+    <string name="preset_file_name_label">File name (without .json)</string>
+    <string name="preset_file_name_hint">A .json preset file will be created and shared</string>
+    <string name="preset_share_success_named">Preset created and shared: %1$s</string>
+    <string name="preset_share_success_prefix">Preset created and shared: </string>
+    <string name="preset_share_failed">Share failed: cannot generate preset file</string>
+    <string name="preset_restore_default_title">Restore Defaults</string>
+    <string name="preset_restore_default_confirm">Restore current filter settings to defaults?</string>
+    <string name="preset_restore_default_done">Defaults restored</string>
+
+    <!-- Waveform / recording -->
+    <string name="waveform_input_title_value">Input Waveform %1$s x</string>
+    <string name="waveform_processed_title_value">Processed Waveform %1$s x</string>
+    <string name="recordings_list_title">Recording List</string>
+    <string name="rename_title">Rename</string>
+    <string name="file_name_label">File Name</string>
+    <string name="delete_recording_title">Delete Recording</string>
+    <string name="delete_recording_confirm">Delete "%1$s"? This cannot be undone.</string>
+
+    <string name="monitor_on">Monitor</string>
+    <string name="monitor_off">Monitor Off</string>
+    <string name="import_audio">Import Audio</string>
+    <string name="importing">Importing</string>
+    <string name="audio_input_mode">Audio Input</string>
+    <string name="list_title">List</string>
+    <string name="error_prefix_with_message">Error: %1$s</string>
+    <string name="input_source_imported_audio">Input Source: Imported Audio%1$s</string>
+
+    <!-- Filters / processing -->
+    <string name="low_pass_value_hz">Low-pass %1$s Hz</string>
+    <string name="low_pass_set_title">Set Low-Pass Cutoff</string>
+    <string name="low_pass_info_title">Low-Pass Cutoff</string>
+    <string name="low_pass_info_message">Low-pass filters attenuate high frequencies. Lower cutoff gives stronger effect.</string>
+    <string name="high_pass_value_hz">High-pass %1$s Hz</string>
+    <string name="high_pass_set_title">Set High-Pass Cutoff</string>
+    <string name="high_pass_info_title">High-Pass Cutoff</string>
+    <string name="high_pass_info_message">High-pass filters attenuate low frequencies. Higher cutoff gives stronger effect.</string>
+    <string name="processed_gain_value">Processed Gain %1$s dB (%2$s x)</string>
+    <string name="processed_gain_set_title">Set Processed Gain</string>
+    <string name="processed_gain_info_title">Processed Gain</string>
+    <string name="processed_gain_info_message">Adjusts overall level of the processed waveform.</string>
+    <string name="time_window_value_ms">Time Window %1$s ms</string>
+    <string name="time_window_set_title">Set Time Window</string>
+    <string name="time_window_info_title">Time Window</string>
+    <string name="time_window_info_message">Longer window shows more periods but updates slower.</string>
+
+    <!-- Test / recording options -->
+    <string name="test_mode_label">Test Mode</string>
+    <string name="test_mode_start">Test</string>
+    <string name="test_mode_running">Testing</string>
+    <string name="test_mode_hint">Use static test signal</string>
+    <string name="test_waveform_label">Test Waveform</string>
+    <string name="test_waveform_hint">Switch between async SPWM and square modulation</string>
+    <string name="recording_format_label">Recording Format</string>
+    <string name="sample_rate_label">Sample Rate</string>
+    <string name="recording_locked_format_hint">Format &amp; sample rate cannot be changed while recording</string>
+    <string name="waveform_refresh_rate_label">Waveform Refresh Rate</string>
+    <string name="waveform_refresh_rate_hint">Higher is smoother, but reduces performance</string>
+    <string name="waveform_ref_line_label">Waveform 0dB Reference Line</string>
+
+    <!-- Startup note -->
+    <string name="startup_note_title">Tip</string>
+    <string name="startup_note_text">The pickup gain should keep both waveforms within the +/-0dB reference line to avoid clipping. Also, drag vertically on the waveform to adjust amplitude scale, and drag horizontally to adjust time window.</string>
+    <string name="startup_note_do_not_show">Don\'t show again</string>
+    <string name="startup_note_ack">Got it</string>
+    <string name="startup_note_show_button">Show Tip Dialog</string>
+
+    <!-- Trigger / UI toggles -->
+    <string name="trigger_on">Trigger On</string>
+    <string name="trigger_off">Trigger Off</string>
+    <string name="trigger_advanced_title">Trigger Advanced</string>
+    <string name="trigger_advanced_on">Advanced On</string>
+    <string name="trigger_advanced_off">Advanced Off</string>
+    <string name="trigger_switch_info_title">Trigger Switch</string>
+    <string name="trigger_switch_info_message">Enables rising-edge trigger with autocorrelation and phase history for stable locking.</string>
+    <string name="trigger_advanced_info_title">Trigger Advanced</string>
+    <string name="trigger_advanced_info_message">These settings tune trigger stability. Autocorrelation estimates base period; hysteresis, holdoff, and refresh affect stability and responsiveness.</string>
+    <string name="trigger_autocorr_assist">Autocorrelation Assist</string>
+    <string name="trigger_autocorr_assist_info">When enabled, Trigger estimates base frequency from autocorrelation before edge locking, useful for slowly varying VVVF waveforms.</string>
+    <string name="hide_reference_line">Hide Reference</string>
+    <string name="show_reference_line">Show Reference</string>
+    <string name="lock">Lock</string>
+    <string name="unlock">Unlock</string>
+    <string name="amp_scale_overlay">Amplitude x %1$s</string>
+    <string name="time_window_overlay">Window %1$s ms</string>
+    <string name="unit_x">x</string>
+    <string name="unit_ms">ms</string>
+
+    <!-- EQ -->
+    <string name="filter_order_format">Order %1$d</string>
+    <string name="eq_panel_title">Graphic EQ</string>
+    <string name="eq_reset_all">Reset EQ</string>
+    <string name="eq_band_freq_value">Band %1$s Freq %2$s Hz</string>
+    <string name="eq_band_freq_title">Set Band %1$s Frequency</string>
+    <string name="eq_band_gain_value">Gain %1$s dB</string>
+    <string name="eq_band_gain_title">Set Band %1$s Gain</string>
+    <string name="eq_band_q_title">Set Band %1$s Q</string>
+
+    <!-- Language dialog -->
+    <string name="language_dialog_title">Choose Language / 选择语言</string>
+    <string name="language_dialog_message">Please choose your preferred language.\n首次安装请选择界面语言。</string>
+    <string name="language_option_zh">Chinese</string>
+    <string name="language_option_en">English</string>
+
+</resources>

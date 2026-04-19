@@ -71,10 +71,10 @@ internal class NewTriggerEngine(
 
         val crossingPeriodSamples = estimatePeriodFromCrossings(allCrossings)
         val shouldRefreshAutocorr = config.useAutocorrelation && (
-            crossingPeriodSamples <= 0 ||
-            estimatedPeriodSamples <= 0 ||
-            (processFrameIndex % config.autocorrRefreshFrames.coerceAtLeast(1) == 0)
-        )
+                crossingPeriodSamples <= 0 ||
+                        estimatedPeriodSamples <= 0 ||
+                        (processFrameIndex % config.autocorrRefreshFrames.coerceAtLeast(1) == 0)
+                )
         val autocorrPeriodSamples = if (shouldRefreshAutocorr) {
             estimatePeriodFromAutocorrelation(triggerSignal, n, config, crossingPeriodSamples)
         } else 0

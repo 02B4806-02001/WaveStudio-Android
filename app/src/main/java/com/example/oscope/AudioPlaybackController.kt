@@ -13,4 +13,3 @@ internal interface AudioPlaybackController {
     fun playRecording(context: Context, clip: RecordedClip)
     fun seekPlaybackTo(positionMs: Long)
 }
-

@@ -880,16 +880,16 @@ fun OscopeApp(
                             }
                         )
                     }
-             ) {
-                 LiveWaveformView(
-                     samplesFlow = audioViewModel.rawWaveform,
-                     ampScale = rawDisplayScale,
-                     lineColor = Color.Blue,
-                      showReference = showRefWaveforms,
-                     referenceAmpNormalized = rawDisplayScale.coerceAtLeast(1e-4f),
-                     referenceColor = Color(0x22000000),
-                     modifier = Modifier.fillMaxSize()
-                 )
+            ) {
+                LiveWaveformView(
+                    samplesFlow = audioViewModel.rawWaveform,
+                    ampScale = rawDisplayScale,
+                    lineColor = Color.Blue,
+                    showReference = showRefWaveforms,
+                    referenceAmpNormalized = rawDisplayScale.coerceAtLeast(1e-4f),
+                    referenceColor = Color(0x22000000),
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             Row(
@@ -978,16 +978,16 @@ fun OscopeApp(
                             }
                         )
                     }
-             ) {
-                 LiveWaveformView(
-                     samplesFlow = audioViewModel.filteredWaveform,
-                     ampScale = filteredDisplayScale,
-                     lineColor = Color.Red,
-                     showReference = showRefWaveforms,
-                     referenceAmpNormalized = filteredDisplayScale.coerceAtLeast(1e-4f),
-                     referenceColor = Color(0x22FF0000),
-                     modifier = Modifier.fillMaxSize()
-                 )
+            ) {
+                LiveWaveformView(
+                    samplesFlow = audioViewModel.filteredWaveform,
+                    ampScale = filteredDisplayScale,
+                    lineColor = Color.Red,
+                    showReference = showRefWaveforms,
+                    referenceAmpNormalized = filteredDisplayScale.coerceAtLeast(1e-4f),
+                    referenceColor = Color(0x22FF0000),
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             CaptureDiagnosticsLine(audioViewModel = audioViewModel)
@@ -1747,15 +1747,15 @@ fun OscopeApp(
                         )
                     }
                 }
-             }
+            }
 
-             // 底部安全区：直接占住系统导航栏/手势返回区域（以及少量额外余量），确保该区域不绘制任何内容。
-             Spacer(
-                 modifier = Modifier
-                     .fillMaxWidth()
-                     .navigationBarsPadding()
-                     .height(4.dp)
-             )
+            // 底部安全区：直接占住系统导航栏/手势返回区域（以及少量额外余量），确保该区域不绘制任何内容。
+            Spacer(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .height(4.dp)
+            )
         }
     }
 
@@ -1817,8 +1817,13 @@ fun OscopeApp(
                         modifier = Modifier.verticalScroll(aboutDialogScrollState),
                         verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text("Wave Studio v0.11.4 by 磁拾音器研究所")
+                        Text("Wave Studio v0.11.5 by 磁拾音器研究所")
                         Text("提示：使用前请授予麦克风权限。")
+                        Text("")
+                        Text("0.11.5版本主要更新内容如下：")
+                        Text("- 均衡器")
+                        Text("- 修复了监听模式卡顿的问题")
+                        Text("- 修复了一些其他 bug")
                         Text("")
                         Text("0.11.4版本主要更新内容如下：")
                         Text("- 滤波器改为默认关闭")
@@ -2063,10 +2068,10 @@ private fun ImmersiveScreen(
             triggerEngine.extractTriggeredWindow(source, res)
         }
         return window to if (mode == NewTriggerEngine.Mode.OFF) null else res
-     }
+    }
 
 
-     Box(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
@@ -2150,7 +2155,7 @@ private fun ImmersiveScreen(
                 referenceColor = Color(0x44FFFFFF),
                 referenceDashed = true,
                 lineWidthDp = 2f,
-         )
+            )
 
             if (triggerMode != NewTriggerEngine.Mode.OFF && triggerResult != null) {
                 val conf = String.format(Locale.US, "%.2f", triggerResult.confidence)
@@ -2273,8 +2278,99 @@ private fun ImmersiveScreen(
                         }
 
                         when (columns) {
-                                1 -> {
-                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            1 -> {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("预触发比例: ${String.format(Locale.US, "%.2f", triggerPreTriggerRatio)}")
+                                            InfoIconButton("预触发比例", "决定触发点出现在窗口前面留多少余量。越大，触发点越靠后，前面的波形越多。")
+                                        }
+                                        Slider(
+                                            value = triggerPreTriggerRatio,
+                                            onValueChange = { triggerPreTriggerRatio = it },
+                                            valueRange = 0.08f..0.35f,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("辅助低通: ${String.format(Locale.US, "%.0f", triggerStrongLowPassHz)}Hz")
+                                            InfoIconButton("辅助低通", "这是给 Trigger 用的低通截止频率，用来压制高频开关噪声，让基波更容易被识别。")
+                                        }
+                                        Slider(
+                                            value = triggerStrongLowPassHz,
+                                            onValueChange = { triggerStrongLowPassHz = it },
+                                            valueRange = 120f..600f,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("自相关刷新: ${triggerAutocorrRefreshFrames} 帧")
+                                            InfoIconButton("自相关刷新", "控制多久重新计算一次自相关。越小越跟手，但越耗性能；越大越省电，但响应更慢。")
+                                        }
+                                        Slider(
+                                            value = triggerAutocorrRefreshFrames.toFloat(),
+                                            onValueChange = { triggerAutocorrRefreshFrames = it.roundToInt().coerceIn(1, 32) },
+                                            valueRange = 1f..32f,
+                                            steps = 30,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("自相关长度: ${triggerAutocorrMaxSamples} 点")
+                                            InfoIconButton("自相关长度", "用多长的一段波形做自相关。越长越稳，但越耗性能；越短越快，但可能更抖。")
+                                        }
+                                        Slider(
+                                            value = triggerAutocorrMaxSamples.toFloat(),
+                                            onValueChange = { triggerAutocorrMaxSamples = it.roundToInt().coerceIn(128, 2048) },
+                                            valueRange = 128f..2048f,
+                                            steps = 14,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("滞回: ${String.format(Locale.US, "%.2f", triggerHysteresisRatio)}")
+                                            InfoIconButton("滞回", "防止阈值附近来回抖动造成误触。调大更稳，调小更灵敏。")
+                                        }
+                                        Slider(
+                                            value = triggerHysteresisRatio,
+                                            onValueChange = { triggerHysteresisRatio = it },
+                                            valueRange = 0.05f..0.40f,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("保留间隔: ${String.format(Locale.US, "%.2f", triggerHoldoffRatio)}")
+                                            InfoIconButton("保留间隔", "限制连续触发之间的最小间隔，避免同一周期里重复抓到多个边沿。")
+                                        }
+                                        Slider(
+                                            value = triggerHoldoffRatio,
+                                            onValueChange = { triggerHoldoffRatio = it },
+                                            valueRange = 0.20f..0.85f,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+
+                            2 -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 Text("预触发比例: ${String.format(Locale.US, "%.2f", triggerPreTriggerRatio)}")
@@ -2314,7 +2410,12 @@ private fun ImmersiveScreen(
                                                 modifier = Modifier.fillMaxWidth()
                                             )
                                         }
+                                    }
 
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 Text("自相关长度: ${triggerAutocorrMaxSamples} 点")
@@ -2356,206 +2457,110 @@ private fun ImmersiveScreen(
                                         }
                                     }
                                 }
+                            }
 
-                                2 -> {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            else -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Column(
-                                            modifier = Modifier.weight(1f),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("预触发比例: ${String.format(Locale.US, "%.2f", triggerPreTriggerRatio)}")
-                                                    InfoIconButton("预触发比例", "决定触发点出现在窗口前面留多少余量。越大，触发点越靠后，前面的波形越多。")
-                                                }
-                                                Slider(
-                                                    value = triggerPreTriggerRatio,
-                                                    onValueChange = { triggerPreTriggerRatio = it },
-                                                    valueRange = 0.08f..0.35f,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text("预触发比例: ${String.format(Locale.US, "%.2f", triggerPreTriggerRatio)}")
+                                                InfoIconButton("预触发比例", "决定触发点出现在窗口前面留多少余量。越大，触发点越靠后，前面的波形越多。")
                                             }
-
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("辅助低通: ${String.format(Locale.US, "%.0f", triggerStrongLowPassHz)}Hz")
-                                                    InfoIconButton("辅助低通", "这是给 Trigger 用的低通截止频率，用来压制高频开关噪声，让基波更容易被识别。")
-                                                }
-                                                Slider(
-                                                    value = triggerStrongLowPassHz,
-                                                    onValueChange = { triggerStrongLowPassHz = it },
-                                                    valueRange = 120f..600f,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
-
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("自相关刷新: ${triggerAutocorrRefreshFrames} 帧")
-                                                    InfoIconButton("自相关刷新", "控制多久重新计算一次自相关。越小越跟手，但越耗性能；越大越省电，但响应更慢。")
-                                                }
-                                                Slider(
-                                                    value = triggerAutocorrRefreshFrames.toFloat(),
-                                                    onValueChange = { triggerAutocorrRefreshFrames = it.roundToInt().coerceIn(1, 32) },
-                                                    valueRange = 1f..32f,
-                                                    steps = 30,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
+                                            Slider(
+                                                value = triggerPreTriggerRatio,
+                                                onValueChange = { triggerPreTriggerRatio = it },
+                                                valueRange = 0.08f..0.35f,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                         }
 
-                                        Column(
-                                            modifier = Modifier.weight(1f),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("自相关长度: ${triggerAutocorrMaxSamples} 点")
-                                                    InfoIconButton("自相关长度", "用多长的一段波形做自相关。越长越稳，但越耗性能；越短越快，但可能更抖。")
-                                                }
-                                                Slider(
-                                                    value = triggerAutocorrMaxSamples.toFloat(),
-                                                    onValueChange = { triggerAutocorrMaxSamples = it.roundToInt().coerceIn(128, 2048) },
-                                                    valueRange = 128f..2048f,
-                                                    steps = 14,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text("辅助低通: ${String.format(Locale.US, "%.0f", triggerStrongLowPassHz)}Hz")
+                                                InfoIconButton("辅助低通", "这是给 Trigger 用的低通截止频率，用来压制高频开关噪声，让基波更容易被识别。")
                                             }
-
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("滞回: ${String.format(Locale.US, "%.2f", triggerHysteresisRatio)}")
-                                                    InfoIconButton("滞回", "防止阈值附近来回抖动造成误触。调大更稳，调小更灵敏。")
-                                                }
-                                                Slider(
-                                                    value = triggerHysteresisRatio,
-                                                    onValueChange = { triggerHysteresisRatio = it },
-                                                    valueRange = 0.05f..0.40f,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
-
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("保留间隔: ${String.format(Locale.US, "%.2f", triggerHoldoffRatio)}")
-                                                    InfoIconButton("保留间隔", "限制连续触发之间的最小间隔，避免同一周期里重复抓到多个边沿。")
-                                                }
-                                                Slider(
-                                                    value = triggerHoldoffRatio,
-                                                    onValueChange = { triggerHoldoffRatio = it },
-                                                    valueRange = 0.20f..0.85f,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
+                                            Slider(
+                                                value = triggerStrongLowPassHz,
+                                                onValueChange = { triggerStrongLowPassHz = it },
+                                                valueRange = 120f..600f,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                         }
                                     }
-                                }
 
-                                else -> {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Column(
-                                            modifier = Modifier.weight(1f),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("预触发比例: ${String.format(Locale.US, "%.2f", triggerPreTriggerRatio)}")
-                                                    InfoIconButton("预触发比例", "决定触发点出现在窗口前面留多少余量。越大，触发点越靠后，前面的波形越多。")
-                                                }
-                                                Slider(
-                                                    value = triggerPreTriggerRatio,
-                                                    onValueChange = { triggerPreTriggerRatio = it },
-                                                    valueRange = 0.08f..0.35f,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text("自相关刷新: ${triggerAutocorrRefreshFrames} 帧")
+                                                InfoIconButton("自相关刷新", "控制多久重新计算一次自相关。越小越跟手，但越耗性能；越大越省电，但响应更慢。")
                                             }
-
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("辅助低通: ${String.format(Locale.US, "%.0f", triggerStrongLowPassHz)}Hz")
-                                                    InfoIconButton("辅助低通", "这是给 Trigger 用的低通截止频率，用来压制高频开关噪声，让基波更容易被识别。")
-                                                }
-                                                Slider(
-                                                    value = triggerStrongLowPassHz,
-                                                    onValueChange = { triggerStrongLowPassHz = it },
-                                                    valueRange = 120f..600f,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
+                                            Slider(
+                                                value = triggerAutocorrRefreshFrames.toFloat(),
+                                                onValueChange = { triggerAutocorrRefreshFrames = it.roundToInt().coerceIn(1, 32) },
+                                                valueRange = 1f..32f,
+                                                steps = 30,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                         }
 
-                                        Column(
-                                            modifier = Modifier.weight(1f),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("自相关刷新: ${triggerAutocorrRefreshFrames} 帧")
-                                                    InfoIconButton("自相关刷新", "控制多久重新计算一次自相关。越小越跟手，但越耗性能；越大越省电，但响应更慢。")
-                                                }
-                                                Slider(
-                                                    value = triggerAutocorrRefreshFrames.toFloat(),
-                                                    onValueChange = { triggerAutocorrRefreshFrames = it.roundToInt().coerceIn(1, 32) },
-                                                    valueRange = 1f..32f,
-                                                    steps = 30,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text("自相关长度: ${triggerAutocorrMaxSamples} 点")
+                                                InfoIconButton("自相关长度", "用多长的一段波形做自相关。越长越稳，但越耗性能；越短越快，但可能更抖。")
                                             }
+                                            Slider(
+                                                value = triggerAutocorrMaxSamples.toFloat(),
+                                                onValueChange = { triggerAutocorrMaxSamples = it.roundToInt().coerceIn(128, 2048) },
+                                                valueRange = 128f..2048f,
+                                                steps = 14,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
 
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("自相关长度: ${triggerAutocorrMaxSamples} 点")
-                                                    InfoIconButton("自相关长度", "用多长的一段波形做自相关。越长越稳，但越耗性能；越短越快，但可能更抖。")
-                                                }
-                                                Slider(
-                                                    value = triggerAutocorrMaxSamples.toFloat(),
-                                                    onValueChange = { triggerAutocorrMaxSamples = it.roundToInt().coerceIn(128, 2048) },
-                                                    valueRange = 128f..2048f,
-                                                    steps = 14,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text("滞回: ${String.format(Locale.US, "%.2f", triggerHysteresisRatio)}")
+                                                InfoIconButton("滞回", "防止阈值附近来回抖动造成误触。调大更稳，调小更灵敏。")
                                             }
+                                            Slider(
+                                                value = triggerHysteresisRatio,
+                                                onValueChange = { triggerHysteresisRatio = it },
+                                                valueRange = 0.05f..0.40f,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                         }
 
-                                        Column(
-                                            modifier = Modifier.weight(1f),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("滞回: ${String.format(Locale.US, "%.2f", triggerHysteresisRatio)}")
-                                                    InfoIconButton("滞回", "防止阈值附近来回抖动造成误触。调大更稳，调小更灵敏。")
-                                                }
-                                                Slider(
-                                                    value = triggerHysteresisRatio,
-                                                    onValueChange = { triggerHysteresisRatio = it },
-                                                    valueRange = 0.05f..0.40f,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text("保留间隔: ${String.format(Locale.US, "%.2f", triggerHoldoffRatio)}")
+                                                InfoIconButton("保留间隔", "限制连续触发之间的最小间隔，避免同一周期里重复抓到多个边沿。")
                                             }
-
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Text("保留间隔: ${String.format(Locale.US, "%.2f", triggerHoldoffRatio)}")
-                                                    InfoIconButton("保留间隔", "限制连续触发之间的最小间隔，避免同一周期里重复抓到多个边沿。")
-                                                }
-                                                Slider(
-                                                    value = triggerHoldoffRatio,
-                                                    onValueChange = { triggerHoldoffRatio = it },
-                                                    valueRange = 0.20f..0.85f,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
+                                            Slider(
+                                                value = triggerHoldoffRatio,
+                                                onValueChange = { triggerHoldoffRatio = it },
+                                                valueRange = 0.20f..0.85f,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                         }
                                     }
                                 }
                             }
+                        }
                     }
                 },
                 confirmButton = {
