@@ -24,7 +24,7 @@
     <string name="action_restore_default">Restore Defaults</string>
 
     <!-- Modes / UI -->
-    <string name="mode_immersive">Immersive</string>
+    <string name="mode_immersive">FullScreen</string>
     <string name="mode_normal">Normal</string>
     <string name="about_title">About</string>
     <string name="exit_title">Exit</string>
@@ -65,7 +65,7 @@
 
     <string name="monitor_on">Monitor</string>
     <string name="monitor_off">Monitor Off</string>
-    <string name="import_audio">Import Audio</string>
+    <string name="load_audio">Load Audio</string>
     <string name="importing">Importing</string>
     <string name="audio_input_mode">Audio Input</string>
     <string name="list_title">List</string>
@@ -134,6 +134,7 @@
 
     <!-- EQ -->
     <string name="filter_order_format">Order %1$d</string>
+    <string name="filter_order_ordinal_format">%1$s Order</string>
     <string name="eq_panel_title">Graphic EQ</string>
     <string name="eq_reset_all">Reset EQ</string>
     <string name="eq_band_freq_value">Band %1$s Freq %2$s Hz</string>
@@ -141,6 +142,52 @@
     <string name="eq_band_gain_value">Gain %1$s dB</string>
     <string name="eq_band_gain_title">Set Band %1$s Gain</string>
     <string name="eq_band_q_title">Set Band %1$s Q</string>
+
+    <string name="settings_language_label">Language</string>
+    <string name="settings_language_hint">Takes effect immediately after switching</string>
+    <string name="settings_scroll_top">Scroll to Top</string>
+    <string name="preset_help_text">Presets are .json files. Tap "Export" to save to your phone; if you want to send one to others, you can tap "Share" directly without exporting. After receiving it, tap "Import" and choose that file.</string>
+
+    <string name="about_app_signature">Wave Studio v0.11.5 by Magnetic Pickup Institute</string>
+    <string name="about_permission_tip">Tip: Please grant microphone permission before use.</string>
+    <string name="about_update_v0115_title">Main updates in version 0.11.5:</string>
+    <string name="about_update_v0115_item_1">- Equalizer</string>
+    <string name="about_update_v0115_item_2">- Fixed lag in monitoring mode</string>
+    <string name="about_update_v0115_item_3">- Fixed several other bugs</string>
+    <string name="about_update_v0114_title">Main updates in version 0.11.4:</string>
+    <string name="about_update_v0114_item_1">- Filters are now disabled by default</string>
+    <string name="about_update_v0114_item_2">- Fixed lag in monitoring mode</string>
+    <string name="about_update_v0114_item_3">- Fixed several other bugs</string>
+    <string name="about_update_v0113_title">Main updates in version 0.11.3:</string>
+    <string name="about_update_v0113_item_1">- Restored the Show/Hide reference line button</string>
+    <string name="about_update_v0113_item_2">- Filters and equalizer are enabled by default</string>
+    <string name="about_update_v0113_item_3">- Limited effective Q value in EQ Shelf mode</string>
+    <string name="about_update_v0113_item_4">- Fixed frame drops in some scenarios</string>
+    <string name="about_update_v0113_item_5">- Fixed monitor lag when importing audio</string>
+    <string name="about_update_v0113_item_6">- Other detail improvements</string>
+    <string name="about_contributors">Contributors (Bilibili): 02B4806長-02001, 某地铁迷_, 莓喵の小风扇, TEP-28WG01, etc.</string>
+    <string name="about_qq_group">Magnetic Pickup QQ Group: 762852552</string>
+    <string name="about_official_website_label">Official website:</string>
+    <string name="about_preset_download_placeholder">Preset download: (reserved)</string>
+
+    <string name="trigger_pre_trigger_ratio_value">Pre-trigger ratio: %1$s</string>
+    <string name="trigger_assist_lowpass_value">Assist low-pass: %1$sHz</string>
+    <string name="trigger_autocorr_refresh_value">Autocorr refresh: %1$d frames</string>
+    <string name="trigger_autocorr_length_value">Autocorr length: %1$d samples</string>
+    <string name="trigger_hysteresis_value">Hysteresis: %1$s</string>
+    <string name="trigger_holdoff_value">Holdoff: %1$s</string>
+    <string name="trigger_pre_trigger_ratio_info_title">Pre-trigger ratio</string>
+    <string name="trigger_pre_trigger_ratio_info_message">Controls how much margin is kept before the trigger point inside the window. Larger values move the trigger point later and show more leading waveform.</string>
+    <string name="trigger_assist_lowpass_info_title">Assist low-pass</string>
+    <string name="trigger_assist_lowpass_info_message">A low-pass cutoff used by Trigger to suppress high-frequency switching noise and make the fundamental easier to identify.</string>
+    <string name="trigger_autocorr_refresh_info_title">Autocorr. fps</string>
+    <string name="trigger_autocorr_refresh_info_message">How often autocorrelation is recomputed. Smaller values are more responsive but use more CPU; larger values save power but respond slower.</string>
+    <string name="trigger_autocorr_length_info_title">Autocorr. length</string>
+    <string name="trigger_autocorr_length_info_message">How many samples are used for autocorrelation. Longer is steadier but heavier; shorter is faster but can jitter.</string>
+    <string name="trigger_hysteresis_info_title">Hysteresis</string>
+    <string name="trigger_hysteresis_info_message">Prevents false triggers caused by chatter near threshold. Higher is steadier; lower is more sensitive.</string>
+    <string name="trigger_holdoff_info_title">Holdoff</string>
+    <string name="trigger_holdoff_info_message">Minimum interval between consecutive triggers to avoid catching multiple edges within one cycle.</string>
 
     <!-- Language dialog -->
     <string name="language_dialog_title">Choose Language / 选择语言</string>

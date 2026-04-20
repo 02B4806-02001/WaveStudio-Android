@@ -404,7 +404,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         _eqBands.update { list ->
             list.map { band ->
                 if (band.id != id) band
-                else band.copy(gainDb = gainDb.coerceIn(-24f, 24f))
+                else band.copy(gainDb = gainDb.coerceIn(-40f, 40f))
             }
         }
     }
@@ -2193,7 +2193,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             for (b in bands) {
                 if (!b.enabled) continue
                 val fc = b.freqHz.coerceIn(5f, nyquist)
-                val g = b.gainDb.coerceIn(-24f, 24f)
+                val g = b.gainDb.coerceIn(-40f, 40f)
                 val qOrSlope = b.q.coerceIn(0.1f, 18f)
                 out = when (b.type) {
                     EqBandType.PEAK -> biquadProcess(out, designPeakingEq(sampleRate, fc, qOrSlope, g))
@@ -2484,7 +2484,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 b.copy(
                     enabled = p.enabled,
                     freqHz = p.freqHz.coerceIn(20f, 20000f),
-                    gainDb = p.gainDb.coerceIn(-24f, 24f),
+                    gainDb = p.gainDb.coerceIn(-40f, 40f),
                     q = p.q.coerceIn(0.2f, 6f),
                 )
             }

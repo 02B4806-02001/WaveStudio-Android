@@ -36,6 +36,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -62,6 +64,7 @@ import java.io.OutputStream
 import java.util.Locale
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
@@ -76,6 +79,9 @@ import kotlin.math.PI
 
 private const val SETTINGS_PREFS_NAME = "oscope_settings"
 private const val KEY_HIDE_STARTUP_NOTE = "hide_startup_note"
+private const val KEY_APP_LANGUAGE = "app_language"
+private const val LANG_ZH = "zh"
+private const val LANG_EN = "en"
 private const val KEY_TRIGGER_MODE_NAME = "trigger_mode_name"
 private const val KEY_TRIGGER_USE_AUTOCORR = "trigger_use_autocorr"
 private const val KEY_TRIGGER_STRONG_LOWPASS_HZ = "trigger_strong_lowpass_hz"
@@ -85,7 +91,35 @@ private const val KEY_TRIGGER_HOLDOFF_RATIO = "trigger_holdoff_ratio"
 private const val KEY_TRIGGER_AUTOCORR_REFRESH_FRAMES = "trigger_autocorr_refresh_frames"
 private const val KEY_TRIGGER_AUTOCORR_MAX_SAMPLES = "trigger_autocorr_max_samples"
 
+private fun defaultLanguageFromSystem(context: android.content.Context): String {
+    val lang = context.resources.configuration.locales.get(0)?.language ?: Locale.getDefault().language
+    return if (lang.startsWith("zh")) LANG_ZH else LANG_EN
+}
+
+private fun readSavedAppLanguage(context: android.content.Context): String {
+    val prefs = context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+    val saved = prefs.getString(KEY_APP_LANGUAGE, null)
+    return when (saved) {
+        LANG_ZH -> LANG_ZH
+        LANG_EN -> LANG_EN
+        else -> defaultLanguageFromSystem(context)
+    }
+}
+
+private fun wrapContextWithAppLanguage(base: android.content.Context): android.content.Context {
+    val locale = Locale.forLanguageTag(readSavedAppLanguage(base))
+    Locale.setDefault(locale)
+    val config = android.content.res.Configuration(base.resources.configuration)
+    config.setLocale(locale)
+    config.setLayoutDirection(locale)
+    return base.createConfigurationContext(config)
+}
+
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(wrapContextWithAppLanguage(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         MainActivityHolder.activity = this
@@ -197,8 +231,10 @@ fun OscopeApp(
     val immersiveWaveformSpanMs by audioViewModel.publishedWaveformSpanMs.collectAsStateWithLifecycle()
     val immersiveAmpScale by audioViewModel.ampScale.collectAsStateWithLifecycle()
 
-    val startupNoteText = "拾音器的倍率要满足两个波形的幅值均不能超过±0dB参考线，避免削波。" +
-            "另外，在波形上纵向滑动可调整幅值缩放，横向滑动可调整时间窗口。"
+    val resources = context.resources
+    val startupNoteText = stringResource(R.string.startup_note_text)
+    val shareTitleGeneric = stringResource(R.string.share_title_generic)
+    val shareTitleRecording = stringResource(R.string.share_title_recording)
     val startupPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
     }
@@ -206,6 +242,10 @@ fun OscopeApp(
     val hideStartupNoteInitially = remember(startupPrefs) {
         startupPrefs.getBoolean(KEY_HIDE_STARTUP_NOTE, false)
     }
+    val savedLanguageInitial = remember(startupPrefs) {
+        readSavedAppLanguage(context)
+    }
+    var selectedLanguage by rememberSaveable { mutableStateOf(savedLanguageInitial) }
 
     // 启动提示弹窗
     var showStartupNoteDialog by rememberSaveable {
@@ -218,6 +258,13 @@ fun OscopeApp(
     var showAboutDialog by remember { mutableStateOf(false) }
     // 退出确认
     var showExitConfirmDialog by remember { mutableStateOf(false) }
+
+    fun switchAppLanguage(lang: String) {
+        if (selectedLanguage == lang) return
+        selectedLanguage = lang
+        startupPrefs.edit { putString(KEY_APP_LANGUAGE, lang) }
+        activity?.recreate()
+    }
 
     fun openStartupNoteDialog() {
         doNotShowStartupNoteAgain = startupPrefs.getBoolean(KEY_HIDE_STARTUP_NOTE, false)
@@ -292,7 +339,7 @@ fun OscopeApp(
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, "分享"))
+            context.startActivity(Intent.createChooser(intent, shareTitleGeneric))
         } catch (_: Throwable) {
         }
     }
@@ -306,15 +353,19 @@ fun OscopeApp(
             context.contentResolver.openInputStream(uri).use { inS: InputStream? ->
                 val text = inS?.bufferedReader(Charsets.UTF_8)?.readText()
                 if (text.isNullOrBlank()) {
-                    showCenterToast("导入失败：文件为空")
+                    showCenterToast(resources.getString(R.string.preset_import_failed_empty))
                 } else {
                     val preset = FilterPreset.fromJsonString(text)
                     audioViewModel.applyPreset(preset)
-                    showCenterToast("已导入预设" + (preset.name?.let { "：$it" } ?: ""))
+                    val presetName = preset.name?.takeIf { it.isNotBlank() }
+                    showCenterToast(
+                        if (presetName != null) resources.getString(R.string.preset_import_success_named, presetName)
+                        else resources.getString(R.string.preset_import_success)
+                    )
                 }
             }
         } catch (t: Throwable) {
-            showCenterToast("导入失败：${t.message}")
+            showCenterToast(resources.getString(R.string.preset_import_failed_with_message, t.message ?: ""))
         }
     }
 
@@ -337,7 +388,7 @@ fun OscopeApp(
                 outS?.write(json.toByteArray(Charsets.UTF_8))
                 outS?.flush()
             }
-            showCenterToast("已导出预设")
+            showCenterToast(resources.getString(R.string.preset_export_success))
 
             // 同时在 externalCacheDir 保存一份，方便一键分享
             try {
@@ -348,7 +399,7 @@ fun OscopeApp(
                 // ignore cache write
             }
         } catch (t: Throwable) {
-            showCenterToast("导出失败：${t.message}")
+            showCenterToast(resources.getString(R.string.preset_export_failed_with_message, t.message ?: ""))
         }
     }
 
@@ -432,7 +483,7 @@ fun OscopeApp(
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, "分享录音"))
+            context.startActivity(Intent.createChooser(intent, shareTitleRecording))
         } catch (_: Throwable) {
             // ignore
         }
@@ -607,6 +658,7 @@ fun OscopeApp(
     val orderOptions = (1..8).toList()
 
     val settingsScroll = rememberScrollState()
+    val uiScope = rememberCoroutineScope()
     // EQ 图拖动时，禁用外层滚动，避免“拖动节点同时界面滚动”
     val eqGraphDragging by audioViewModel.eqGraphDragging.collectAsStateWithLifecycle()
 
@@ -700,6 +752,7 @@ fun OscopeApp(
         ) {
             // 顶部：左侧“进入沉浸模式”，右侧“预设/关于/退出”
             var presetMenuExpanded by remember { mutableStateOf(false) }
+            var settingsMenuExpanded by remember { mutableStateOf(false) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -707,40 +760,39 @@ fun OscopeApp(
                 OutlinedButton(
                     onClick = { setLandscape(true) },
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) { Text("沉浸模式") }
+                ) { Text(stringResource(R.string.mode_immersive)) }
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // 预设：放到“关于/开始”左边，下拉四个选项 + 提示语（文案保持不变）
-                Box(
-                    modifier = Modifier.widthIn(max = 72.dp) // 让一级“预设”入口整体更窄一点
-                ) {
-                    OutlinedButton(
-                        onClick = { presetMenuExpanded = true },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("预设") }
+                // 预设：图标入口 + 下拉四个选项 + 提示语（文案保持不变）
+                Box {
+                    OutlinedIconButton(onClick = { presetMenuExpanded = true }) {
+                        Icon(
+                            painter = painterResource(id = android.R.drawable.ic_menu_save),
+                            contentDescription = stringResource(R.string.preset_menu_title)
+                        )
+                    }
 
                     DropdownMenu(
                         expanded = presetMenuExpanded,
                         onDismissRequest = { presetMenuExpanded = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("导入") },
+                            text = { Text(stringResource(R.string.action_import)) },
                             onClick = {
                                 presetMenuExpanded = false
                                 importPresetLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("导出") },
+                            text = { Text(stringResource(R.string.action_export)) },
                             onClick = {
                                 presetMenuExpanded = false
                                 exportPresetLauncher.launch("oscope_preset.json")
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("分享") },
+                            text = { Text(stringResource(R.string.action_share)) },
                             onClick = {
                                 presetMenuExpanded = false
                                 presetShareName = "oscope_preset"
@@ -748,7 +800,7 @@ fun OscopeApp(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("默认") },
+                            text = { Text(stringResource(R.string.action_default)) },
                             onClick = {
                                 presetMenuExpanded = false
                                 presetResetConfirmDialog = true
@@ -759,7 +811,7 @@ fun OscopeApp(
 
                         // 提示语：保持原文案不变
                         Text(
-                            text = "预设是 .json 文件。先点“导出”保存到手机；如果要发给别人，也可以不导出直接点“分享”。对方收到后点“导入”选择该文件即可。", //不要改
+                            text = stringResource(R.string.preset_help_text), //不要改
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier
@@ -771,10 +823,59 @@ fun OscopeApp(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                OutlinedButton(
-                    onClick = { showAboutDialog = true },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) { Text("关于") }
+                OutlinedIconButton(onClick = { showAboutDialog = true }) {
+                    Icon(
+                        painter = painterResource(id = android.R.drawable.ic_menu_info_details),
+                        contentDescription = stringResource(R.string.about_title)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                OutlinedIconButton(
+                    onClick = { settingsMenuExpanded = true }
+                ) {
+                    Icon(
+                        painter = painterResource(id = android.R.drawable.ic_menu_manage),
+                        contentDescription = stringResource(R.string.settings_language_label)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = settingsMenuExpanded,
+                    onDismissRequest = { settingsMenuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (selectedLanguage == LANG_ZH) "✓ ${stringResource(R.string.language_option_zh)}" else stringResource(R.string.language_option_zh)
+                            )
+                        },
+                        onClick = {
+                            settingsMenuExpanded = false
+                            switchAppLanguage(LANG_ZH)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (selectedLanguage == LANG_EN) "✓ ${stringResource(R.string.language_option_en)}" else stringResource(R.string.language_option_en)
+                            )
+                        },
+                        onClick = {
+                            settingsMenuExpanded = false
+                            switchAppLanguage(LANG_EN)
+                        }
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.settings_scroll_top)) },
+                        onClick = {
+                            settingsMenuExpanded = false
+                            uiScope.launch { settingsScroll.animateScrollTo(0) }
+                        }
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
@@ -789,7 +890,7 @@ fun OscopeApp(
                         contentColor = Color.White
                     ),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) { Text("退出") }
+                ) { Text(stringResource(R.string.exit_title)) }
             }
 
             Row(
@@ -798,7 +899,7 @@ fun OscopeApp(
             ) {
                 Text(
                     // 原始波形标题：把实时值显示在括号里（替代悬浮文本）
-                    text = "输入波形 ${rawScaleText}x",
+                    text = stringResource(R.string.waveform_input_title_value, rawScaleText),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -898,7 +999,7 @@ fun OscopeApp(
             ) {
                 Text(
                     // 处理后波形标题：仅显示缩放（与示例一致）
-                    text = "处理后波形 ${filteredScaleText}x",
+                    text = stringResource(R.string.waveform_processed_title_value, filteredScaleText),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -1061,7 +1162,7 @@ fun OscopeApp(
                         ),
                         contentPadding = PaddingValues(vertical = 8.dp),
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (useTestSignal || useImportedSignal || isRunning) "停止" else "开始", fontSize = 15.sp) }
+                    ) { Text(if (useTestSignal || useImportedSignal || isRunning) stringResource(R.string.action_stop) else stringResource(R.string.test_mode_start), fontSize = 15.sp) }
 
                     Button(
                         onClick = {
@@ -1081,14 +1182,14 @@ fun OscopeApp(
                         enabled = isRunning || useImportedSignal,
                         contentPadding = PaddingValues(vertical = 8.dp),
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (isRecording) "结束" else "录音", fontSize = 15.sp) }
+                    ) { Text(if (isRecording) stringResource(R.string.action_stop) else stringResource(R.string.action_record), fontSize = 15.sp) }
 
                     Button(
                         onClick = { audioViewModel.toggleMonitoring() },
                         enabled = isRunning || useImportedSignal,
                         contentPadding = PaddingValues(vertical = 8.dp),
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (isMonitoring) "关监听" else "监听", fontSize = 15.sp) }
+                    ) { Text(if (isMonitoring) stringResource(R.string.monitor_off) else stringResource(R.string.monitor_on), fontSize = 15.sp) }
 
 
                     Button(
@@ -1102,9 +1203,9 @@ fun OscopeApp(
                     ) {
                         Text(
                             when {
-                                isImportingAudio -> "导入中"
-                                useImportedSignal -> "音频输入"
-                                else -> "导入音频"
+                                isImportingAudio -> stringResource(R.string.importing)
+                                useImportedSignal -> stringResource(R.string.audio_input_mode)
+                                else -> stringResource(R.string.load_audio)
                             },
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -1118,13 +1219,14 @@ fun OscopeApp(
                         enabled = recordings.isNotEmpty(),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         modifier = Modifier.align(Alignment.CenterVertically)
-                    ) { Text("列表") }
+                    ) { Text(stringResource(R.string.list_title)) }
                 }
 
 
                 if (engineError != null) {
+                    val engineErrorText = engineError ?: ""
                     Text(
-                        text = "错误: ${engineError}",
+                        text = stringResource(R.string.error_prefix_with_message, engineErrorText),
                         style = MaterialTheme.typography.labelMedium,
                         color = Color(0xFFC62828),
                         modifier = Modifier.fillMaxWidth()
@@ -1133,7 +1235,10 @@ fun OscopeApp(
 
                 if (useImportedSignal) {
                     Text(
-                        text = "输入源: 导入音频${importedAudioLabel?.let { " ($it)" } ?: ""}",
+                        text = stringResource(
+                            R.string.input_source_imported_audio,
+                            importedAudioLabel?.let { " ($it)" } ?: ""
+                        ),
                         style = MaterialTheme.typography.labelMedium,
                         color = Color(0xFF1565C0),
                         modifier = Modifier.fillMaxWidth()
@@ -1152,9 +1257,9 @@ fun OscopeApp(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         ClickToEditNumberText(
-                            text = "低通 ${formatLowPassHz(lowPassDisplayHz)}Hz",
+                            text = stringResource(R.string.low_pass_value_hz, formatLowPassHz(lowPassDisplayHz)),
                             initialText = formatLowPassHz(lowPassCutoff),
-                            title = "设置低通截止频率",
+                            title = stringResource(R.string.low_pass_set_title),
                             unit = "Hz",
                             parseAndClamp = { s ->
                                 s.trim().replace(",", ".").toFloatOrNull()?.let { snapLowPassHz(it) }
@@ -1169,7 +1274,12 @@ fun OscopeApp(
                             style = MaterialTheme.typography.bodyMedium,
                             contentPadding = PaddingValues(0.dp),
                             modifier = Modifier.weight(1f),
-                            trailingIcon = { InfoIconButton("低通滤波截止频率", "低通滤波可以阻挡高频，使低频通过，截止频率越低效果越明显。") }
+                            trailingIcon = {
+                                InfoIconButton(
+                                    stringResource(R.string.low_pass_info_title),
+                                    stringResource(R.string.low_pass_info_message)
+                                )
+                            }
                         )
                         Switch(
                             checked = lowPassEnabled,
@@ -1208,9 +1318,9 @@ fun OscopeApp(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         ClickToEditNumberText(
-                            text = "高通 ${formatHighPassHz(highPassDisplayHz)}Hz",
+                            text = stringResource(R.string.high_pass_value_hz, formatHighPassHz(highPassDisplayHz)),
                             initialText = formatHighPassHz(highPassCutoff),
-                            title = "设置高通截止频率",
+                            title = stringResource(R.string.high_pass_set_title),
                             unit = "Hz",
                             parseAndClamp = { s ->
                                 s.trim().replace(",", ".").toFloatOrNull()?.let { snapHighPassHz(it) }
@@ -1224,7 +1334,12 @@ fun OscopeApp(
                             style = MaterialTheme.typography.bodyMedium,
                             contentPadding = PaddingValues(0.dp),
                             modifier = Modifier.weight(1f),
-                            trailingIcon = { InfoIconButton("高通滤波截止频率", "高通滤波可以阻挡低频，使高频通过，截止频率越高效果越明显。") }
+                            trailingIcon = {
+                                InfoIconButton(
+                                    stringResource(R.string.high_pass_info_title),
+                                    stringResource(R.string.high_pass_info_message)
+                                )
+                            }
                         )
                         Switch(
                             checked = highPassEnabled,
@@ -1280,16 +1395,20 @@ fun OscopeApp(
                     val displayGainDb = rememberDisplayLowPass(gainDb, resetKey = "filterGainDb", alpha = 0.44f, snapThreshold = 0.03f)
                     val displayGainX = dbToGain(displayGainDb)
                     val gainDbText = String.format(Locale.US, "%+.1f", displayGainDb)
-                    val gainXText = String.format(Locale.US, "%.1f", displayGainX)
+                    val gainXText = if (displayGainX < 1f) {
+                        String.format(Locale.US, "%.2f", displayGainX)
+                    } else {
+                        String.format(Locale.US, "%.1f", displayGainX)
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         ClickToEditNumberText(
-                            text = "处理后增益 ${gainDbText}dB (${gainXText}x)",
+                            text = stringResource(R.string.processed_gain_value, gainDbText, gainXText),
                             initialText = String.format(Locale.US, "%.2f", gainDb),
-                            title = "设置处理后增益",
+                            title = stringResource(R.string.processed_gain_set_title),
                             unit = "dB",
                             parseAndClamp = { s ->
                                 s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(-20f, 40f)
@@ -1300,31 +1419,44 @@ fun OscopeApp(
                             style = MaterialTheme.typography.bodyMedium,
                             contentPadding = PaddingValues(0.dp),
                             modifier = Modifier.weight(1f),
-                            trailingIcon = { InfoIconButton("处理后增益", "它会整体调节处理后波形的音量大小") }
+                            trailingIcon = {
+                                InfoIconButton(
+                                    stringResource(R.string.processed_gain_info_title),
+                                    stringResource(R.string.processed_gain_info_message)
+                                )
+                            }
                         )
                         TextButton(
                             // 0 dB = 1.0x
                             onClick = { audioViewModel.updateFilterGain(dbToGain(0f).coerceIn(gainMin, gainMax)) },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                        ) { Text("重置") }
+                        ) { Text(stringResource(R.string.common_reset)) }
                     }
 
-                    // range: -20dB .. 40dB
-                    val gainDbMin = -20f
-                    val gainDbMax = 40f
-                    val powerCurve = 1.5f // Higher = more resolution at low end
+                    // range
+                    val gainDbMin = -16f
+                    val gainDbMax = 32.05f
+                    val powerCurve = 2.5f
+                    val linearWeight = 0.65f
 
-                    // Non-linear mapping: p = ((db - min) / range)^(1/k)
-                    // db = min + range * p^k
+                    // Blend linear + power curve so the slider keeps fine low-end control
+                    // but feels less "curved" in the middle section.
                     fun dbToSlider(db: Float): Float {
                         val d = db.coerceIn(gainDbMin, gainDbMax)
-                        val norm = (d - gainDbMin) / (gainDbMax - gainDbMin)
-                        return norm.pow(1f / powerCurve)
+                        val normTarget = (d - gainDbMin) / (gainDbMax - gainDbMin)
+                        var lo = 0f
+                        var hi = 1f
+                        repeat(20) {
+                            val mid = (lo + hi) * 0.5f
+                            val midNorm = mid.pow(powerCurve) * (1f - linearWeight) + mid * linearWeight
+                            if (midNorm < normTarget) lo = mid else hi = mid
+                        }
+                        return (lo + hi) * 0.5f
                     }
 
                     fun sliderToDb(p01: Float): Float {
                         val p = p01.coerceIn(0f, 1f)
-                        val norm = p.pow(powerCurve)
+                        val norm = p.pow(powerCurve) * (1f - linearWeight) + p * linearWeight
                         return gainDbMin + norm * (gainDbMax - gainDbMin)
                     }
 
@@ -1352,22 +1484,27 @@ fun OscopeApp(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         ClickToEditNumberText(
-                            text = "时间窗口 ${winText}ms",
+                            text = stringResource(R.string.time_window_value_ms, winText),
                             initialText = winText,
-                            title = "设置时间窗口",
+                            title = stringResource(R.string.time_window_set_title),
                             unit = "ms",
                             parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(windowMinMs, windowMaxMs) },
                             onValue = { v -> audioViewModel.updateTimeSlider(v) },
                             style = MaterialTheme.typography.bodyMedium,
                             contentPadding = PaddingValues(0.dp),
                             modifier = Modifier.weight(1f),
-                            trailingIcon = { InfoIconButton("时间窗口", "窗口越长显示的周期越多，但画面更新会更慢。") }
+                            trailingIcon = {
+                                InfoIconButton(
+                                    stringResource(R.string.time_window_info_title),
+                                    stringResource(R.string.time_window_info_message)
+                                )
+                            }
                         )
                         TextButton(
                             // 重置为 20ms
                             onClick = { audioViewModel.updateTimeSlider(20f) },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                        ) { Text("重置") }
+                        ) { Text(stringResource(R.string.common_reset)) }
                     }
 
                     // log-ish slider mapping
@@ -1389,15 +1526,15 @@ fun OscopeApp(
                 if (presetShareDialog) {
                     AlertDialog(
                         onDismissRequest = { presetShareDialog = false },
-                        title = { Text("分享预设") },
+                        title = { Text(stringResource(R.string.preset_share_title)) },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedTextField(
                                     value = presetShareName,
                                     onValueChange = { presetShareName = it },
                                     singleLine = true,
-                                    label = { Text("文件名（不含 .json）") },
-                                    supportingText = { Text("会生成并分享一个 .json 预设文件") }
+                                    label = { Text(stringResource(R.string.preset_file_name_label)) },
+                                    supportingText = { Text(stringResource(R.string.preset_file_name_hint)) }
                                 )
                             }
                         },
@@ -1406,17 +1543,17 @@ fun OscopeApp(
                                 onClick = {
                                     val file = exportCurrentPresetToCache(presetShareName)
                                     if (file != null) {
-                                        showCenterToast("已生成并分享预设：${file.name}")
+                                        showCenterToast(resources.getString(R.string.preset_share_success_named, file.name))
                                         shareAnyFile(file, "application/json")
                                     } else {
-                                        showCenterToast("分享失败：无法生成预设文件")
+                                        showCenterToast(resources.getString(R.string.preset_share_failed))
                                     }
                                     presetShareDialog = false
                                 }
-                            ) { Text("直接分享") }
+                            ) { Text(stringResource(R.string.action_share_direct)) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { presetShareDialog = false }) { Text("取消") }
+                            TextButton(onClick = { presetShareDialog = false }) { Text(stringResource(R.string.common_cancel)) }
                         }
                     )
                 }
@@ -1425,19 +1562,19 @@ fun OscopeApp(
                 if (presetResetConfirmDialog) {
                     AlertDialog(
                         onDismissRequest = { presetResetConfirmDialog = false },
-                        title = { Text("恢复默认") },
-                        text = { Text("确定要把当前滤波器参数恢复为默认值吗？") },
+                        title = { Text(stringResource(R.string.preset_restore_default_title)) },
+                        text = { Text(stringResource(R.string.preset_restore_default_confirm)) },
                         confirmButton = {
                             TextButton(
                                 onClick = {
                                     audioViewModel.resetFilterPresetToDefault()
-                                    showCenterToast("已恢复默认")
+                                    showCenterToast(resources.getString(R.string.preset_restore_default_done))
                                     presetResetConfirmDialog = false
                                 }
-                            ) { Text("确定") }
+                            ) { Text(stringResource(R.string.common_confirm)) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { presetResetConfirmDialog = false }) { Text("取消") }
+                            TextButton(onClick = { presetResetConfirmDialog = false }) { Text(stringResource(R.string.common_cancel)) }
                         }
                     )
                 }
@@ -1446,7 +1583,7 @@ fun OscopeApp(
                 if (showRecordList) {
                     AlertDialog(
                         onDismissRequest = { showRecordList = false },
-                        title = { Text("录音列表") },
+                        title = { Text(stringResource(R.string.recordings_list_title)) },
                         text = {
                             Box(
                                 modifier = Modifier
@@ -1476,7 +1613,7 @@ fun OscopeApp(
                             }
                         },
                         confirmButton = {
-                            TextButton(onClick = { showRecordList = false }) { Text("关闭") }
+                            TextButton(onClick = { showRecordList = false }) { Text(stringResource(R.string.common_close)) }
                         }
                     )
                 }
@@ -1486,13 +1623,13 @@ fun OscopeApp(
                     val clip = renameTarget!!
                     AlertDialog(
                         onDismissRequest = { renameTarget = null },
-                        title = { Text("重命名") },
+                        title = { Text(stringResource(R.string.rename_title)) },
                         text = {
                             OutlinedTextField(
                                 value = renameText,
                                 onValueChange = { renameText = it },
                                 singleLine = true,
-                                label = { Text("文件名") },
+                                label = { Text(stringResource(R.string.file_name_label)) },
                             )
                         },
                         confirmButton = {
@@ -1504,10 +1641,10 @@ fun OscopeApp(
                                     }
                                     renameTarget = null
                                 }
-                            ) { Text("确定") }
+                            ) { Text(stringResource(R.string.common_confirm)) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { renameTarget = null }) { Text("取消") }
+                            TextButton(onClick = { renameTarget = null }) { Text(stringResource(R.string.common_cancel)) }
                         }
                     )
                 }
@@ -1517,21 +1654,22 @@ fun OscopeApp(
                     val clip = deleteTarget!!
                     AlertDialog(
                         onDismissRequest = { deleteTarget = null },
-                        title = { Text("删除录音") },
-                        text = { Text("确定要删除“${clip.fileName}”吗？此操作不可恢复。") },
+                        title = { Text(stringResource(R.string.delete_recording_title)) },
+                        text = { Text(stringResource(R.string.delete_recording_confirm, clip.fileName)) },
                         confirmButton = {
                             TextButton(
                                 onClick = {
                                     audioViewModel.deleteRecording(clip.id)
                                     deleteTarget = null
                                 }
-                            ) { Text("删除") }
+                            ) { Text(stringResource(R.string.action_delete)) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { deleteTarget = null }) { Text("取消") }
+                            TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.common_cancel)) }
                         }
                     )
                 }
+
 
                 // ===== Test modes (top of this settings block) =====
                 run {
@@ -1544,7 +1682,7 @@ fun OscopeApp(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "测试模式",
+                            text = stringResource(R.string.test_mode_label),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.widthIn(min = 64.dp)
                         )
@@ -1553,12 +1691,12 @@ fun OscopeApp(
                                 onClick = { audioViewModel.toggleVvvfTestSignal() },
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                             ) {
-                                Text(if (useTestSignal) "测试中" else "测试")
+                                Text(if (useTestSignal) stringResource(R.string.test_mode_running) else stringResource(R.string.test_mode_start))
                             }
                         }
 
                         Text(
-                            text = "使用静态测试信号",
+                            text = stringResource(R.string.test_mode_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                             modifier = Modifier.weight(1f)
@@ -1571,7 +1709,7 @@ fun OscopeApp(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "测试波形",
+                            text = stringResource(R.string.test_waveform_label),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.widthIn(min = 64.dp)
                         )
@@ -1599,7 +1737,7 @@ fun OscopeApp(
                         }
 
                         Text(
-                            text = "可切换异步SPWM或方波调制",
+                            text = stringResource(R.string.test_waveform_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                             modifier = Modifier.weight(1f)
@@ -1620,7 +1758,7 @@ fun OscopeApp(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "波形 0dB 参考线",
+                            text = stringResource(R.string.waveform_ref_line_label),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.widthIn(min = 64.dp)
                         )
@@ -1629,7 +1767,7 @@ fun OscopeApp(
                             onCheckedChange = { showRefWaveforms = it }
                         )
                         Text(
-                            text = if (showRefWaveforms) "显示" else "隐藏",
+                            text = if (showRefWaveforms) stringResource(R.string.show_reference_line) else stringResource(R.string.hide_reference_line),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                         )
@@ -1641,7 +1779,7 @@ fun OscopeApp(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "录音格式",
+                            text = stringResource(R.string.recording_format_label),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.widthIn(min = 64.dp)
                         )
@@ -1672,7 +1810,7 @@ fun OscopeApp(
                         Spacer(Modifier.weight(1f))
 
                         Text(
-                            text = "采样率",
+                            text = stringResource(R.string.sample_rate_label),
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Box {
@@ -1699,7 +1837,7 @@ fun OscopeApp(
 
                     if (isRecording) {
                         Text(
-                            text = "录音中无法修改格式/采样率",
+                            text = stringResource(R.string.recording_locked_format_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                             modifier = Modifier.fillMaxWidth()
@@ -1712,7 +1850,7 @@ fun OscopeApp(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "波形刷新率",
+                            text = stringResource(R.string.waveform_refresh_rate_label),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.widthIn(min = 64.dp)
                         )
@@ -1740,7 +1878,7 @@ fun OscopeApp(
                         }
 
                         Text(
-                            text = "越高越流畅，但更耗性能",
+                            text = stringResource(R.string.waveform_refresh_rate_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                             modifier = Modifier.weight(1f)
@@ -1762,7 +1900,7 @@ fun OscopeApp(
     if (showStartupNoteDialog) {
         AlertDialog(
             onDismissRequest = { showStartupNoteDialog = false },
-            title = { Text("提示") },
+            title = { Text(stringResource(R.string.startup_note_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(startupNoteText)
@@ -1783,7 +1921,7 @@ fun OscopeApp(
                             onCheckedChange = null
                         )
                         Text(
-                            text = "不再提示",
+                            text = stringResource(R.string.startup_note_do_not_show),
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -1795,7 +1933,7 @@ fun OscopeApp(
                         startupPrefs.edit { putBoolean(KEY_HIDE_STARTUP_NOTE, doNotShowStartupNoteAgain) }
                         showStartupNoteDialog = false
                     }
-                ) { Text("知道了") }
+                ) { Text(stringResource(R.string.startup_note_ack)) }
             }
         )
     }
@@ -1806,7 +1944,7 @@ fun OscopeApp(
         val aboutDialogScrollState = rememberScrollState()
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
-            title = { Text("关于") },
+            title = { Text(stringResource(R.string.about_title)) },
             text = {
                 Box(
                     modifier = Modifier
@@ -1817,32 +1955,32 @@ fun OscopeApp(
                         modifier = Modifier.verticalScroll(aboutDialogScrollState),
                         verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text("Wave Studio v0.11.5 by 磁拾音器研究所")
-                        Text("提示：使用前请授予麦克风权限。")
+                        Text(stringResource(R.string.about_app_signature))
+                        Text(stringResource(R.string.about_permission_tip))
                         Text("")
-                        Text("0.11.5版本主要更新内容如下：")
-                        Text("- 均衡器")
-                        Text("- 修复了监听模式卡顿的问题")
-                        Text("- 修复了一些其他 bug")
+                        Text(stringResource(R.string.about_update_v0115_title))
+                        Text(stringResource(R.string.about_update_v0115_item_1))
+                        Text(stringResource(R.string.about_update_v0115_item_2))
+                        Text(stringResource(R.string.about_update_v0115_item_3))
                         Text("")
-                        Text("0.11.4版本主要更新内容如下：")
-                        Text("- 滤波器改为默认关闭")
-                        Text("- 修复了监听模式卡顿的问题")
-                        Text("- 修复了一些其他 bug")
+                        Text(stringResource(R.string.about_update_v0114_title))
+                        Text(stringResource(R.string.about_update_v0114_item_1))
+                        Text(stringResource(R.string.about_update_v0114_item_2))
+                        Text(stringResource(R.string.about_update_v0114_item_3))
                         Text("")
-                        Text("0.11.3版本主要更新内容如下：")
-                        Text("- 加回“显示/隐藏参考线”按钮")
-                        Text("- 滤波器与均衡器改为默认开启")
-                        Text("- 均衡器 Shelf 模式下限制有效Q值")
-                        Text("- 修复了一些情况下的掉帧问题")
-                        Text("- 修复了导入音频时监听卡顿的问题")
-                        Text("- 改动了一些细节")
+                        Text(stringResource(R.string.about_update_v0113_title))
+                        Text(stringResource(R.string.about_update_v0113_item_1))
+                        Text(stringResource(R.string.about_update_v0113_item_2))
+                        Text(stringResource(R.string.about_update_v0113_item_3))
+                        Text(stringResource(R.string.about_update_v0113_item_4))
+                        Text(stringResource(R.string.about_update_v0113_item_5))
+                        Text(stringResource(R.string.about_update_v0113_item_6))
                         Text("")
-                        Text("参与开发人员（B站名）：02B4806長-02001、某地铁迷_、莓喵の小风扇、TEP-28WG01等")
+                        Text(stringResource(R.string.about_contributors))
                         Text("")
-                        Text("磁拾音器QQ交流群：762852552")
+                        Text(stringResource(R.string.about_qq_group))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("磁拾音器研究所官网：")
+                            Text(stringResource(R.string.about_official_website_label))
                             val url = "https://www.mhrri.org/"
                             val linkText = buildAnnotatedString {
                                 withStyle(
@@ -1868,7 +2006,7 @@ fun OscopeApp(
                             )
                         }
                         Text("")
-                        Text("预设配置下载：（暂时预留）")
+                        Text(stringResource(R.string.about_preset_download_placeholder))
                     }
                 }
             },
@@ -1879,11 +2017,11 @@ fun OscopeApp(
                         openStartupNoteDialog()
                     }
                 ) {
-                    Text("显示提示弹窗")
+                    Text(stringResource(R.string.startup_note_show_button))
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showAboutDialog = false }) { Text("确定") }
+                TextButton(onClick = { showAboutDialog = false }) { Text(stringResource(R.string.common_confirm)) }
             }
         )
     }
@@ -1891,8 +2029,8 @@ fun OscopeApp(
     if (showExitConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showExitConfirmDialog = false },
-            title = { Text("退出") },
-            text = { Text("确定要退出吗？") },
+            title = { Text(stringResource(R.string.exit_title)) },
+            text = { Text(stringResource(R.string.exit_confirm_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1901,10 +2039,10 @@ fun OscopeApp(
                         try { audioViewModel.stopEngine() } catch (_: Throwable) {}
                         try { activity?.finish() } catch (_: Throwable) {}
                     }
-                ) { Text("退出") }
+                ) { Text(stringResource(R.string.exit_title)) }
             },
             dismissButton = {
-                TextButton(onClick = { showExitConfirmDialog = false }) { Text("取消") }
+                TextButton(onClick = { showExitConfirmDialog = false }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -2186,7 +2324,7 @@ private fun ImmersiveScreen(
                 OutlinedButton(
                     onClick = { setLandscape(false) },
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
-                ) { Text("普通模式", color = Color.White) }
+                ) { Text(stringResource(R.string.mode_normal), color = Color.White) }
 
                 Spacer(Modifier.width(10.dp))
 
@@ -2201,12 +2339,12 @@ private fun ImmersiveScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             val label = when (triggerMode) {
-                                NewTriggerEngine.Mode.OFF -> "Trigger 关"
+                                NewTriggerEngine.Mode.OFF -> stringResource(R.string.trigger_off)
                                 NewTriggerEngine.Mode.RISING,
-                                NewTriggerEngine.Mode.FALLING -> "Trigger 开"
+                                NewTriggerEngine.Mode.FALLING -> stringResource(R.string.trigger_on)
                             }
                             Text(label, color = Color.White)
-                            InfoIconButton("Trigger 开关", "开启后会使用升沿触发，并结合自相关与历史相位来稳定触发点。")
+                            InfoIconButton(stringResource(R.string.trigger_switch_info_title), stringResource(R.string.trigger_switch_info_message))
                         }
                     }
                 }
@@ -2217,7 +2355,7 @@ private fun ImmersiveScreen(
                     onClick = { showTriggerAdvancedDialog = true },
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                 ) {
-                    Text(if (triggerUseAutocorr) "增强·开" else "增强·关", color = Color.White)
+                    Text(if (triggerUseAutocorr) stringResource(R.string.trigger_advanced_on) else stringResource(R.string.trigger_advanced_off), color = Color.White)
                 }
 
                 Spacer(Modifier.width(8.dp))
@@ -2226,7 +2364,7 @@ private fun ImmersiveScreen(
                     onClick = onToggleShowRef,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                 ) {
-                    Text(if (showRefWaveforms) "隐藏参考线" else "显示参考线", color = Color.White)
+                    Text(if (showRefWaveforms) stringResource(R.string.hide_reference_line) else stringResource(R.string.show_reference_line), color = Color.White)
                 }
             }
         } else {
@@ -2246,8 +2384,8 @@ private fun ImmersiveScreen(
                 properties = DialogProperties(usePlatformDefaultWidth = false),
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Trigger 增强")
-                        InfoIconButton("Trigger 增强", "这里调的是触发稳定性相关参数。自相关辅助会帮助识别基波周期；滞回、保留间隔和刷新频率会影响稳定性与响应速度。")
+                        Text(stringResource(R.string.trigger_advanced_title))
+                        InfoIconButton(stringResource(R.string.trigger_advanced_info_title), stringResource(R.string.trigger_advanced_info_message))
                     }
                 },
                 text = {
@@ -2268,8 +2406,8 @@ private fun ImmersiveScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("自相关辅助")
-                                InfoIconButton("自相关辅助", "开启后，Trigger 会先用自相关估计当前基频周期，再辅助升沿触发，更适合基频缓慢变化的 VVVF 波形。")
+                                Text(stringResource(R.string.trigger_autocorr_assist))
+                                InfoIconButton(stringResource(R.string.trigger_autocorr_assist), stringResource(R.string.trigger_autocorr_assist_info))
                             }
                             Switch(
                                 checked = triggerUseAutocorr,
@@ -2282,8 +2420,8 @@ private fun ImmersiveScreen(
                                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("预触发比例: ${String.format(Locale.US, "%.2f", triggerPreTriggerRatio)}")
-                                            InfoIconButton("预触发比例", "决定触发点出现在窗口前面留多少余量。越大，触发点越靠后，前面的波形越多。")
+                                            Text(stringResource(R.string.trigger_pre_trigger_ratio_value, String.format(Locale.US, "%.2f", triggerPreTriggerRatio)))
+                                            InfoIconButton(stringResource(R.string.trigger_pre_trigger_ratio_info_title), stringResource(R.string.trigger_pre_trigger_ratio_info_message))
                                         }
                                         Slider(
                                             value = triggerPreTriggerRatio,
@@ -2295,8 +2433,8 @@ private fun ImmersiveScreen(
 
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("辅助低通: ${String.format(Locale.US, "%.0f", triggerStrongLowPassHz)}Hz")
-                                            InfoIconButton("辅助低通", "这是给 Trigger 用的低通截止频率，用来压制高频开关噪声，让基波更容易被识别。")
+                                            Text(stringResource(R.string.trigger_assist_lowpass_value, String.format(Locale.US, "%.0f", triggerStrongLowPassHz)))
+                                            InfoIconButton(stringResource(R.string.trigger_assist_lowpass_info_title), stringResource(R.string.trigger_assist_lowpass_info_message))
                                         }
                                         Slider(
                                             value = triggerStrongLowPassHz,
@@ -2308,8 +2446,8 @@ private fun ImmersiveScreen(
 
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("自相关刷新: ${triggerAutocorrRefreshFrames} 帧")
-                                            InfoIconButton("自相关刷新", "控制多久重新计算一次自相关。越小越跟手，但越耗性能；越大越省电，但响应更慢。")
+                                            Text(stringResource(R.string.trigger_autocorr_refresh_value, triggerAutocorrRefreshFrames))
+                                            InfoIconButton(stringResource(R.string.trigger_autocorr_refresh_info_title), stringResource(R.string.trigger_autocorr_refresh_info_message))
                                         }
                                         Slider(
                                             value = triggerAutocorrRefreshFrames.toFloat(),
@@ -2322,8 +2460,8 @@ private fun ImmersiveScreen(
 
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("自相关长度: ${triggerAutocorrMaxSamples} 点")
-                                            InfoIconButton("自相关长度", "用多长的一段波形做自相关。越长越稳，但越耗性能；越短越快，但可能更抖。")
+                                            Text(stringResource(R.string.trigger_autocorr_length_value, triggerAutocorrMaxSamples))
+                                            InfoIconButton(stringResource(R.string.trigger_autocorr_length_info_title), stringResource(R.string.trigger_autocorr_length_info_message))
                                         }
                                         Slider(
                                             value = triggerAutocorrMaxSamples.toFloat(),
@@ -2336,8 +2474,8 @@ private fun ImmersiveScreen(
 
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("滞回: ${String.format(Locale.US, "%.2f", triggerHysteresisRatio)}")
-                                            InfoIconButton("滞回", "防止阈值附近来回抖动造成误触。调大更稳，调小更灵敏。")
+                                            Text(stringResource(R.string.trigger_hysteresis_value, String.format(Locale.US, "%.2f", triggerHysteresisRatio)))
+                                            InfoIconButton(stringResource(R.string.trigger_hysteresis_info_title), stringResource(R.string.trigger_hysteresis_info_message))
                                         }
                                         Slider(
                                             value = triggerHysteresisRatio,
@@ -2349,8 +2487,8 @@ private fun ImmersiveScreen(
 
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("保留间隔: ${String.format(Locale.US, "%.2f", triggerHoldoffRatio)}")
-                                            InfoIconButton("保留间隔", "限制连续触发之间的最小间隔，避免同一周期里重复抓到多个边沿。")
+                                            Text(stringResource(R.string.trigger_holdoff_value, String.format(Locale.US, "%.2f", triggerHoldoffRatio)))
+                                            InfoIconButton(stringResource(R.string.trigger_holdoff_info_title), stringResource(R.string.trigger_holdoff_info_message))
                                         }
                                         Slider(
                                             value = triggerHoldoffRatio,
@@ -2373,8 +2511,8 @@ private fun ImmersiveScreen(
                                     ) {
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("预触发比例: ${String.format(Locale.US, "%.2f", triggerPreTriggerRatio)}")
-                                                InfoIconButton("预触发比例", "决定触发点出现在窗口前面留多少余量。越大，触发点越靠后，前面的波形越多。")
+                                                Text(stringResource(R.string.trigger_pre_trigger_ratio_value, String.format(Locale.US, "%.2f", triggerPreTriggerRatio)))
+                                                InfoIconButton(stringResource(R.string.trigger_pre_trigger_ratio_info_title), stringResource(R.string.trigger_pre_trigger_ratio_info_message))
                                             }
                                             Slider(
                                                 value = triggerPreTriggerRatio,
@@ -2386,8 +2524,8 @@ private fun ImmersiveScreen(
 
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("辅助低通: ${String.format(Locale.US, "%.0f", triggerStrongLowPassHz)}Hz")
-                                                InfoIconButton("辅助低通", "这是给 Trigger 用的低通截止频率，用来压制高频开关噪声，让基波更容易被识别。")
+                                                Text(stringResource(R.string.trigger_assist_lowpass_value, String.format(Locale.US, "%.0f", triggerStrongLowPassHz)))
+                                                InfoIconButton(stringResource(R.string.trigger_assist_lowpass_info_title), stringResource(R.string.trigger_assist_lowpass_info_message))
                                             }
                                             Slider(
                                                 value = triggerStrongLowPassHz,
@@ -2399,8 +2537,8 @@ private fun ImmersiveScreen(
 
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("自相关刷新: ${triggerAutocorrRefreshFrames} 帧")
-                                                InfoIconButton("自相关刷新", "控制多久重新计算一次自相关。越小越跟手，但越耗性能；越大越省电，但响应更慢。")
+                                                Text(stringResource(R.string.trigger_autocorr_refresh_value, triggerAutocorrRefreshFrames))
+                                                InfoIconButton(stringResource(R.string.trigger_autocorr_refresh_info_title), stringResource(R.string.trigger_autocorr_refresh_info_message))
                                             }
                                             Slider(
                                                 value = triggerAutocorrRefreshFrames.toFloat(),
@@ -2418,8 +2556,8 @@ private fun ImmersiveScreen(
                                     ) {
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("自相关长度: ${triggerAutocorrMaxSamples} 点")
-                                                InfoIconButton("自相关长度", "用多长的一段波形做自相关。越长越稳，但越耗性能；越短越快，但可能更抖。")
+                                                Text(stringResource(R.string.trigger_autocorr_length_value, triggerAutocorrMaxSamples))
+                                                InfoIconButton(stringResource(R.string.trigger_autocorr_length_info_title), stringResource(R.string.trigger_autocorr_length_info_message))
                                             }
                                             Slider(
                                                 value = triggerAutocorrMaxSamples.toFloat(),
@@ -2432,8 +2570,8 @@ private fun ImmersiveScreen(
 
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("滞回: ${String.format(Locale.US, "%.2f", triggerHysteresisRatio)}")
-                                                InfoIconButton("滞回", "防止阈值附近来回抖动造成误触。调大更稳，调小更灵敏。")
+                                                Text(stringResource(R.string.trigger_hysteresis_value, String.format(Locale.US, "%.2f", triggerHysteresisRatio)))
+                                                InfoIconButton(stringResource(R.string.trigger_hysteresis_info_title), stringResource(R.string.trigger_hysteresis_info_message))
                                             }
                                             Slider(
                                                 value = triggerHysteresisRatio,
@@ -2445,8 +2583,8 @@ private fun ImmersiveScreen(
 
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("保留间隔: ${String.format(Locale.US, "%.2f", triggerHoldoffRatio)}")
-                                                InfoIconButton("保留间隔", "限制连续触发之间的最小间隔，避免同一周期里重复抓到多个边沿。")
+                                                Text(stringResource(R.string.trigger_holdoff_value, String.format(Locale.US, "%.2f", triggerHoldoffRatio)))
+                                                InfoIconButton(stringResource(R.string.trigger_holdoff_info_title), stringResource(R.string.trigger_holdoff_info_message))
                                             }
                                             Slider(
                                                 value = triggerHoldoffRatio,
@@ -2470,8 +2608,8 @@ private fun ImmersiveScreen(
                                     ) {
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("预触发比例: ${String.format(Locale.US, "%.2f", triggerPreTriggerRatio)}")
-                                                InfoIconButton("预触发比例", "决定触发点出现在窗口前面留多少余量。越大，触发点越靠后，前面的波形越多。")
+                                                Text(stringResource(R.string.trigger_pre_trigger_ratio_value, String.format(Locale.US, "%.2f", triggerPreTriggerRatio)))
+                                                InfoIconButton(stringResource(R.string.trigger_pre_trigger_ratio_info_title), stringResource(R.string.trigger_pre_trigger_ratio_info_message))
                                             }
                                             Slider(
                                                 value = triggerPreTriggerRatio,
@@ -2483,8 +2621,8 @@ private fun ImmersiveScreen(
 
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("辅助低通: ${String.format(Locale.US, "%.0f", triggerStrongLowPassHz)}Hz")
-                                                InfoIconButton("辅助低通", "这是给 Trigger 用的低通截止频率，用来压制高频开关噪声，让基波更容易被识别。")
+                                                Text(stringResource(R.string.trigger_assist_lowpass_value, String.format(Locale.US, "%.0f", triggerStrongLowPassHz)))
+                                                InfoIconButton(stringResource(R.string.trigger_assist_lowpass_info_title), stringResource(R.string.trigger_assist_lowpass_info_message))
                                             }
                                             Slider(
                                                 value = triggerStrongLowPassHz,
@@ -2501,8 +2639,8 @@ private fun ImmersiveScreen(
                                     ) {
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("自相关刷新: ${triggerAutocorrRefreshFrames} 帧")
-                                                InfoIconButton("自相关刷新", "控制多久重新计算一次自相关。越小越跟手，但越耗性能；越大越省电，但响应更慢。")
+                                                Text(stringResource(R.string.trigger_autocorr_refresh_value, triggerAutocorrRefreshFrames))
+                                                InfoIconButton(stringResource(R.string.trigger_autocorr_refresh_info_title), stringResource(R.string.trigger_autocorr_refresh_info_message))
                                             }
                                             Slider(
                                                 value = triggerAutocorrRefreshFrames.toFloat(),
@@ -2515,8 +2653,8 @@ private fun ImmersiveScreen(
 
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("自相关长度: ${triggerAutocorrMaxSamples} 点")
-                                                InfoIconButton("自相关长度", "用多长的一段波形做自相关。越长越稳，但越耗性能；越短越快，但可能更抖。")
+                                                Text(stringResource(R.string.trigger_autocorr_length_value, triggerAutocorrMaxSamples))
+                                                InfoIconButton(stringResource(R.string.trigger_autocorr_length_info_title), stringResource(R.string.trigger_autocorr_length_info_message))
                                             }
                                             Slider(
                                                 value = triggerAutocorrMaxSamples.toFloat(),
@@ -2534,8 +2672,8 @@ private fun ImmersiveScreen(
                                     ) {
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("滞回: ${String.format(Locale.US, "%.2f", triggerHysteresisRatio)}")
-                                                InfoIconButton("滞回", "防止阈值附近来回抖动造成误触。调大更稳，调小更灵敏。")
+                                                Text(stringResource(R.string.trigger_hysteresis_value, String.format(Locale.US, "%.2f", triggerHysteresisRatio)))
+                                                InfoIconButton(stringResource(R.string.trigger_hysteresis_info_title), stringResource(R.string.trigger_hysteresis_info_message))
                                             }
                                             Slider(
                                                 value = triggerHysteresisRatio,
@@ -2547,8 +2685,8 @@ private fun ImmersiveScreen(
 
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("保留间隔: ${String.format(Locale.US, "%.2f", triggerHoldoffRatio)}")
-                                                InfoIconButton("保留间隔", "限制连续触发之间的最小间隔，避免同一周期里重复抓到多个边沿。")
+                                                Text(stringResource(R.string.trigger_holdoff_value, String.format(Locale.US, "%.2f", triggerHoldoffRatio)))
+                                                InfoIconButton(stringResource(R.string.trigger_holdoff_info_title), stringResource(R.string.trigger_holdoff_info_message))
                                             }
                                             Slider(
                                                 value = triggerHoldoffRatio,
@@ -2576,11 +2714,11 @@ private fun ImmersiveScreen(
                                 triggerAutocorrMaxSamples = 512
                             }
                         ) {
-                            Text("恢复默认")
+                            Text(stringResource(R.string.action_restore_default))
                         }
 
                         TextButton(onClick = { showTriggerAdvancedDialog = false }) {
-                            Text("确定")
+                            Text(stringResource(R.string.common_confirm))
                         }
                     }
                 }
@@ -2597,7 +2735,7 @@ private fun ImmersiveScreen(
                 onClick = onToggleLock,
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Text(if (landscapeLocked) "解锁" else "锁定", color = Color.White)
+                Text(if (landscapeLocked) stringResource(R.string.unlock) else stringResource(R.string.lock), color = Color.White)
             }
         }
 
@@ -2613,12 +2751,15 @@ private fun ImmersiveScreen(
             ) {
                 when (gestureMode) {
                     1 -> Text(
-                        text = "幅度 x${String.format(Locale.US, "%.2f", gestureAmp)}",
+                        text = stringResource(R.string.amp_scale_overlay, String.format(Locale.US, "%.2f", gestureAmp)),
                         color = Color.White,
                         style = MaterialTheme.typography.bodyMedium
                     )
                     2 -> Text(
-                        text = "时间窗 ${if (gestureWindow < 10f) String.format(Locale.US, "%.1f", gestureWindow) else String.format(Locale.US, "%.0f", gestureWindow)}ms",
+                        text = stringResource(
+                            R.string.time_window_overlay,
+                            if (gestureWindow < 10f) String.format(Locale.US, "%.1f", gestureWindow) else String.format(Locale.US, "%.0f", gestureWindow)
+                        ),
                         color = Color.White,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -2673,6 +2814,21 @@ private fun CaptureDiagnosticsLine(
         color = if (audioInputAlive) Color(0xFF2E7D32) else Color(0xFFC62828),
         modifier = modifier.fillMaxWidth()
     )
+}
+
+private fun toEnglishOrdinal(value: Int): String {
+    val absValue = abs(value)
+    val suffix = if (absValue % 100 in 11..13) {
+        "th"
+    } else {
+        when (absValue % 10) {
+            1 -> "st"
+            2 -> "nd"
+            3 -> "rd"
+            else -> "th"
+        }
+    }
+    return "$value$suffix"
 }
 
 
@@ -2800,10 +2956,10 @@ private fun ClickToEditNumberText(
                         if (v != null) onValue(v)
                         showDialog = false
                     }
-                ) { Text("确定") }
+                ) { Text(stringResource(R.string.common_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDialog = false }) { Text("取消") }
+                TextButton(onClick = { showDialog = false }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -2869,6 +3025,8 @@ private fun FilterOrderSelector(
     onOrderChange: (Int) -> Unit,
 ) {
     var orderMenu by remember { mutableStateOf(false) }
+    val currentLanguage = LocalConfiguration.current.locales.get(0)?.language ?: Locale.getDefault().language
+    val useEnglishOrdinal = currentLanguage.startsWith("en")
     val minO = orderOptions.minOrNull() ?: 1
     val maxO = orderOptions.maxOrNull() ?: 8
 
@@ -2885,7 +3043,14 @@ private fun FilterOrderSelector(
             TextButton(
                 onClick = { orderMenu = true },
                 contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
-            ) { Text("${order}阶", style = MaterialTheme.typography.bodySmall) }
+            ) {
+                val orderLabel = if (useEnglishOrdinal) {
+                    stringResource(R.string.filter_order_ordinal_format, toEnglishOrdinal(order))
+                } else {
+                    stringResource(R.string.filter_order_format, order)
+                }
+                Text(orderLabel, style = MaterialTheme.typography.bodySmall)
+            }
 
             IconButton(
                 onClick = { onOrderChange((order + 1).coerceAtMost(maxO)) },
@@ -2896,7 +3061,14 @@ private fun FilterOrderSelector(
         DropdownMenu(expanded = orderMenu, onDismissRequest = { orderMenu = false }) {
             for (o in orderOptions) {
                 DropdownMenuItem(
-                    text = { Text("${o}阶", style = MaterialTheme.typography.bodyMedium) },
+                    text = {
+                        val optionLabel = if (useEnglishOrdinal) {
+                            stringResource(R.string.filter_order_ordinal_format, toEnglishOrdinal(o))
+                        } else {
+                            stringResource(R.string.filter_order_format, o)
+                        }
+                        Text(optionLabel, style = MaterialTheme.typography.bodyMedium)
+                    },
                     onClick = {
                         orderMenu = false
                         onOrderChange(o)
@@ -2939,7 +3111,7 @@ private fun EqPanel(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("图形均衡器", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.eq_panel_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(8.dp))
                 Switch(checked = enabled, onCheckedChange = onEnabledChange)
                 Spacer(Modifier.width(6.dp))
@@ -2947,22 +3119,22 @@ private fun EqPanel(
                     onClick = { expanded = !expanded },
                     enabled = enabled,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                ) { Text(if (expanded) "折叠" else "展开") }
+                ) { Text(if (expanded) stringResource(R.string.common_collapse) else stringResource(R.string.common_expand)) }
             }
 
             TextButton(
                 onClick = onReset,
                 enabled = enabled,
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-            ) { Text("重置均衡器") }
+            ) { Text(stringResource(R.string.eq_reset_all)) }
         }
 
         if (!enabled || !expanded) return
 
         val freqMin = 20f
         val freqMax = 20000f
-        val gainMin = -24f
-        val gainMax = 24f
+        val gainMin = -40f
+        val gainMax = 40f
         val qMin = 0.2f
 
         var selectedId by remember { mutableStateOf(bands.firstOrNull()?.id ?: 0) }
@@ -3020,7 +3192,7 @@ private fun EqPanel(
             Spacer(Modifier.weight(1f))
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("启用", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.common_enabled), style = MaterialTheme.typography.bodySmall)
                 Switch(checked = sel.enabled, onCheckedChange = { onBandEnabled(sel.id, it) })
             }
         }
@@ -3040,9 +3212,9 @@ private fun EqPanel(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ClickToEditNumberText(
-                    text = "${sel.label}段 频率 ${String.format(Locale.US, "%.0f", displaySelFreq)}Hz",
+                    text = stringResource(R.string.eq_band_freq_value, sel.label, String.format(Locale.US, "%.0f", displaySelFreq)),
                     initialText = String.format(Locale.US, "%.0f", sel.freqHz),
-                    title = "设置第${sel.label}段频率",
+                    title = stringResource(R.string.eq_band_freq_title, sel.label),
                     unit = "Hz",
                     parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(freqMin, freqMax) },
                     onValue = { v -> onBandFreq(sel.id, v) },
@@ -3099,7 +3271,7 @@ private fun EqPanel(
                     },
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                     modifier = Modifier.height(32.dp)
-                ) { Text("重置", style = MaterialTheme.typography.bodySmall) }
+                ) { Text(stringResource(R.string.common_reset), style = MaterialTheme.typography.bodySmall) }
             }
         }
 
@@ -3124,20 +3296,26 @@ private fun EqPanel(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     ClickToEditNumberText(
-                        text = "增益 ${String.format(Locale.US, "%+.1f", displaySelGainDb)}dB",
+                        text = stringResource(R.string.eq_band_gain_value, String.format(Locale.US, "%+.1f", displaySelGainDb)),
                         initialText = String.format(Locale.US, "%.1f", sel.gainDb),
-                        title = "设置第${sel.label}段增益",
+                        title = stringResource(R.string.eq_band_gain_title, sel.label),
                         unit = "dB",
                         parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(gainMin, gainMax) },
                         onValue = { v -> onBandGainDb(sel.id, v) },
                         style = MaterialTheme.typography.bodyMedium,
                         contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        trailingIcon = {
+                            InfoIconButton(
+                                stringResource(R.string.processed_gain_info_title),
+                                stringResource(R.string.processed_gain_info_message)
+                            )
+                        }
                     )
                     TextButton(
                         onClick = { onBandGainDb(sel.id, 0f) },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) { Text("重置") }
+                    ) { Text(stringResource(R.string.common_reset)) }
                 }
                 OscopeSlider(
                     value = ((sel.gainDb - gainMin) / (gainMax - gainMin)).coerceIn(0f, 1f),
@@ -3161,7 +3339,7 @@ private fun EqPanel(
                     ClickToEditNumberText(
                         text = "Q ${String.format(Locale.US, "%.2f", displaySelQ)}",
                         initialText = String.format(Locale.US, "%.2f", effectiveSelQ),
-                        title = "设置第${sel.label}段 Q",
+                        title = stringResource(R.string.eq_band_q_title, sel.label),
                         unit = "Q",
                         parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(qMin, qMax) },
                         onValue = { v -> onBandQ(sel.id, v) },
@@ -3172,7 +3350,7 @@ private fun EqPanel(
                     TextButton(
                         onClick = { onBandQ(sel.id, AudioEngineViewModel.DEFAULT_EQ_Q) },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) { Text("重置") }
+                    ) { Text(stringResource(R.string.common_reset)) }
                 }
                 OscopeSlider(
                     value = logToSlider(sel.q, qMin, qMax),

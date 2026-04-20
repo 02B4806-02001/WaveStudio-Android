@@ -19,7 +19,7 @@
     <string name="action_record">录音</string>
     <string name="action_restore_default">恢复默认</string>
 
-    <string name="mode_immersive">沉浸模式</string>
+    <string name="mode_immersive">全屏模式</string>
     <string name="mode_normal">普通模式</string>
     <string name="about_title">关于</string>
     <string name="exit_title">退出</string>
@@ -58,7 +58,7 @@
 
     <string name="monitor_on">监听</string>
     <string name="monitor_off">关闭监听</string>
-    <string name="import_audio">导入音频</string>
+    <string name="load_audio">导入音频</string>
     <string name="importing">导入中</string>
     <string name="audio_input_mode">音频输入</string>
     <string name="list_title">列表</string>
@@ -122,6 +122,7 @@
     <string name="unit_ms">ms</string>
 
     <string name="filter_order_format">%1$d 阶</string>
+    <string name="filter_order_ordinal_format">%1$s 阶</string>
     <string name="eq_panel_title">图形均衡器</string>
     <string name="eq_reset_all">重置均衡器</string>
     <string name="eq_band_freq_value">第 %1$s 段 频率 %2$s Hz</string>
@@ -129,6 +130,52 @@
     <string name="eq_band_gain_value">增益 %1$s dB</string>
     <string name="eq_band_gain_title">设置第%1$s段增益</string>
     <string name="eq_band_q_title">设置第%1$s段 Q</string>
+
+    <string name="settings_language_label">界面语言</string>
+    <string name="settings_language_hint">切换后会立即生效</string>
+    <string name="settings_scroll_top">回到顶部</string>
+    <string name="preset_help_text">预设是 .json 文件。先点“导出”保存到手机；如果要发给别人，也可以不导出直接点“分享”。对方收到后点“导入”选择该文件即可。</string>
+
+    <string name="about_app_signature">Wave Studio v0.11.5 by 磁拾音器研究所</string>
+    <string name="about_permission_tip">提示：使用前请授予麦克风权限。</string>
+    <string name="about_update_v0115_title">0.11.5版本主要更新内容如下：</string>
+    <string name="about_update_v0115_item_1">- 均衡器</string>
+    <string name="about_update_v0115_item_2">- 修复了监听模式卡顿的问题</string>
+    <string name="about_update_v0115_item_3">- 修复了一些其他 bug</string>
+    <string name="about_update_v0114_title">0.11.4版本主要更新内容如下：</string>
+    <string name="about_update_v0114_item_1">- 滤波器改为默认关闭</string>
+    <string name="about_update_v0114_item_2">- 修复了监听模式卡顿的问题</string>
+    <string name="about_update_v0114_item_3">- 修复了一些其他 bug</string>
+    <string name="about_update_v0113_title">0.11.3版本主要更新内容如下：</string>
+    <string name="about_update_v0113_item_1">- 加回“显示/隐藏参考线”按钮</string>
+    <string name="about_update_v0113_item_2">- 滤波器与均衡器改为默认开启</string>
+    <string name="about_update_v0113_item_3">- 均衡器 Shelf 模式下限制有效Q值</string>
+    <string name="about_update_v0113_item_4">- 修复了一些情况下的掉帧问题</string>
+    <string name="about_update_v0113_item_5">- 修复了导入音频时监听卡顿的问题</string>
+    <string name="about_update_v0113_item_6">- 改动了一些细节</string>
+    <string name="about_contributors">参与开发人员（B站名）：02B4806長-02001、某地铁迷_、莓喵の小风扇、TEP-28WG01等</string>
+    <string name="about_qq_group">磁拾音器QQ交流群：762852552</string>
+    <string name="about_official_website_label">磁拾音器研究所官网：</string>
+    <string name="about_preset_download_placeholder">预设配置下载：（暂时预留）</string>
+
+    <string name="trigger_pre_trigger_ratio_value">预触发比例: %1$s</string>
+    <string name="trigger_assist_lowpass_value">辅助低通: %1$sHz</string>
+    <string name="trigger_autocorr_refresh_value">自相关刷新: %1$d 帧</string>
+    <string name="trigger_autocorr_length_value">自相关长度: %1$d 点</string>
+    <string name="trigger_hysteresis_value">滞回: %1$s</string>
+    <string name="trigger_holdoff_value">保留间隔: %1$s</string>
+    <string name="trigger_pre_trigger_ratio_info_title">预触发比例</string>
+    <string name="trigger_pre_trigger_ratio_info_message">决定触发点出现在窗口前面留多少余量。越大，触发点越靠后，前面的波形越多。</string>
+    <string name="trigger_assist_lowpass_info_title">辅助低通</string>
+    <string name="trigger_assist_lowpass_info_message">这是给 Trigger 用的低通截止频率，用来压制高频开关噪声，让基波更容易被识别。</string>
+    <string name="trigger_autocorr_refresh_info_title">自相关刷新</string>
+    <string name="trigger_autocorr_refresh_info_message">控制多久重新计算一次自相关。越小越跟手，但越耗性能；越大越省电，但响应更慢。</string>
+    <string name="trigger_autocorr_length_info_title">自相关长度</string>
+    <string name="trigger_autocorr_length_info_message">用多长的一段波形做自相关。越长越稳，但越耗性能；越短越快，但可能更抖。</string>
+    <string name="trigger_hysteresis_info_title">滞回</string>
+    <string name="trigger_hysteresis_info_message">防止阈值附近来回抖动造成误触。调大更稳，调小更灵敏。</string>
+    <string name="trigger_holdoff_info_title">保留间隔</string>
+    <string name="trigger_holdoff_info_message">限制连续触发之间的最小间隔，避免同一周期里重复抓到多个边沿。</string>
 
     <string name="language_dialog_title">选择语言 / Language</string>
     <string name="language_dialog_message">首次安装请选择界面语言。\nPlease choose your preferred language.</string>
