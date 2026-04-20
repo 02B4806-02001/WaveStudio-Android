@@ -19,6 +19,7 @@
     <string name="action_share_direct">Share Now</string>
     <string name="action_default">Default</string>
     <string name="action_delete">Delete</string>
+    <string name="action_start">Start</string>
     <string name="action_stop">Stop</string>
     <string name="action_record">Record</string>
     <string name="action_restore_default">Restore Defaults</string>
@@ -148,7 +149,7 @@
     <string name="settings_scroll_top">Scroll to Top</string>
     <string name="preset_help_text">Presets are .json files. Tap "Export" to save to your phone; if you want to send one to others, you can tap "Share" directly without exporting. After receiving it, tap "Import" and choose that file.</string>
 
-    <string name="about_app_signature">Wave Studio v0.11.5 by Magnetic Pickup Institute</string>
+    <string name="about_app_signature">Wave Studio v0.11.5 by MoHa-Radio Institute</string>
     <string name="about_permission_tip">Tip: Please grant microphone permission before use.</string>
     <string name="about_update_v0115_title">Main updates in version 0.11.5:</string>
     <string name="about_update_v0115_item_1">- Equalizer</string>
@@ -166,7 +167,7 @@
     <string name="about_update_v0113_item_5">- Fixed monitor lag when importing audio</string>
     <string name="about_update_v0113_item_6">- Other detail improvements</string>
     <string name="about_contributors">Contributors (Bilibili): 02B4806長-02001, 某地铁迷_, 莓喵の小风扇, TEP-28WG01, etc.</string>
-    <string name="about_qq_group">Magnetic Pickup QQ Group: 762852552</string>
+    <string name="about_qq_group">MoHa-Radio QQ Group: 762852552</string>
     <string name="about_official_website_label">Official website:</string>
     <string name="about_preset_download_placeholder">Preset download: (reserved)</string>
 

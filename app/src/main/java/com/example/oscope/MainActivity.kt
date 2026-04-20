@@ -14,6 +14,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.edit
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -90,6 +91,8 @@ private const val KEY_TRIGGER_HYSTERESIS_RATIO = "trigger_hysteresis_ratio"
 private const val KEY_TRIGGER_HOLDOFF_RATIO = "trigger_holdoff_ratio"
 private const val KEY_TRIGGER_AUTOCORR_REFRESH_FRAMES = "trigger_autocorr_refresh_frames"
 private const val KEY_TRIGGER_AUTOCORR_MAX_SAMPLES = "trigger_autocorr_max_samples"
+private const val KEY_RAW_WAVE_HEIGHT_DP = "raw_wave_height_dp"
+private const val KEY_FILTERED_WAVE_HEIGHT_DP = "filtered_wave_height_dp"
 
 private fun defaultLanguageFromSystem(context: android.content.Context): String {
     val lang = context.resources.configuration.locales.get(0)?.language ?: Locale.getDefault().language
@@ -544,8 +547,6 @@ fun OscopeApp(
     val waveHeightMin = 50
     val waveHeightMax = 150
     val waveHeightStep = 10
-    var rawWaveHeightDp by rememberSaveable { mutableIntStateOf(80) }
-    var filteredWaveHeightDp by rememberSaveable { mutableIntStateOf(110) }
 
     fun clampWaveHeight(v: Int): Int {
         val clamped = v.coerceIn(waveHeightMin, waveHeightMax)
@@ -554,8 +555,24 @@ fun OscopeApp(
         return snapped.coerceIn(waveHeightMin, waveHeightMax)
     }
 
+    val rawWaveHeightInitial = remember(startupPrefs) {
+        clampWaveHeight(startupPrefs.getInt(KEY_RAW_WAVE_HEIGHT_DP, 80))
+    }
+    val filteredWaveHeightInitial = remember(startupPrefs) {
+        clampWaveHeight(startupPrefs.getInt(KEY_FILTERED_WAVE_HEIGHT_DP, 110))
+    }
+    var rawWaveHeightDp by rememberSaveable { mutableIntStateOf(rawWaveHeightInitial) }
+    var filteredWaveHeightDp by rememberSaveable { mutableIntStateOf(filteredWaveHeightInitial) }
+
     fun incWaveHeight(current: Int): Int = clampWaveHeight(current + waveHeightStep)
     fun decWaveHeight(current: Int): Int = clampWaveHeight(current - waveHeightStep)
+
+    LaunchedEffect(rawWaveHeightDp, filteredWaveHeightDp) {
+        startupPrefs.edit {
+            putInt(KEY_RAW_WAVE_HEIGHT_DP, rawWaveHeightDp)
+            putInt(KEY_FILTERED_WAVE_HEIGHT_DP, filteredWaveHeightDp)
+        }
+    }
 
     // ViewModel 的 ampScale 变化时（例如重置/加载），如果用户还没改过各自缩放，则跟随
     LaunchedEffect(ampScale) {
@@ -757,16 +774,38 @@ fun OscopeApp(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(
+                val topActionModifier = Modifier.size(38.dp)
+                val topActionShape = RoundedCornerShape(11.dp)
+                val topActionBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f))
+                val topActionColors = IconButtonDefaults.outlinedIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedIconButton(
                     onClick = { setLandscape(true) },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) { Text(stringResource(R.string.mode_immersive)) }
+                    modifier = topActionModifier,
+                    shape = topActionShape,
+                    border = topActionBorder,
+                    colors = topActionColors
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_open_in_full),
+                        contentDescription = stringResource(R.string.mode_immersive)
+                    )
+                }
 
                 Spacer(modifier = Modifier.weight(1f))
 
                 // 预设：图标入口 + 下拉四个选项 + 提示语（文案保持不变）
                 Box {
-                    OutlinedIconButton(onClick = { presetMenuExpanded = true }) {
+                    OutlinedIconButton(
+                        onClick = { presetMenuExpanded = true },
+                        modifier = topActionModifier,
+                        shape = topActionShape,
+                        border = topActionBorder,
+                        colors = topActionColors
+                    ) {
                         Icon(
                             painter = painterResource(id = android.R.drawable.ic_menu_save),
                             contentDescription = stringResource(R.string.preset_menu_title)
@@ -821,19 +860,29 @@ fun OscopeApp(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
-                OutlinedIconButton(onClick = { showAboutDialog = true }) {
+                OutlinedIconButton(
+                    onClick = { showAboutDialog = true },
+                    modifier = topActionModifier,
+                    shape = topActionShape,
+                    border = topActionBorder,
+                    colors = topActionColors
+                ) {
                     Icon(
                         painter = painterResource(id = android.R.drawable.ic_menu_info_details),
                         contentDescription = stringResource(R.string.about_title)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 OutlinedIconButton(
-                    onClick = { settingsMenuExpanded = true }
+                    onClick = { settingsMenuExpanded = true },
+                    modifier = topActionModifier,
+                    shape = topActionShape,
+                    border = topActionBorder,
+                    colors = topActionColors
                 ) {
                     Icon(
                         painter = painterResource(id = android.R.drawable.ic_menu_manage),
@@ -1162,7 +1211,7 @@ fun OscopeApp(
                         ),
                         contentPadding = PaddingValues(vertical = 8.dp),
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (useTestSignal || useImportedSignal || isRunning) stringResource(R.string.action_stop) else stringResource(R.string.test_mode_start), fontSize = 15.sp) }
+                    ) { Text(if (useTestSignal || useImportedSignal || isRunning) stringResource(R.string.action_stop) else stringResource(R.string.action_start), fontSize = 15.sp) }
 
                     Button(
                         onClick = {
@@ -1426,11 +1475,10 @@ fun OscopeApp(
                                 )
                             }
                         )
-                        TextButton(
+                        ResetIconButton(
                             // 0 dB = 1.0x
-                            onClick = { audioViewModel.updateFilterGain(dbToGain(0f).coerceIn(gainMin, gainMax)) },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                        ) { Text(stringResource(R.string.common_reset)) }
+                            onClick = { audioViewModel.updateFilterGain(dbToGain(0f).coerceIn(gainMin, gainMax)) }
+                        )
                     }
 
                     // range
@@ -1500,11 +1548,10 @@ fun OscopeApp(
                                 )
                             }
                         )
-                        TextButton(
+                        ResetIconButton(
                             // 重置为 20ms
-                            onClick = { audioViewModel.updateTimeSlider(20f) },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                        ) { Text(stringResource(R.string.common_reset)) }
+                            onClick = { audioViewModel.updateTimeSlider(20f) }
+                        )
                     }
 
                     // log-ish slider mapping
@@ -1942,6 +1989,64 @@ fun OscopeApp(
 
     if (showAboutDialog) {
         val aboutDialogScrollState = rememberScrollState()
+        val isZhAbout = selectedLanguage == LANG_ZH
+        val aboutMainLines = if (isZhAbout) {
+            listOf(
+                "Wave Studio v0.11.5 by 磁拾音器研究所",
+                "提示：使用前请授予麦克风权限。",
+                "",
+                "0.11.5版本主要更新内容如下：",
+                "- 均衡器",
+                "- 修复了监听模式卡顿的问题",
+                "- 修复了一些其他 bug",
+                "",
+                "0.11.4版本主要更新内容如下：",
+                "- 滤波器改为默认关闭",
+                "- 修复了监听模式卡顿的问题",
+                "- 修复了一些其他 bug",
+                "",
+                "0.11.3版本主要更新内容如下：",
+                "- 加回\"显示/隐藏参考线\"按钮",
+                "- 滤波器与均衡器改为默认开启",
+                "- 均衡器 Shelf 模式下限制有效Q值",
+                "- 修复了一些情况下的掉帧问题",
+                "- 修复了导入音频时监听卡顿的问题",
+                "- 改动了一些细节",
+                "",
+                "参与开发人员（B站名）：02B4806長-02001、某地铁迷_、莓喵の小风扇、TEP-28WG01等",
+                "",
+                "磁拾音器QQ交流群：762852552",
+            )
+        } else {
+            listOf(
+                "Wave Studio v0.11.5 by Magnetic Pickup Institute",
+                "Tip: Please grant microphone permission before use.",
+                "",
+                "Main updates in version 0.11.5:",
+                "- Equalizer",
+                "- Fixed lag in monitoring mode",
+                "- Fixed several other bugs",
+                "",
+                "Main updates in version 0.11.4:",
+                "- Filters are now disabled by default",
+                "- Fixed lag in monitoring mode",
+                "- Fixed several other bugs",
+                "",
+                "Main updates in version 0.11.3:",
+                "- Restored the Show/Hide reference line button",
+                "- Filters and equalizer are enabled by default",
+                "- Limited effective Q value in EQ Shelf mode",
+                "- Fixed frame drops in some scenarios",
+                "- Fixed monitor lag when importing audio",
+                "- Other detail improvements",
+                "",
+                "Contributors (Bilibili): 02B4806長-02001, 某地铁迷_, 莓喵の小风扇, TEP-28WG01, etc.",
+                "",
+                "Magnetic Pickup QQ Group: 762852552",
+            )
+        }
+        val aboutWebsiteLabel = if (isZhAbout) "磁拾音器研究所官网：" else "Official website:"
+        val aboutPresetPlaceholder = if (isZhAbout) "预设配置下载：（暂时预留）" else "Preset download: (reserved)"
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
             title = { Text(stringResource(R.string.about_title)) },
@@ -1955,32 +2060,9 @@ fun OscopeApp(
                         modifier = Modifier.verticalScroll(aboutDialogScrollState),
                         verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text(stringResource(R.string.about_app_signature))
-                        Text(stringResource(R.string.about_permission_tip))
-                        Text("")
-                        Text(stringResource(R.string.about_update_v0115_title))
-                        Text(stringResource(R.string.about_update_v0115_item_1))
-                        Text(stringResource(R.string.about_update_v0115_item_2))
-                        Text(stringResource(R.string.about_update_v0115_item_3))
-                        Text("")
-                        Text(stringResource(R.string.about_update_v0114_title))
-                        Text(stringResource(R.string.about_update_v0114_item_1))
-                        Text(stringResource(R.string.about_update_v0114_item_2))
-                        Text(stringResource(R.string.about_update_v0114_item_3))
-                        Text("")
-                        Text(stringResource(R.string.about_update_v0113_title))
-                        Text(stringResource(R.string.about_update_v0113_item_1))
-                        Text(stringResource(R.string.about_update_v0113_item_2))
-                        Text(stringResource(R.string.about_update_v0113_item_3))
-                        Text(stringResource(R.string.about_update_v0113_item_4))
-                        Text(stringResource(R.string.about_update_v0113_item_5))
-                        Text(stringResource(R.string.about_update_v0113_item_6))
-                        Text("")
-                        Text(stringResource(R.string.about_contributors))
-                        Text("")
-                        Text(stringResource(R.string.about_qq_group))
+                        aboutMainLines.forEach { line -> Text(line) }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(stringResource(R.string.about_official_website_label))
+                            Text(aboutWebsiteLabel)
                             val url = "https://www.mhrri.org/"
                             val linkText = buildAnnotatedString {
                                 withStyle(
@@ -2006,7 +2088,7 @@ fun OscopeApp(
                             )
                         }
                         Text("")
-                        Text(stringResource(R.string.about_preset_download_placeholder))
+                        Text(aboutPresetPlaceholder)
                     }
                 }
             },
@@ -3122,11 +3204,11 @@ private fun EqPanel(
                 ) { Text(if (expanded) stringResource(R.string.common_collapse) else stringResource(R.string.common_expand)) }
             }
 
-            TextButton(
+            ResetIconButton(
                 onClick = onReset,
                 enabled = enabled,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-            ) { Text(stringResource(R.string.eq_reset_all)) }
+                contentDescriptionRes = R.string.eq_reset_all
+            )
         }
 
         if (!enabled || !expanded) return
@@ -3258,7 +3340,7 @@ private fun EqPanel(
                     }
                 }
 
-                TextButton(
+                ResetIconButton(
                     onClick = {
                         val defaultFreq = when (sel.id) {
                             0 -> 50f
@@ -3269,9 +3351,8 @@ private fun EqPanel(
                         }
                         onBandFreq(sel.id, defaultFreq)
                     },
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                    modifier = Modifier.height(32.dp)
-                ) { Text(stringResource(R.string.common_reset), style = MaterialTheme.typography.bodySmall) }
+                    modifier = Modifier.size(32.dp)
+                )
             }
         }
 
@@ -3312,10 +3393,10 @@ private fun EqPanel(
                             )
                         }
                     )
-                    TextButton(
+                    ResetIconButton(
                         onClick = { onBandGainDb(sel.id, 0f) },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) { Text(stringResource(R.string.common_reset)) }
+                        modifier = Modifier.size(32.dp)
+                    )
                 }
                 OscopeSlider(
                     value = run {
@@ -3371,10 +3452,10 @@ private fun EqPanel(
                         contentPadding = PaddingValues(0.dp),
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(
+                    ResetIconButton(
                         onClick = { onBandQ(sel.id, AudioEngineViewModel.DEFAULT_EQ_Q) },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) { Text(stringResource(R.string.common_reset)) }
+                        modifier = Modifier.size(32.dp)
+                    )
                 }
                 OscopeSlider(
                     value = logToSlider(sel.q, qMin, qMax),
@@ -3386,8 +3467,26 @@ private fun EqPanel(
                 )
             }
         }
-
         LaunchedEffect(Unit) { onGraphDragging(false) }
+    }
+}
+
+@Composable
+private fun ResetIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.size(34.dp),
+    enabled: Boolean = true,
+    contentDescriptionRes: Int = R.string.common_reset,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_reset_settings),
+            contentDescription = stringResource(contentDescriptionRes)
+        )
     }
 }
 

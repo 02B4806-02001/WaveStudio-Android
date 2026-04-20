@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">波形工作室</string>
+    <string name="app_name">WaveStudio</string>
 
     <string name="common_confirm">确定</string>
     <string name="common_cancel">取消</string>
@@ -15,6 +15,7 @@
     <string name="action_share_direct">直接分享</string>
     <string name="action_default">默认</string>
     <string name="action_delete">删除</string>
+    <string name="action_start">开始</string>
     <string name="action_stop">停止</string>
     <string name="action_record">录音</string>
     <string name="action_restore_default">恢复默认</string>
