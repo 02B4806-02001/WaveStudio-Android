@@ -272,6 +272,12 @@ fun OscopeSlider(
                         isPressed = true
                         tryAwaitRelease()
                         isPressed = false
+                    },
+                    onTap = { offset ->
+                        if (!enabled) return@detectTapGestures
+                        val next = positionToFraction(offset.x)
+                        emitFraction(next)
+                        currentOnValueChangeFinished?.invoke()
                     }
                 )
             }
@@ -280,7 +286,7 @@ fun OscopeSlider(
                 orientation = Orientation.Horizontal,
                 state = dragState,
                 interactionSource = interactionSource,
-                startDragImmediately = true,
+                startDragImmediately = false,
                 onDragStarted = { startOffset ->
                     isPressed = true
                     isDragging = true

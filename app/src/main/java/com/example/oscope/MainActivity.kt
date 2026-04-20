@@ -807,7 +807,7 @@ fun OscopeApp(
                         colors = topActionColors
                     ) {
                         Icon(
-                            painter = painterResource(id = android.R.drawable.ic_menu_save),
+                            painter = painterResource(id = R.drawable.ic_save_custom),
                             contentDescription = stringResource(R.string.preset_menu_title)
                         )
                     }
@@ -870,7 +870,7 @@ fun OscopeApp(
                     colors = topActionColors
                 ) {
                     Icon(
-                        painter = painterResource(id = android.R.drawable.ic_menu_info_details),
+                        painter = painterResource(id = R.drawable.ic_info_custom),
                         contentDescription = stringResource(R.string.about_title)
                     )
                 }
@@ -885,7 +885,7 @@ fun OscopeApp(
                     colors = topActionColors
                 ) {
                     Icon(
-                        painter = painterResource(id = android.R.drawable.ic_menu_manage),
+                        painter = painterResource(id = R.drawable.ic_settings_custom),
                         contentDescription = stringResource(R.string.settings_language_label)
                     )
                 }
@@ -1992,12 +1992,17 @@ fun OscopeApp(
         val isZhAbout = selectedLanguage == LANG_ZH
         val aboutMainLines = if (isZhAbout) {
             listOf(
-                "Wave Studio v0.11.5 by 磁拾音器研究所",
+                "Wave Studio v0.12.0 by 磁拾音器研究所",
                 "提示：使用前请授予麦克风权限。",
                 "",
-                "0.11.5版本主要更新内容如下：",
-                "- 均衡器",
-                "- 修复了监听模式卡顿的问题",
+                "0.12.0版本主要更新内容如下：",
+                "- 全局资源化，适配中英双语",
+                "- 处理后增益滑块显示逻辑更改",
+                "- 处理后增益和 EQ 增益滑块手感调整",
+                "- 滑块交互更跟手",
+                "- 顶部 UI 部分按钮改成图标",
+                "- 波形高度值持久化",
+                "- 构建与稳定性修复",
                 "- 修复了一些其他 bug",
                 "",
                 "0.11.4版本主要更新内容如下：",
@@ -2006,7 +2011,7 @@ fun OscopeApp(
                 "- 修复了一些其他 bug",
                 "",
                 "0.11.3版本主要更新内容如下：",
-                "- 加回\"显示/隐藏参考线\"按钮",
+                "- 加回“显示/隐藏参考线”按钮",
                 "- 滤波器与均衡器改为默认开启",
                 "- 均衡器 Shelf 模式下限制有效Q值",
                 "- 修复了一些情况下的掉帧问题",
@@ -2019,30 +2024,35 @@ fun OscopeApp(
             )
         } else {
             listOf(
-                "Wave Studio v0.11.5 by Magnetic Pickup Institute",
-                "Tip: Please grant microphone permission before use.",
+                "Wave Studio v0.12.0 by MoHa-Radio Institute",
+                "Note: Please grant microphone permission before use.",
                 "",
-                "Main updates in version 0.11.5:",
-                "- Equalizer",
-                "- Fixed lag in monitoring mode",
+                "Key updates in version 0.12.0:",
+                "- Support for both Chinese and English",
+                "- Changed display logic for Processing Gain slider",
+                "- Adjusted slider feel for Processing gain and EQ gain",
+                "- Smoother and more responsive slider interaction",
+                "- Changed some buttons in the top UI to icons",
+                "- Persisted waveform height value",
+                "- Build and stability fixes",
                 "- Fixed several other bugs",
                 "",
-                "Main updates in version 0.11.4:",
-                "- Filters are now disabled by default",
-                "- Fixed lag in monitoring mode",
+                "Key updates in version 0.11.4:",
+                "- Filter is now disabled by default",
+                "- Fixed lag issue in monitoring mode",
                 "- Fixed several other bugs",
                 "",
-                "Main updates in version 0.11.3:",
-                "- Restored the Show/Hide reference line button",
-                "- Filters and equalizer are enabled by default",
-                "- Limited effective Q value in EQ Shelf mode",
-                "- Fixed frame drops in some scenarios",
-                "- Fixed monitor lag when importing audio",
-                "- Other detail improvements",
+                "Key updates in version 0.11.3:",
+                "- Added back the 'Show/Hide Reference Line' button",
+                "- Filter and equalizer are now enabled by default",
+                "- Restricted effective Q value in EQ Shelf mode",
+                "- Fixed frame drop issues in certain situations",
+                "- Fixed lag issue when importing audio during monitoring",
+                "- Made some minor tweaks",
                 "",
-                "Contributors (Bilibili): 02B4806長-02001, 某地铁迷_, 莓喵の小风扇, TEP-28WG01, etc.",
+                "Contributing developers (Bilibili usernames): 02B4806長-02001, 某地铁迷_, 莓喵の小风扇, TEP-28WG01, etc.",
                 "",
-                "Magnetic Pickup QQ Group: 762852552",
+                "MoHa-Radio QQ group: 762852552"
             )
         }
         val aboutWebsiteLabel = if (isZhAbout) "磁拾音器研究所官网：" else "Official website:"
@@ -2335,7 +2345,7 @@ private fun ImmersiveScreen(
                         when (mode) {
                             1 -> {
                                 val dy01 = (-(dy) * invHF).coerceIn(-1f, 1f)
-                                val k = 0.8f
+                                val k = 1.0f
                                 val factor = exp(dy01 * k)
                                 val nextAmp = (currentFilteredDisplayScale * factor).coerceIn(ampMin, ampMax)
                                 onGestureAmp(snapForDisplay(nextAmp))
@@ -2343,7 +2353,7 @@ private fun ImmersiveScreen(
                             }
                             2 -> {
                                 val dx01 = (dx * invWF).coerceIn(-1f, 1f)
-                                val baseStepMs = 40f
+                                val baseStepMs = 60f
                                 val accel = (currentGestureWindow / 40f).coerceIn(0.5f, 14f)
                                 val deltaMs = (-dx01) * baseStepMs * accel
                                 val nextWindow = (currentGestureWindow + deltaMs).coerceIn(windowMinMs, windowMaxMs)
