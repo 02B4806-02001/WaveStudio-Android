@@ -49,7 +49,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -84,13 +83,7 @@ private const val KEY_APP_LANGUAGE = "app_language"
 private const val LANG_ZH = "zh"
 private const val LANG_EN = "en"
 private const val KEY_TRIGGER_MODE_NAME = "trigger_mode_name"
-private const val KEY_TRIGGER_USE_AUTOCORR = "trigger_use_autocorr"
-private const val KEY_TRIGGER_STRONG_LOWPASS_HZ = "trigger_strong_lowpass_hz"
-private const val KEY_TRIGGER_PRE_TRIGGER_RATIO = "trigger_pre_trigger_ratio"
-private const val KEY_TRIGGER_HYSTERESIS_RATIO = "trigger_hysteresis_ratio"
-private const val KEY_TRIGGER_HOLDOFF_RATIO = "trigger_holdoff_ratio"
-private const val KEY_TRIGGER_AUTOCORR_REFRESH_FRAMES = "trigger_autocorr_refresh_frames"
-private const val KEY_TRIGGER_AUTOCORR_MAX_SAMPLES = "trigger_autocorr_max_samples"
+private const val KEY_TRIGGER_NORMAL_ENABLED = "trigger_normal_enabled"
 private const val KEY_RAW_WAVE_HEIGHT_DP = "raw_wave_height_dp"
 private const val KEY_FILTERED_WAVE_HEIGHT_DP = "filtered_wave_height_dp"
 
@@ -239,6 +232,9 @@ fun OscopeApp(
     val shareTitleGeneric = stringResource(R.string.share_title_generic)
     val shareTitleRecording = stringResource(R.string.share_title_recording)
     val startupPrefs = remember(context) {
+        context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+    }
+    val triggerPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
     }
 
@@ -454,6 +450,10 @@ fun OscopeApp(
 
     // ===== 0dB 参考线显示开关（竖屏默认开启） =====
     var showRefWaveforms by rememberSaveable { mutableStateOf(true) }
+    val normalTriggerEnabledInitial = remember(triggerPrefs) {
+        triggerPrefs.getBoolean(KEY_TRIGGER_NORMAL_ENABLED, false)
+    }
+    var normalTriggerEnabled by rememberSaveable { mutableStateOf(normalTriggerEnabledInitial) }
 
     // ===== Recording settings UI state =====
     val recordingFormat by audioViewModel.recordingFormat.collectAsStateWithLifecycle()
@@ -492,6 +492,35 @@ fun OscopeApp(
         }
     }
 
+    val recordingSampleRateOptions = remember {
+        listOf(16000, 22050, 32000, 44100, 48000)
+    }
+    fun nextRecordingFormat(current: AudioEngineViewModel.RecordingFormat): AudioEngineViewModel.RecordingFormat {
+        return if (current == AudioEngineViewModel.RecordingFormat.WAV) {
+            AudioEngineViewModel.RecordingFormat.M4A_AAC
+        } else {
+            AudioEngineViewModel.RecordingFormat.WAV
+        }
+    }
+    fun nextRecordingSampleRate(current: Int): Int {
+        val idx = recordingSampleRateOptions.indexOf(current)
+        if (idx < 0) return recordingSampleRateOptions.first()
+        return recordingSampleRateOptions[(idx + 1) % recordingSampleRateOptions.size]
+    }
+    fun prevPublishRateOption(current: AudioEngineViewModel.PublishRateOption): AudioEngineViewModel.PublishRateOption {
+        val options = AudioEngineViewModel.PublishRateOption.entries
+        val idx = options.indexOf(current)
+        if (idx <= 0) return options.first()
+        return options[idx - 1]
+    }
+    fun nextPublishRateOption(current: AudioEngineViewModel.PublishRateOption): AudioEngineViewModel.PublishRateOption {
+        val options = AudioEngineViewModel.PublishRateOption.entries
+        val idx = options.indexOf(current)
+        if (idx < 0) return options.first()
+        if (idx >= options.lastIndex) return options.last()
+        return options[idx + 1]
+    }
+
     // 收集ViewModel状态
     val isRunning by audioViewModel.isRunning.collectAsStateWithLifecycle()
     val useTestSignal by audioViewModel.useTestSignal.collectAsStateWithLifecycle()
@@ -514,6 +543,37 @@ fun OscopeApp(
 
     val windowMs by audioViewModel.windowMs.collectAsStateWithLifecycle()
     val ampScale by audioViewModel.ampScale.collectAsStateWithLifecycle()
+    val filteredWaveSamples by audioViewModel.filteredWaveform.collectAsStateWithLifecycle()
+    val normalTriggerEngine = remember(normalTriggerEnabled) { NewTriggerEngine(nominalWindowSize = 512) }
+
+    LaunchedEffect(normalTriggerEnabled) {
+        triggerPrefs.edit { putBoolean(KEY_TRIGGER_NORMAL_ENABLED, normalTriggerEnabled) }
+    }
+    LaunchedEffect(isLandscape, normalTriggerEnabled) {
+        if (!isLandscape) audioViewModel.setTriggerEnabled(normalTriggerEnabled)
+    }
+
+    fun buildNormalTriggeredWindow(source: FloatArray, waveformSpanMs: Float): FloatArray {
+        val nominalWindowSize = 512
+        if (!normalTriggerEnabled) return source
+        if (source.isEmpty() || source.size <= nominalWindowSize) return source
+
+        val cfg = NewTriggerEngine.Config(
+            mode = NewTriggerEngine.Mode.RISING,
+            sampleRateHz = (source.size.toFloat() / (waveformSpanMs / 1000f).coerceAtLeast(1e-4f)).coerceAtLeast(1000f),
+            strongLowPassHz = 220f,
+            fMinHz = 5f,
+            fMaxHz = 1200f,
+            useAutocorrelation = true,
+            autocorrRefreshFrames = 8,
+            autocorrMaxSamples = 512,
+            preTriggerRatio = 0.16f,
+            hysteresisRatio = 0.16f,
+            holdoffRatio = 0.60f,
+        )
+        val result = normalTriggerEngine.process(source, cfg)
+        return normalTriggerEngine.extractTriggeredWindow(source, result)
+    }
 
     // ===== 显示幅度（倍数）范围：0.5..30（手势/显示用） =====
     val ampMin = 0.5f
@@ -877,53 +937,145 @@ fun OscopeApp(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
-                OutlinedIconButton(
-                    onClick = { settingsMenuExpanded = true },
-                    modifier = topActionModifier,
-                    shape = topActionShape,
-                    border = topActionBorder,
-                    colors = topActionColors
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_settings_custom),
-                        contentDescription = stringResource(R.string.settings_language_label)
-                    )
-                }
+                Box {
+                    OutlinedIconButton(
+                        onClick = { settingsMenuExpanded = true },
+                        modifier = topActionModifier,
+                        shape = topActionShape,
+                        border = topActionBorder,
+                        colors = topActionColors
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_settings_custom),
+                            contentDescription = stringResource(R.string.settings_language_label)
+                        )
+                    }
 
-                DropdownMenu(
-                    expanded = settingsMenuExpanded,
-                    onDismissRequest = { settingsMenuExpanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = {
+                    DropdownMenu(
+                        expanded = settingsMenuExpanded,
+                        onDismissRequest = { settingsMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.trigger_label))
+                                    Spacer(Modifier.weight(1f))
+                                    Switch(
+                                        checked = normalTriggerEnabled,
+                                        onCheckedChange = { normalTriggerEnabled = it }
+                                    )
+                                }
+                            },
+                            onClick = { normalTriggerEnabled = !normalTriggerEnabled }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.waveform_ref_line_label))
+                                    Spacer(Modifier.weight(1f))
+                                    Switch(
+                                        checked = showRefWaveforms,
+                                        onCheckedChange = { showRefWaveforms = it }
+                                    )
+                                }
+                            },
+                            onClick = { showRefWaveforms = !showRefWaveforms }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(R.string.recording_format_label) + ": " + recordingFormat.label
+                                )
+                            },
+                            enabled = !isRecording,
+                            onClick = {
+                                audioViewModel.setRecordingFormat(nextRecordingFormat(recordingFormat))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(R.string.sample_rate_label) + ": ${recordingSampleRate}Hz"
+                                )
+                            },
+                            enabled = !isRecording,
+                            onClick = {
+                                audioViewModel.setRecordingSampleRate(nextRecordingSampleRate(recordingSampleRate))
+                            }
+                        )
+                        val publishRateOptions = AudioEngineViewModel.PublishRateOption.entries
+                        val publishRateIdx = publishRateOptions.indexOf(publishRateOption).coerceAtLeast(0)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(stringResource(R.string.waveform_refresh_rate_label))
+                            Spacer(Modifier.weight(1f))
+                            TextButton(
+                                enabled = publishRateIdx > 0,
+                                onClick = {
+                                    audioViewModel.setPublishRateOption(prevPublishRateOption(publishRateOption))
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("-")
+                            }
                             Text(
-                                if (selectedLanguage == LANG_ZH) "✓ ${stringResource(R.string.language_option_zh)}" else stringResource(R.string.language_option_zh)
+                                text = "${publishRateOption.hz}Hz",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 4.dp)
                             )
-                        },
-                        onClick = {
-                            settingsMenuExpanded = false
-                            switchAppLanguage(LANG_ZH)
+                            TextButton(
+                                enabled = publishRateIdx < publishRateOptions.lastIndex,
+                                onClick = {
+                                    audioViewModel.setPublishRateOption(nextPublishRateOption(publishRateOption))
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("+")
+                            }
                         }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (selectedLanguage == LANG_EN) "✓ ${stringResource(R.string.language_option_en)}" else stringResource(R.string.language_option_en)
-                            )
-                        },
-                        onClick = {
-                            settingsMenuExpanded = false
-                            switchAppLanguage(LANG_EN)
-                        }
-                    )
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.settings_scroll_top)) },
-                        onClick = {
-                            settingsMenuExpanded = false
-                            uiScope.launch { settingsScroll.animateScrollTo(0) }
-                        }
-                    )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (selectedLanguage == LANG_ZH) "✓ ${stringResource(R.string.language_option_zh)}" else stringResource(R.string.language_option_zh)
+                                )
+                            },
+                            onClick = {
+                                settingsMenuExpanded = false
+                                switchAppLanguage(LANG_ZH)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (selectedLanguage == LANG_EN) "✓ ${stringResource(R.string.language_option_en)}" else stringResource(R.string.language_option_en)
+                                )
+                            },
+                            onClick = {
+                                settingsMenuExpanded = false
+                                switchAppLanguage(LANG_EN)
+                            }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.settings_scroll_top)) },
+                            onClick = {
+                                settingsMenuExpanded = false
+                                uiScope.launch { settingsScroll.animateScrollTo(0) }
+                            }
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -1129,13 +1281,18 @@ fun OscopeApp(
                         )
                     }
             ) {
-                LiveWaveformView(
-                    samplesFlow = audioViewModel.filteredWaveform,
+                val displayFilteredSamples = buildNormalTriggeredWindow(
+                    source = filteredWaveSamples,
+                    waveformSpanMs = windowMs,
+                )
+                WaveformView(
+                    samples = displayFilteredSamples,
                     ampScale = filteredDisplayScale,
                     lineColor = Color.Red,
-                    showReference = showRefWaveforms,
+                    showReferenceWhenBelow1x = showRefWaveforms,
                     referenceAmpNormalized = filteredDisplayScale.coerceAtLeast(1e-4f),
                     referenceColor = Color(0x22FF0000),
+                    referenceDashed = true,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -1792,145 +1949,6 @@ fun OscopeApp(
                     }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-
-                    val fmtMenuState = remember { mutableStateOf(false) }
-                    val srMenuState = remember { mutableStateOf(false) }
-                    val publishRateMenuState = remember { mutableStateOf(false) }
-                    val srOptions = listOf(16000, 22050, 32000, 44100, 48000)
-                    val publishRateOptions = AudioEngineViewModel.PublishRateOption.entries
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.waveform_ref_line_label),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.widthIn(min = 64.dp)
-                        )
-                        Switch(
-                            checked = showRefWaveforms,
-                            onCheckedChange = { showRefWaveforms = it }
-                        )
-                        Text(
-                            text = if (showRefWaveforms) stringResource(R.string.show_reference_line) else stringResource(R.string.hide_reference_line),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.recording_format_label),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.widthIn(min = 64.dp)
-                        )
-                        Box {
-                            OutlinedButton(
-                                onClick = { fmtMenuState.value = true },
-                                enabled = !isRecording,
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text(recordingFormat.label)
-                            }
-                            DropdownMenu(expanded = fmtMenuState.value, onDismissRequest = { fmtMenuState.value = false }) {
-                                listOf(
-                                    AudioEngineViewModel.RecordingFormat.WAV,
-                                    AudioEngineViewModel.RecordingFormat.M4A_AAC,
-                                ).forEach { fmt ->
-                                    DropdownMenuItem(
-                                        text = { Text(fmt.label) },
-                                        onClick = {
-                                            fmtMenuState.value = false
-                                            audioViewModel.setRecordingFormat(fmt)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.weight(1f))
-
-                        Text(
-                            text = stringResource(R.string.sample_rate_label),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Box {
-                            OutlinedButton(
-                                onClick = { srMenuState.value = true },
-                                enabled = !isRecording,
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text("${recordingSampleRate}Hz")
-                            }
-                            DropdownMenu(expanded = srMenuState.value, onDismissRequest = { srMenuState.value = false }) {
-                                srOptions.forEach { sr ->
-                                    DropdownMenuItem(
-                                        text = { Text("${sr}Hz") },
-                                        onClick = {
-                                            srMenuState.value = false
-                                            audioViewModel.setRecordingSampleRate(sr)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (isRecording) {
-                        Text(
-                            text = stringResource(R.string.recording_locked_format_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.waveform_refresh_rate_label),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.widthIn(min = 64.dp)
-                        )
-                        Box {
-                            OutlinedButton(
-                                onClick = { publishRateMenuState.value = true },
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text("${publishRateOption.hz}Hz")
-                            }
-                            DropdownMenu(
-                                expanded = publishRateMenuState.value,
-                                onDismissRequest = { publishRateMenuState.value = false }
-                            ) {
-                                publishRateOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text("${option.hz}Hz") },
-                                        onClick = {
-                                            publishRateMenuState.value = false
-                                            audioViewModel.setPublishRateOption(option)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        Text(
-                            text = stringResource(R.string.waveform_refresh_rate_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
                 }
             }
 
@@ -2002,6 +2020,7 @@ fun OscopeApp(
                 "- 滑块交互更跟手",
                 "- 顶部 UI 部分按钮改成图标",
                 "- 波形高度值持久化",
+                "- 优化了 Trigger 功能",
                 "- 构建与稳定性修复",
                 "- 修复了一些其他 bug",
                 "",
@@ -2034,6 +2053,7 @@ fun OscopeApp(
                 "- Smoother and more responsive slider interaction",
                 "- Changed some buttons in the top UI to icons",
                 "- Persisted waveform height value",
+                "- Optimized the Trigger function",
                 "- Build and stability fixes",
                 "- Fixed several other bugs",
                 "",
@@ -2202,57 +2222,13 @@ private fun ImmersiveScreen(
         triggerPrefs.getString(KEY_TRIGGER_MODE_NAME, NewTriggerEngine.Mode.OFF.name)
             ?: NewTriggerEngine.Mode.OFF.name
     }
-    val triggerUseAutocorrInitial = remember(triggerPrefs) {
-        triggerPrefs.getBoolean(KEY_TRIGGER_USE_AUTOCORR, true)
-    }
-    val triggerStrongLowPassHzInitial = remember(triggerPrefs) {
-        triggerPrefs.getFloat(KEY_TRIGGER_STRONG_LOWPASS_HZ, 240f)
-    }
-    val triggerPreTriggerRatioInitial = remember(triggerPrefs) {
-        triggerPrefs.getFloat(KEY_TRIGGER_PRE_TRIGGER_RATIO, 0.16f)
-    }
-    val triggerHysteresisRatioInitial = remember(triggerPrefs) {
-        triggerPrefs.getFloat(KEY_TRIGGER_HYSTERESIS_RATIO, 0.16f)
-    }
-    val triggerHoldoffRatioInitial = remember(triggerPrefs) {
-        triggerPrefs.getFloat(KEY_TRIGGER_HOLDOFF_RATIO, 0.60f)
-    }
-    val triggerAutocorrRefreshFramesInitial = remember(triggerPrefs) {
-        triggerPrefs.getInt(KEY_TRIGGER_AUTOCORR_REFRESH_FRAMES, 8)
-    }
-    val triggerAutocorrMaxSamplesInitial = remember(triggerPrefs) {
-        triggerPrefs.getInt(KEY_TRIGGER_AUTOCORR_MAX_SAMPLES, 512)
-    }
-
     var triggerModeName by rememberSaveable { mutableStateOf(triggerModeNameInitial) }
-    var showTriggerAdvancedDialog by rememberSaveable { mutableStateOf(false) }
-    var triggerUseAutocorr by rememberSaveable { mutableStateOf(triggerUseAutocorrInitial) }
-    var triggerStrongLowPassHz by rememberSaveable { mutableStateOf(triggerStrongLowPassHzInitial) }
-    var triggerPreTriggerRatio by rememberSaveable { mutableStateOf(triggerPreTriggerRatioInitial) }
-    var triggerHysteresisRatio by rememberSaveable { mutableStateOf(triggerHysteresisRatioInitial) }
-    var triggerHoldoffRatio by rememberSaveable { mutableStateOf(triggerHoldoffRatioInitial) }
-    var triggerAutocorrRefreshFrames by rememberSaveable { mutableIntStateOf(triggerAutocorrRefreshFramesInitial) }
-    var triggerAutocorrMaxSamples by rememberSaveable { mutableIntStateOf(triggerAutocorrMaxSamplesInitial) }
 
     LaunchedEffect(
         triggerModeName,
-        triggerUseAutocorr,
-        triggerStrongLowPassHz,
-        triggerPreTriggerRatio,
-        triggerHysteresisRatio,
-        triggerHoldoffRatio,
-        triggerAutocorrRefreshFrames,
-        triggerAutocorrMaxSamples,
     ) {
         triggerPrefs.edit {
             putString(KEY_TRIGGER_MODE_NAME, triggerModeName)
-            putBoolean(KEY_TRIGGER_USE_AUTOCORR, triggerUseAutocorr)
-            putFloat(KEY_TRIGGER_STRONG_LOWPASS_HZ, triggerStrongLowPassHz)
-            putFloat(KEY_TRIGGER_PRE_TRIGGER_RATIO, triggerPreTriggerRatio)
-            putFloat(KEY_TRIGGER_HYSTERESIS_RATIO, triggerHysteresisRatio)
-            putFloat(KEY_TRIGGER_HOLDOFF_RATIO, triggerHoldoffRatio)
-            putInt(KEY_TRIGGER_AUTOCORR_REFRESH_FRAMES, triggerAutocorrRefreshFrames)
-            putInt(KEY_TRIGGER_AUTOCORR_MAX_SAMPLES, triggerAutocorrMaxSamples)
         }
     }
     val triggerMode = parseTriggerMode(triggerModeName)
@@ -2276,19 +2252,19 @@ private fun ImmersiveScreen(
         if (source.isEmpty()) return source to null
         if (source.size <= nominalWindowSize) return source to null
 
-        val preferAutocorrelation = triggerUseAutocorr && mode != NewTriggerEngine.Mode.OFF
+        val preferAutocorrelation = mode != NewTriggerEngine.Mode.OFF
 
         val cfg = NewTriggerEngine.Config(
             mode = if (mode == NewTriggerEngine.Mode.OFF) NewTriggerEngine.Mode.OFF else NewTriggerEngine.Mode.RISING,
             sampleRateHz = (source.size.toFloat() / (waveformSpanMs / 1000f).coerceAtLeast(1e-4f)).coerceAtLeast(1000f),
-            strongLowPassHz = if (preferAutocorrelation) triggerStrongLowPassHz else 160f,
-            fMaxHz = if (preferAutocorrelation) (triggerStrongLowPassHz + 40f).coerceAtLeast(260f) else 2000f,
+            strongLowPassHz = if (preferAutocorrelation) 240f else 160f,
+            fMaxHz = if (preferAutocorrelation) 280f else 2000f,
             useAutocorrelation = preferAutocorrelation,
-            autocorrRefreshFrames = triggerAutocorrRefreshFrames.coerceIn(1, 32),
-            autocorrMaxSamples = triggerAutocorrMaxSamples.coerceIn(128, 2048),
-            preTriggerRatio = triggerPreTriggerRatio.coerceIn(0.08f, 0.35f),
-            hysteresisRatio = triggerHysteresisRatio.coerceIn(0.05f, 0.40f),
-            holdoffRatio = triggerHoldoffRatio.coerceIn(0.20f, 0.85f),
+            autocorrRefreshFrames = 8,
+            autocorrMaxSamples = 512,
+            preTriggerRatio = 0.16f,
+            hysteresisRatio = 0.16f,
+            holdoffRatio = 0.60f,
         )
         val res = triggerEngine.process(source, cfg)
         val window = if (mode == NewTriggerEngine.Mode.OFF) {
@@ -2444,15 +2420,6 @@ private fun ImmersiveScreen(
                 Spacer(Modifier.width(8.dp))
 
                 OutlinedButton(
-                    onClick = { showTriggerAdvancedDialog = true },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
-                ) {
-                    Text(if (triggerUseAutocorr) stringResource(R.string.trigger_advanced_on) else stringResource(R.string.trigger_advanced_off), color = Color.White)
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                OutlinedButton(
                     onClick = onToggleShowRef,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                 ) {
@@ -2470,352 +2437,6 @@ private fun ImmersiveScreen(
             ) {}
         }
 
-        if (showTriggerAdvancedDialog) {
-            AlertDialog(
-                onDismissRequest = { showTriggerAdvancedDialog = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false),
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(stringResource(R.string.trigger_advanced_title))
-                        InfoIconButton(stringResource(R.string.trigger_advanced_info_title), stringResource(R.string.trigger_advanced_info_message))
-                    }
-                },
-                text = {
-                    val dialogWidth = LocalConfiguration.current.screenWidthDp.dp
-                    val columns = when {
-                        dialogWidth < 420.dp -> 1
-                        dialogWidth < 700.dp -> 2
-                        else -> 3
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .widthIn(max = 760.dp)
-                            .heightIn(max = 520.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(stringResource(R.string.trigger_autocorr_assist))
-                                InfoIconButton(stringResource(R.string.trigger_autocorr_assist), stringResource(R.string.trigger_autocorr_assist_info))
-                            }
-                            Switch(
-                                checked = triggerUseAutocorr,
-                                onCheckedChange = { triggerUseAutocorr = it }
-                            )
-                        }
-
-                        when (columns) {
-                            1 -> {
-                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(stringResource(R.string.trigger_pre_trigger_ratio_value, String.format(Locale.US, "%.2f", triggerPreTriggerRatio)))
-                                            InfoIconButton(stringResource(R.string.trigger_pre_trigger_ratio_info_title), stringResource(R.string.trigger_pre_trigger_ratio_info_message))
-                                        }
-                                        Slider(
-                                            value = triggerPreTriggerRatio,
-                                            onValueChange = { triggerPreTriggerRatio = it },
-                                            valueRange = 0.08f..0.35f,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(stringResource(R.string.trigger_assist_lowpass_value, String.format(Locale.US, "%.0f", triggerStrongLowPassHz)))
-                                            InfoIconButton(stringResource(R.string.trigger_assist_lowpass_info_title), stringResource(R.string.trigger_assist_lowpass_info_message))
-                                        }
-                                        Slider(
-                                            value = triggerStrongLowPassHz,
-                                            onValueChange = { triggerStrongLowPassHz = it },
-                                            valueRange = 120f..600f,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(stringResource(R.string.trigger_autocorr_refresh_value, triggerAutocorrRefreshFrames))
-                                            InfoIconButton(stringResource(R.string.trigger_autocorr_refresh_info_title), stringResource(R.string.trigger_autocorr_refresh_info_message))
-                                        }
-                                        Slider(
-                                            value = triggerAutocorrRefreshFrames.toFloat(),
-                                            onValueChange = { triggerAutocorrRefreshFrames = it.roundToInt().coerceIn(1, 32) },
-                                            valueRange = 1f..32f,
-                                            steps = 30,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(stringResource(R.string.trigger_autocorr_length_value, triggerAutocorrMaxSamples))
-                                            InfoIconButton(stringResource(R.string.trigger_autocorr_length_info_title), stringResource(R.string.trigger_autocorr_length_info_message))
-                                        }
-                                        Slider(
-                                            value = triggerAutocorrMaxSamples.toFloat(),
-                                            onValueChange = { triggerAutocorrMaxSamples = it.roundToInt().coerceIn(128, 2048) },
-                                            valueRange = 128f..2048f,
-                                            steps = 14,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(stringResource(R.string.trigger_hysteresis_value, String.format(Locale.US, "%.2f", triggerHysteresisRatio)))
-                                            InfoIconButton(stringResource(R.string.trigger_hysteresis_info_title), stringResource(R.string.trigger_hysteresis_info_message))
-                                        }
-                                        Slider(
-                                            value = triggerHysteresisRatio,
-                                            onValueChange = { triggerHysteresisRatio = it },
-                                            valueRange = 0.05f..0.40f,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(stringResource(R.string.trigger_holdoff_value, String.format(Locale.US, "%.2f", triggerHoldoffRatio)))
-                                            InfoIconButton(stringResource(R.string.trigger_holdoff_info_title), stringResource(R.string.trigger_holdoff_info_message))
-                                        }
-                                        Slider(
-                                            value = triggerHoldoffRatio,
-                                            onValueChange = { triggerHoldoffRatio = it },
-                                            valueRange = 0.20f..0.85f,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                }
-                            }
-
-                            2 -> {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_pre_trigger_ratio_value, String.format(Locale.US, "%.2f", triggerPreTriggerRatio)))
-                                                InfoIconButton(stringResource(R.string.trigger_pre_trigger_ratio_info_title), stringResource(R.string.trigger_pre_trigger_ratio_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerPreTriggerRatio,
-                                                onValueChange = { triggerPreTriggerRatio = it },
-                                                valueRange = 0.08f..0.35f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_assist_lowpass_value, String.format(Locale.US, "%.0f", triggerStrongLowPassHz)))
-                                                InfoIconButton(stringResource(R.string.trigger_assist_lowpass_info_title), stringResource(R.string.trigger_assist_lowpass_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerStrongLowPassHz,
-                                                onValueChange = { triggerStrongLowPassHz = it },
-                                                valueRange = 120f..600f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_autocorr_refresh_value, triggerAutocorrRefreshFrames))
-                                                InfoIconButton(stringResource(R.string.trigger_autocorr_refresh_info_title), stringResource(R.string.trigger_autocorr_refresh_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerAutocorrRefreshFrames.toFloat(),
-                                                onValueChange = { triggerAutocorrRefreshFrames = it.roundToInt().coerceIn(1, 32) },
-                                                valueRange = 1f..32f,
-                                                steps = 30,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_autocorr_length_value, triggerAutocorrMaxSamples))
-                                                InfoIconButton(stringResource(R.string.trigger_autocorr_length_info_title), stringResource(R.string.trigger_autocorr_length_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerAutocorrMaxSamples.toFloat(),
-                                                onValueChange = { triggerAutocorrMaxSamples = it.roundToInt().coerceIn(128, 2048) },
-                                                valueRange = 128f..2048f,
-                                                steps = 14,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_hysteresis_value, String.format(Locale.US, "%.2f", triggerHysteresisRatio)))
-                                                InfoIconButton(stringResource(R.string.trigger_hysteresis_info_title), stringResource(R.string.trigger_hysteresis_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerHysteresisRatio,
-                                                onValueChange = { triggerHysteresisRatio = it },
-                                                valueRange = 0.05f..0.40f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_holdoff_value, String.format(Locale.US, "%.2f", triggerHoldoffRatio)))
-                                                InfoIconButton(stringResource(R.string.trigger_holdoff_info_title), stringResource(R.string.trigger_holdoff_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerHoldoffRatio,
-                                                onValueChange = { triggerHoldoffRatio = it },
-                                                valueRange = 0.20f..0.85f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            else -> {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_pre_trigger_ratio_value, String.format(Locale.US, "%.2f", triggerPreTriggerRatio)))
-                                                InfoIconButton(stringResource(R.string.trigger_pre_trigger_ratio_info_title), stringResource(R.string.trigger_pre_trigger_ratio_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerPreTriggerRatio,
-                                                onValueChange = { triggerPreTriggerRatio = it },
-                                                valueRange = 0.08f..0.35f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_assist_lowpass_value, String.format(Locale.US, "%.0f", triggerStrongLowPassHz)))
-                                                InfoIconButton(stringResource(R.string.trigger_assist_lowpass_info_title), stringResource(R.string.trigger_assist_lowpass_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerStrongLowPassHz,
-                                                onValueChange = { triggerStrongLowPassHz = it },
-                                                valueRange = 120f..600f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_autocorr_refresh_value, triggerAutocorrRefreshFrames))
-                                                InfoIconButton(stringResource(R.string.trigger_autocorr_refresh_info_title), stringResource(R.string.trigger_autocorr_refresh_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerAutocorrRefreshFrames.toFloat(),
-                                                onValueChange = { triggerAutocorrRefreshFrames = it.roundToInt().coerceIn(1, 32) },
-                                                valueRange = 1f..32f,
-                                                steps = 30,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_autocorr_length_value, triggerAutocorrMaxSamples))
-                                                InfoIconButton(stringResource(R.string.trigger_autocorr_length_info_title), stringResource(R.string.trigger_autocorr_length_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerAutocorrMaxSamples.toFloat(),
-                                                onValueChange = { triggerAutocorrMaxSamples = it.roundToInt().coerceIn(128, 2048) },
-                                                valueRange = 128f..2048f,
-                                                steps = 14,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_hysteresis_value, String.format(Locale.US, "%.2f", triggerHysteresisRatio)))
-                                                InfoIconButton(stringResource(R.string.trigger_hysteresis_info_title), stringResource(R.string.trigger_hysteresis_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerHysteresisRatio,
-                                                onValueChange = { triggerHysteresisRatio = it },
-                                                valueRange = 0.05f..0.40f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text(stringResource(R.string.trigger_holdoff_value, String.format(Locale.US, "%.2f", triggerHoldoffRatio)))
-                                                InfoIconButton(stringResource(R.string.trigger_holdoff_info_title), stringResource(R.string.trigger_holdoff_info_message))
-                                            }
-                                            Slider(
-                                                value = triggerHoldoffRatio,
-                                                onValueChange = { triggerHoldoffRatio = it },
-                                                valueRange = 0.20f..0.85f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(
-                            onClick = {
-                                triggerUseAutocorr = true
-                                triggerStrongLowPassHz = 240f
-                                triggerPreTriggerRatio = 0.16f
-                                triggerHysteresisRatio = 0.16f
-                                triggerHoldoffRatio = 0.60f
-                                triggerAutocorrRefreshFrames = 8
-                                triggerAutocorrMaxSamples = 512
-                            }
-                        ) {
-                            Text(stringResource(R.string.action_restore_default))
-                        }
-
-                        TextButton(onClick = { showTriggerAdvancedDialog = false }) {
-                            Text(stringResource(R.string.common_confirm))
-                        }
-                    }
-                }
-            )
-        }
 
         Box(
             modifier = Modifier
@@ -3353,15 +2974,16 @@ private fun EqPanel(
                 ResetIconButton(
                     onClick = {
                         val defaultFreq = when (sel.id) {
-                            0 -> 50f
-                            1 -> 300f
-                            2 -> 1200f
-                            3 -> 6000f
+                            0 -> 200f
+                            1 -> 800f
+                            2 -> 2000f
+                            3 -> 5000f
                             else -> 1000f
                         }
                         onBandFreq(sel.id, defaultFreq)
                     },
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(32.dp),
+                    iconRes = R.drawable.ic_eq_reset_custom,
                 )
             }
         }
@@ -3405,7 +3027,8 @@ private fun EqPanel(
                     )
                     ResetIconButton(
                         onClick = { onBandGainDb(sel.id, 0f) },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
+                        iconRes = R.drawable.ic_eq_reset_custom,
                     )
                 }
                 OscopeSlider(
@@ -3464,7 +3087,8 @@ private fun EqPanel(
                     )
                     ResetIconButton(
                         onClick = { onBandQ(sel.id, AudioEngineViewModel.DEFAULT_EQ_Q) },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
+                        iconRes = R.drawable.ic_eq_reset_custom,
                     )
                 }
                 OscopeSlider(
@@ -3487,6 +3111,7 @@ private fun ResetIconButton(
     modifier: Modifier = Modifier.size(34.dp),
     enabled: Boolean = true,
     contentDescriptionRes: Int = R.string.common_reset,
+    iconRes: Int = R.drawable.ic_reset_settings,
 ) {
     IconButton(
         onClick = onClick,
@@ -3494,7 +3119,7 @@ private fun ResetIconButton(
         modifier = modifier
     ) {
         Icon(
-            painter = painterResource(id = R.drawable.ic_reset_settings),
+            painter = painterResource(id = iconRes),
             contentDescription = stringResource(contentDescriptionRes)
         )
     }

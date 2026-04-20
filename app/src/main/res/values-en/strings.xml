@@ -113,6 +113,7 @@
     <string name="startup_note_show_button">Show Tip Dialog</string>
 
     <!-- Trigger / UI toggles -->
+    <string name="trigger_label">Trigger</string>
     <string name="trigger_on">Trigger On</string>
     <string name="trigger_off">Trigger Off</string>
     <string name="trigger_advanced_title">Trigger Advanced</string>

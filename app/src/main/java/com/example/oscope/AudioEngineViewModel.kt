@@ -68,6 +68,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     enum class PublishRateOption(val hz: Int) {
+        HZ_6(6),
+        HZ_8(8),
+        HZ_10(10),
+        HZ_12(12),
+        HZ_16(16),
         HZ_20(20),
         HZ_24(24),
         HZ_30(30),
@@ -391,10 +396,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     /** 重置某一段 EQ 的频率为默认值（不会改启用状态/增益/Q）。 */
     fun resetEqBandFreq(id: Int) {
         val defaultFreq = when (id) {
-            0 -> 50f
-            1 -> 300f
-            2 -> 1200f
-            3 -> 6000f
+            0 -> 200f
+            1 -> 800f
+            2 -> 2000f
+            3 -> 5000f
             else -> 1000f
         }
         setEqBandFreq(id, defaultFreq)
@@ -603,7 +608,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             val requestedRate = _recordingSampleRate.value
             val preferredRates = buildList {
                 add(requestedRate)
-                listOf(48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025).forEach {
+                listOf(48000, 44100, 32000, 24000, 22050).forEach {
                     if (!contains(it)) add(it)
                 }
             }
@@ -1723,8 +1728,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun sanitizeRecordingSampleRate(sr: Int): Int {
         return when (sr) {
-            11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000 -> sr
-            else -> sr.coerceIn(11025, 48000)
+            22050, 24000, 32000, 44100, 48000 -> sr
+            else -> sr.coerceIn(22050, 48000)
         }
     }
 

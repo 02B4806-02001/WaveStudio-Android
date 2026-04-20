@@ -102,6 +102,7 @@
     <string name="startup_note_ack">知道了</string>
     <string name="startup_note_show_button">显示提示弹窗</string>
 
+    <string name="trigger_label">Trigger</string>
     <string name="trigger_on">Trigger 开</string>
     <string name="trigger_off">Trigger 关</string>
     <string name="trigger_advanced_title">Trigger 增强</string>
