@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SliderColors
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val OscopeSliderShape = RoundedCornerShape(999.dp)
@@ -139,6 +141,7 @@ fun OscopeSlider(
 
     var layoutWidthPx by remember { mutableFloatStateOf(0f) }
     var dragFraction by remember { mutableFloatStateOf(Float.NaN) }
+    var pendingFraction by remember { mutableFloatStateOf(Float.NaN) }
     var isDragging by remember { mutableStateOf(false) }
     var isPressed by remember { mutableStateOf(false) }
 
@@ -171,15 +174,31 @@ fun OscopeSlider(
     }
 
     fun emitFraction(fraction: Float) {
-        currentOnValueChange(fractionToValue(fraction))
+        val snapped = snapFraction(fraction)
+        pendingFraction = snapped
+        currentOnValueChange(fractionToValue(snapped))
     }
 
-    val targetFraction = if (dragFraction.isNaN()) normalizedValue else dragFraction.coerceIn(0f, 1f)
+    LaunchedEffect(normalizedValue, pendingFraction, isDragging, isPressed, steps) {
+        if (isDragging || isPressed || pendingFraction.isNaN()) return@LaunchedEffect
+        val tolerance = if (steps > 0) 0.5f / (steps + 1).toFloat() else 0.003f
+        if (abs(normalizedValue - pendingFraction) <= tolerance) {
+            pendingFraction = Float.NaN
+        }
+    }
+
+    val localFraction = when {
+        !dragFraction.isNaN() -> dragFraction
+        !pendingFraction.isNaN() -> pendingFraction
+        else -> normalizedValue
+    }
+    val targetFraction = localFraction.coerceIn(0f, 1f)
     val animatedFraction by animateFloatAsState(
         targetValue = targetFraction,
-        animationSpec = tween(durationMillis = if (isDragging) 45 else 140, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
         label = "oscope-slider-fraction"
     )
+    val renderedFraction = if (isDragging) targetFraction else animatedFraction
 
     val thumbScale by animateFloatAsState(
         targetValue = when {
@@ -223,7 +242,11 @@ fun OscopeSlider(
     val interactionSource = remember { MutableInteractionSource() }
     val dragState = rememberDraggableState { delta ->
         if (!enabled) return@rememberDraggableState
-        val base = if (dragFraction.isNaN()) normalizedValue else dragFraction
+        val base = when {
+            !dragFraction.isNaN() -> dragFraction
+            !pendingFraction.isNaN() -> pendingFraction
+            else -> normalizedValue
+        }
         val next = (base + delta / dragWidthPx()).coerceIn(0f, 1f)
         dragFraction = next
         emitFraction(next)
@@ -253,9 +276,7 @@ fun OscopeSlider(
                     onTap = { offset ->
                         if (!enabled) return@detectTapGestures
                         val next = positionToFraction(offset.x)
-                        dragFraction = next
                         emitFraction(next)
-                        dragFraction = Float.NaN
                         currentOnValueChangeFinished?.invoke()
                     }
                 )
@@ -265,12 +286,14 @@ fun OscopeSlider(
                 orientation = Orientation.Horizontal,
                 state = dragState,
                 interactionSource = interactionSource,
+                startDragImmediately = true,
                 onDragStarted = { startOffset ->
                     isPressed = true
                     isDragging = true
-                    val next = positionToFraction(startOffset.x)
-                    dragFraction = next
-                    emitFraction(next)
+                    dragFraction = when {
+                        !pendingFraction.isNaN() -> pendingFraction
+                        else -> normalizedValue
+                    }
                 },
                 onDragStopped = {
                     isDragging = false
@@ -295,7 +318,7 @@ fun OscopeSlider(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(horizontal = baseThumbHalfWidthDp)
-                .fillMaxWidth(animatedFraction)
+                .fillMaxWidth(renderedFraction)
                 .height(OscopeTrackHeight)
                 .clip(OscopeSliderShape)
                 .background(activeTrackColor)
@@ -305,7 +328,7 @@ fun OscopeSlider(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .offset {
-                    val centerX = animatedFraction * dragWidthPx() + baseThumbHalfWidthPx
+                    val centerX = renderedFraction * dragWidthPx() + baseThumbHalfWidthPx
                     IntOffset((centerX - baseThumbHalfWidthPx).roundToInt(), 0)
                 }
                 .size(width = OscopeThumbWidth, height = OscopeThumbHeight)

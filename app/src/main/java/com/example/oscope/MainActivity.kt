@@ -3318,9 +3318,33 @@ private fun EqPanel(
                     ) { Text(stringResource(R.string.common_reset)) }
                 }
                 OscopeSlider(
-                    value = ((sel.gainDb - gainMin) / (gainMax - gainMin)).coerceIn(0f, 1f),
+                    value = run {
+                        val gainPowCurve = 1.5f
+                        val signed = if (sel.gainDb >= 0f) {
+                            (sel.gainDb / gainMax).coerceIn(0f, 1f)
+                        } else {
+                            -(((-sel.gainDb) / (-gainMin)).coerceIn(0f, 1f))
+                        }
+                        val linearSigned = if (signed >= 0f) {
+                            signed.pow(1f / gainPowCurve)
+                        } else {
+                            -((-signed).pow(1f / gainPowCurve))
+                        }
+                        ((linearSigned + 1f) * 0.5f).coerceIn(0f, 1f)
+                    },
                     onValueChange = {
-                        val db = (gainMin + (gainMax - gainMin) * it).coerceIn(gainMin, gainMax)
+                        val gainPowCurve = 1.5f
+                        val linearSigned = (it * 2f - 1f).coerceIn(-1f, 1f)
+                        val curvedSigned = if (linearSigned >= 0f) {
+                            linearSigned.pow(gainPowCurve)
+                        } else {
+                            -((-linearSigned).pow(gainPowCurve))
+                        }
+                        val db = if (curvedSigned >= 0f) {
+                            (curvedSigned * gainMax).coerceIn(0f, gainMax)
+                        } else {
+                            -((-curvedSigned) * (-gainMin)).coerceIn(0f, -gainMin)
+                        }
                         onBandGainDb(sel.id, db)
                     },
                     valueRange = 0f..1f,
