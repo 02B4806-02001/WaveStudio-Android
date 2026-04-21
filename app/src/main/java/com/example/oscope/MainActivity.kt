@@ -1166,13 +1166,13 @@ fun OscopeApp(
                                         val dy01 = (-(dy) * invH).coerceIn(-1f, 1f)
                                         // 对数手感：在 log 域里加法 => 线性域里乘法
                                         // dy01>0 表示向上滑 => 放大；dy01<0 => 缩小
-                                        val k = 0.8f // tweak: lower => less sensitive
+                                        val k = 0.6f // tweak: lower => less sensitive
                                         val factor = exp(dy01 * k)
                                         rawDisplayScale = (currentRawDisplayScale * factor).coerceIn(ampMin, ampMax)
                                     }
                                     2 -> {
                                         val dx01 = (dx * invW).coerceIn(-1f, 1f)
-                                        val baseStepMs = 40f
+                                        val baseStepMs = 30f
                                         val accel = (currentWindowMs / 40f).coerceIn(0.5f, 14f)
                                         val deltaMs = (dx01) * baseStepMs * accel
                                         val nextWindow = (currentWindowMs + deltaMs).coerceIn(windowMinMs, windowMaxMs)
@@ -1264,13 +1264,13 @@ fun OscopeApp(
                                 when (filteredDragMode) {
                                     1 -> {
                                         val dy01 = (-(dy) * invH).coerceIn(-1f, 1f)
-                                        val k = 0.8f // tweak: lower => less sensitive
+                                        val k = 0.6f // tweak: lower => less sensitive
                                         val factor = exp(dy01 * k)
                                         filteredDisplayScale = (currentFilteredDisplayScale * factor).coerceIn(ampMin, ampMax)
                                     }
                                     2 -> {
                                         val dx01 = (dx * invW).coerceIn(-1f, 1f)
-                                        val baseStepMs = 40f
+                                        val baseStepMs = 30f
                                         val accel = (currentWindowMs / 40f).coerceIn(0.5f, 14f)
                                         val deltaMs = (dx01) * baseStepMs * accel
                                         val nextWindow = (currentWindowMs + deltaMs).coerceIn(windowMinMs, windowMaxMs)
@@ -2321,7 +2321,7 @@ private fun ImmersiveScreen(
                         when (mode) {
                             1 -> {
                                 val dy01 = (-(dy) * invHF).coerceIn(-1f, 1f)
-                                val k = 1.0f
+                                val k = 2.5f
                                 val factor = exp(dy01 * k)
                                 val nextAmp = (currentFilteredDisplayScale * factor).coerceIn(ampMin, ampMax)
                                 onGestureAmp(snapForDisplay(nextAmp))
