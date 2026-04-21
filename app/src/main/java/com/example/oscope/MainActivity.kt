@@ -1174,7 +1174,7 @@ fun OscopeApp(
                                         val dx01 = (dx * invW).coerceIn(-1f, 1f)
                                         val baseStepMs = 40f
                                         val accel = (currentWindowMs / 40f).coerceIn(0.5f, 14f)
-                                        val deltaMs = (-dx01) * baseStepMs * accel
+                                        val deltaMs = (dx01) * baseStepMs * accel
                                         val nextWindow = (currentWindowMs + deltaMs).coerceIn(windowMinMs, windowMaxMs)
                                         audioViewModel.updateTimeSlider(nextWindow)
                                     }
@@ -1272,7 +1272,7 @@ fun OscopeApp(
                                         val dx01 = (dx * invW).coerceIn(-1f, 1f)
                                         val baseStepMs = 40f
                                         val accel = (currentWindowMs / 40f).coerceIn(0.5f, 14f)
-                                        val deltaMs = (-dx01) * baseStepMs * accel
+                                        val deltaMs = (dx01) * baseStepMs * accel
                                         val nextWindow = (currentWindowMs + deltaMs).coerceIn(windowMinMs, windowMaxMs)
                                         audioViewModel.updateTimeSlider(nextWindow)
                                     }
@@ -2331,7 +2331,7 @@ private fun ImmersiveScreen(
                                 val dx01 = (dx * invWF).coerceIn(-1f, 1f)
                                 val baseStepMs = 60f
                                 val accel = (currentGestureWindow / 40f).coerceIn(0.5f, 14f)
-                                val deltaMs = (-dx01) * baseStepMs * accel
+                                val deltaMs = (dx01) * baseStepMs * accel
                                 val nextWindow = (currentGestureWindow + deltaMs).coerceIn(windowMinMs, windowMaxMs)
                                 onGestureWindow(nextWindow)
                                 onWindowMs(nextWindow)

@@ -1257,9 +1257,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 var lastUiUpdateAt = 0L
 
                 val chunkSize = inBlock.size
+                val chunkDurationMs = (chunkSize * 1000L / sampleRate).coerceAtLeast(8L)
                 val chunk = FloatArray(chunkSize)
                 val chunkBytes = ByteArray(chunkSize * 2)
                 var filePosBytes = 0L
+                var nextChunkAtMs = SystemClock.elapsedRealtime()
 
                 fun fillChunkBytes(): Int {
                     val localRaf = raf ?: return 0
@@ -1280,6 +1282,14 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 }
 
                 while (isActive && _useImportedSignal.value) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (now < nextChunkAtMs) {
+                        delay(nextChunkAtMs - now)
+                    } else if (now - nextChunkAtMs > chunkDurationMs * 4L) {
+                        // If processing was stalled, resync to avoid long-term drift bursts.
+                        nextChunkAtMs = now
+                    }
+
                     val bytesRead = fillChunkBytes()
                     if (bytesRead < chunkBytes.size) {
                         if (bytesRead <= 0) break
@@ -1347,17 +1357,16 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     }
 
                     val track = ensureMonitorStarted()
-                    val monitorActive = track != null
                     if (track != null) {
                         try {
                             val out = filteredOutShort
                             val pcm = out ?: monitorSilence
                             var offset = 0
                             while (offset < chunkSize) {
-                                val written = track.write(pcm, offset, chunkSize - offset)
+                                val written = track.write(pcm, offset, chunkSize - offset, AudioTrack.WRITE_NON_BLOCKING)
                                 when {
                                     written > 0 -> offset += written
-                                    written == 0 -> Thread.yield()
+                                    written == 0 -> break
                                     else -> throw IllegalStateException("AudioTrack.write failed: $written")
                                 }
                             }
@@ -1374,8 +1383,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
                         val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
                             .coerceAtMost(ring.size)
+                        val triggerArmed = _triggerEnabled
+                        val monitorOn = _isMonitoring.value
                         val extraSamples = (windowSamples * 0.45f).toInt()
-                        val fetchSamples = min(ringSize, windowSamples + extraSamples)
+                        val minTriggerSamples = if (triggerArmed) 640 else 0
+                        val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
                         if (fetchSamples > 0) {
                             val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
                             for (i in 0 until fetchSamples) {
@@ -1402,7 +1414,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 uiWaveformFilter.process(uiSlice, uiFiltered, fetchSamples)
                             }
 
-                            val targetPoints = if (_isMonitoring.value) 384 else 704
+                            val targetPoints = when {
+                                monitorOn && triggerArmed -> 640
+                                monitorOn -> 384
+                                else -> 704
+                            }
                             val downRaw = downsamplePeakFloatArray(uiSlice, 0, fetchSamples, targetPoints = targetPoints)
                             val downFiltered = downsamplePeakFloatArray(uiFiltered, 0, fetchSamples, targetPoints = targetPoints)
                             val immersiveFiltered = resampleLinearFloatArray(uiFiltered, 0, fetchSamples, targetPoints)
@@ -1422,12 +1438,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         }
                     }
 
-                    // 导入输入没有 AudioRecord 的天然节流：
-                    // - 有监听输出时交给 AudioTrack 的阻塞写入来节拍；
-                    // - 没监听时再用固定间隔避免忙等。
-                    if (!monitorActive) {
-                        delay((chunkSize * 1000L / sampleRate).coerceAtLeast(8L))
-                    }
+                    // Imported loop keeps a stable real-time cadence regardless of monitor write mode.
+                    nextChunkAtMs += chunkDurationMs
                 }
             } finally {
                 _isRunning.value = false

@@ -10,8 +10,13 @@ internal class NewTriggerEngine(
     private val nominalWindowSize: Int = 512,
 ) {
     companion object {
-        private const val MIN_TRIGGER_THRESHOLD = 0.008f
-        private const val ADAPTIVE_THRESHOLD_RMS_SCALE = 0.08f
+        private const val DEFAULT_TRIGGER_THRESHOLD = 0.02f
+        private const val TRIGGER_CROSSING_HYSTERESIS_FLOOR = 0.002f
+        private const val TRIGGER_CROSSING_HYSTERESIS_RATIO = 0.18f
+        private const val TRIGGER_WEAK_SIGNAL_RMS_FLOOR = 0.006f
+        private const val TRIGGER_MAX_ACCEPTED_PERIOD_JUMP_RATIO = 0.12f
+        private const val TRIGGER_PHASE_ERROR_EMA_ALPHA = 0.12f
+        private const val PERIOD_EMA_NEW_WEIGHT = 0.18f
     }
 
     enum class Mode {
@@ -37,6 +42,15 @@ internal class NewTriggerEngine(
         val lockExitConfidence: Float = 0.10f,
         val unlockAfterBadFrames: Int = 6,
         val periodSmoothAlpha: Float = 0.18f,
+        val triggerThreshold: Float = DEFAULT_TRIGGER_THRESHOLD,
+        val triggerCrossingHysteresisFloor: Float = TRIGGER_CROSSING_HYSTERESIS_FLOOR,
+        val triggerCrossingHysteresisRatio: Float = TRIGGER_CROSSING_HYSTERESIS_RATIO,
+        val triggerWeakSignalRmsFloor: Float = TRIGGER_WEAK_SIGNAL_RMS_FLOOR,
+        val triggerMaxAcceptedPeriodJumpRatio: Float = TRIGGER_MAX_ACCEPTED_PERIOD_JUMP_RATIO,
+        val triggerHoldoffMs: Float = 1.0f,
+        val triggerEdgeConsistencyRadius: Int = 10,
+        val triggerPhaseErrorEmaAlpha: Float = TRIGGER_PHASE_ERROR_EMA_ALPHA,
+        val triggerPreferRisingPrimaryReference: Boolean = true,
     )
 
     data class Result(
@@ -77,6 +91,7 @@ internal class NewTriggerEngine(
     fun process(x: FloatArray, config: Config): Result {
         val n = x.size
         val maxStart = max(0, n - nominalWindowSize)
+        val preferredAnchor = preferredAnchorSamples()
         processFrameIndex++
         if (config.mode == Mode.OFF || n < 64) {
             lockState.locked = false
@@ -87,52 +102,47 @@ internal class NewTriggerEngine(
         }
 
         ensureCapacity(n)
-        val triggerSignal = triggerLowPass(x, n, config.sampleRateHz, config.strongLowPassHz)
+        // Output-waveform mode: trigger directly on the same array that will be displayed.
+        val triggerSignal = x
         val signalRms = rms(triggerSignal, n)
-        val adaptiveThreshold = adaptiveThreshold(signalRms)
+        val adaptiveThreshold = config.triggerThreshold
+        val edgeMode = primaryMode(config)
         val allCrossings = collectHysteresisCrossings(
             x = triggerSignal,
             n = n,
-            mode = config.mode,
+            mode = edgeMode,
             threshold = adaptiveThreshold,
-            hysteresisRatio = config.hysteresisRatio,
+            rms = signalRms,
+            config = config,
         )
 
-        val crossingCandidates = staggeredFundamentalPeriodCandidates(
-            crossings = allCrossings,
-            sampleRateHz = config.sampleRateHz,
-            fMinHz = config.fMinHz,
-            fMaxHz = config.fMaxHz,
-        )
-        val crossingPeriodSamples = chooseFundamentalPeriodCandidate(
-            candidates = crossingCandidates,
-            seed = estimatedPeriodSamples,
-        )
-        val shouldRefreshAutocorr = config.useAutocorrelation && (
-                crossingPeriodSamples <= 0 ||
-                        estimatedPeriodSamples <= 0 ||
-                        (processFrameIndex % config.autocorrRefreshFrames.coerceAtLeast(1) == 0)
-                )
-        val autocorrPeriodSamples = if (shouldRefreshAutocorr) {
-            estimatePeriodFromAutocorrelation(triggerSignal, n, config, crossingPeriodSamples)
-        } else 0
-
-        val observedPeriodSamples = when {
-            autocorrPeriodSamples > 0 -> autocorrPeriodSamples
-            crossingPeriodSamples > 0 -> crossingPeriodSamples
-            else -> 0
-        }
-        if (observedPeriodSamples > 0) {
-            estimatedPeriodSamples = smoothPeriodSamples(estimatedPeriodSamples, observedPeriodSamples, config.periodSmoothAlpha)
-            lockState.emaPeriodSamples = smoothFloat(lockState.emaPeriodSamples, estimatedPeriodSamples.toFloat(), config.periodSmoothAlpha)
+        if (signalRms >= config.triggerWeakSignalRmsFloor) {
+            val crossingCandidates = staggeredFundamentalPeriodCandidates(
+                crossings = allCrossings,
+                sampleRateHz = config.sampleRateHz,
+                fMinHz = config.fMinHz,
+                fMaxHz = config.fMaxHz,
+            )
+            var observedPeriodSamples = chooseFundamentalPeriodCandidate(
+                candidates = crossingCandidates,
+                seed = estimatedPeriodSamples,
+            )
+            if (config.useAutocorrelation && n >= 96) {
+                val acPeriod = estimatePeriodFromAutocorrelation(triggerSignal, n, config, observedPeriodSamples)
+                if (acPeriod > 0) observedPeriodSamples = acPeriod
+            }
+            if (observedPeriodSamples > 0) {
+                estimatedPeriodSamples = updatePeriodState(estimatedPeriodSamples, observedPeriodSamples, config)
+                lockState.emaPeriodSamples = smoothFloat(lockState.emaPeriodSamples, estimatedPeriodSamples.toFloat(), PERIOD_EMA_NEW_WEIGHT)
+            }
         }
 
-        val holdoffSamples = triggerHoldoffSamples(estimatedPeriodSamples, config)
+        val holdoffSamples = holdoffSamples(config.sampleRateHz, config.triggerHoldoffMs)
         val validCrossings = ArrayList<Int>(allCrossings.size)
         var lastKept = Int.MIN_VALUE / 4
         for (crossing in allCrossings) {
             if (crossing - lastKept < holdoffSamples) continue
-            if (isLegalAnchor(crossing, n, config.preTriggerRatio)) {
+            if (isLegalAnchor(crossing, n, preferredAnchor)) {
                 validCrossings += crossing
                 lastKept = crossing
             }
@@ -145,25 +155,32 @@ internal class NewTriggerEngine(
         val bestCrossing = chooseBestTriggerCrossing(
             signal = triggerSignal,
             crossings = validCrossings,
-            mode = config.mode,
+            mode = edgeMode,
             predictedAnchor = predictedAnchor,
             periodSamples = estimatedPeriodSamples,
-            searchRadius = phaseSearchRadius(estimatedPeriodSamples, config),
+            searchRadius = phaseSearchRadius(estimatedPeriodSamples),
             priorFingerprint = lockState.triggerFingerprint,
+            edgeRadius = config.triggerEdgeConsistencyRadius,
         )
         if (bestCrossing == null) {
             return fallbackResult(n, config)
         }
 
         val anchorIndex = bestCrossing.index
+        val phaseErr = if (predictedAnchor >= 0) anchorIndex - predictedAnchor else 0
+        lockState.phaseErrorSamples = smoothFloat(
+            lockState.phaseErrorSamples,
+            phaseErr.toFloat(),
+            config.triggerPhaseErrorEmaAlpha.coerceIn(0f, 1f),
+        )
         lastTriggerAnchor = anchorIndex
 
-        val startIndex = startFromAnchor(anchorIndex, n, config.preTriggerRatio).coerceIn(0, maxStart)
+        val startIndex = (anchorIndex - preferredAnchor).coerceIn(0, maxStart)
 
         val periodSamples = estimatedPeriodSamples
 
         val freqHz = if (periodSamples > 1) config.sampleRateHz / periodSamples.toFloat() else 0f
-        val confidenceAdjusted = if (signalRms < adaptiveThreshold * 1.2f && periodSamples > 0) {
+        val confidenceAdjusted = if (signalRms < config.triggerWeakSignalRmsFloor && periodSamples > 0) {
             (bestCrossing.confidence * 0.84f).coerceAtLeast(0.18f)
         } else {
             bestCrossing.confidence
@@ -171,7 +188,7 @@ internal class NewTriggerEngine(
 
         val lockedNow = updateLockState(
             confidence = confidenceAdjusted,
-            phaseError = bestCrossing.phaseError.toFloat(),
+            phaseError = phaseErr.toFloat(),
             periodSamples = periodSamples,
             anchorIndex = anchorIndex,
             frameSize = n,
@@ -240,33 +257,48 @@ internal class NewTriggerEngine(
         periodSamples: Int,
         searchRadius: Int,
         priorFingerprint: FloatArray?,
+        edgeRadius: Int,
     ): ScoredCrossing? {
         if (crossings.isEmpty()) return null
 
         var best: ScoredCrossing? = null
         for (anchor in crossings) {
             if (anchor !in 1 until signal.size) continue
-            val edge = candidateEdgeStrength(signal, anchor, mode)
+            val edge = edgeConsistencyScore(signal, anchor, mode, edgeRadius)
             val phase = phaseAlignmentScore(anchor, predictedAnchor, searchRadius)
             val period = periodDeviationScore(anchor, periodSamples, searchRadius)
             val symmetry = halfWaveSymmetryScore(signal, anchor, periodSamples)
             val fp = fingerprintScore(signal, anchor, periodSamples, priorFingerprint)
             val recency = (anchor.toFloat() / signal.lastIndex.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
             val total = (
-                    0.30f * edge +
-                            0.24f * phase +
-                            0.18f * period +
-                            0.16f * fp +
-                            0.08f * symmetry +
-                            0.04f * recency
+                    0.38f * edge +
+                            0.20f * symmetry +
+                            0.20f * fp +
+                            0.14f * max(phase, period) +
+                            0.08f * recency
                     ).coerceIn(0f, 1f)
-            val confidence = (0.58f * edge + 0.42f * max(phase, period)).coerceIn(0f, 1f)
+            val confidence = total
             val phaseErr = if (predictedAnchor >= 0) anchor - predictedAnchor else 0
             if (best == null || total > best.score) {
                 best = ScoredCrossing(anchor, total, confidence, phaseErr)
             }
         }
         return best
+    }
+
+    private fun edgeConsistencyScore(signal: FloatArray, anchorIndex: Int, mode: Mode, radius: Int): Float {
+        val r = radius.coerceAtLeast(1)
+        val start = (anchorIndex - r).coerceAtLeast(1)
+        val end = (anchorIndex + r).coerceAtMost(signal.lastIndex)
+        var directed = 0f
+        var mag = 0f
+        for (i in start..end) {
+            val d = signal[i] - signal[i - 1]
+            directed += if (mode == Mode.FALLING) -d else d
+            mag += abs(d)
+        }
+        if (mag <= 1e-6f) return 0f
+        return ((directed / mag) * 0.5f + 0.5f).coerceIn(0f, 1f)
     }
 
     private fun phaseAlignmentScore(
@@ -301,18 +333,6 @@ internal class NewTriggerEngine(
         val prev = priorFingerprint ?: return 0.5f
         val now = triggerFingerprint(signal, anchorIndex, periodSamples) ?: return 0.5f
         return cosineSimilarity(now, prev)
-    }
-
-    private fun candidateEdgeStrength(signal: FloatArray, anchorIndex: Int, mode: Mode): Float {
-        val i0 = (anchorIndex - 1).coerceAtLeast(0)
-        val i1 = anchorIndex.coerceAtMost(signal.lastIndex)
-        val i2 = (anchorIndex + 1).coerceAtMost(signal.lastIndex)
-        val slope = when (mode) {
-            Mode.FALLING -> signal[i0] - signal[i1]
-            else -> signal[i1] - signal[i0]
-        }
-        val localRms = localRms(signal, i1, 2).coerceAtLeast(1e-4f)
-        return ((abs(slope) / localRms) * 0.65f).coerceIn(0f, 1f)
     }
 
     private fun halfWaveSymmetryScore(signal: FloatArray, anchorIndex: Int, periodSamples: Int): Float {
@@ -368,36 +388,44 @@ internal class NewTriggerEngine(
         return ((ab / den) * 0.5f + 0.5f).coerceIn(0f, 1f)
     }
 
-    private fun localRms(signal: FloatArray, center: Int, radius: Int): Float {
-        val start = max(0, center - radius)
-        val end = min(signal.size - 1, center + radius)
-        var sumSq = 0f
-        var count = 0
-        for (i in start..end) {
-            val v = signal[i]
-            sumSq += v * v
-            count++
-        }
-        return if (count > 0) kotlin.math.sqrt(sumSq / count) else 0f
-    }
-
     private fun predictedAnchor(periodSamples: Int, lastAnchor: Int, n: Int): Int {
         if (periodSamples <= 0 || lastAnchor < 0) return -1
         return (lastAnchor + periodSamples).coerceIn(0, n - 1)
     }
 
-    private fun phaseSearchRadius(periodSamples: Int, config: Config): Int {
+    private fun phaseSearchRadius(periodSamples: Int): Int {
         val base = if (periodSamples > 0) (periodSamples * 0.35f).roundToInt() else (nominalWindowSize * 0.20f).roundToInt()
         return max(8, base)
     }
 
-    private fun triggerHoldoffSamples(periodSamples: Int, config: Config): Int {
-        val holdoff = if (periodSamples > 0) {
-            (periodSamples * config.holdoffRatio.coerceIn(0.10f, 0.90f)).roundToInt()
-        } else {
-            (nominalWindowSize * 0.14f).roundToInt()
+    private fun holdoffSamples(sampleRateHz: Float, holdoffMs: Float): Int {
+        return ((sampleRateHz.coerceAtLeast(1f) * holdoffMs.coerceAtLeast(0f)) / 1000f)
+            .roundToInt()
+            .coerceAtLeast(1)
+    }
+
+    private fun estimatePeriodFromCrossingsMedian(crossings: IntArray): Int {
+        if (crossings.size < 2) return 0
+        val deltas = ArrayList<Int>(crossings.size - 1)
+        for (i in 1 until crossings.size) {
+            val d = crossings[i] - crossings[i - 1]
+            if (d > 0) deltas += d
         }
-        return holdoff.coerceAtLeast(4)
+        if (deltas.isEmpty()) return 0
+        deltas.sort()
+        return deltas[deltas.size / 2]
+    }
+
+    private fun updatePeriodState(previous: Int, observed: Int, config: Config): Int {
+        if (observed <= 0) return previous
+        if (previous <= 0) return observed
+        val jumpRatio = abs(observed - previous).toFloat() / previous.toFloat().coerceAtLeast(1f)
+        if (jumpRatio > config.triggerMaxAcceptedPeriodJumpRatio.coerceAtLeast(0f)) {
+            return previous
+        }
+        return (previous.toFloat() * (1f - PERIOD_EMA_NEW_WEIGHT) + observed.toFloat() * PERIOD_EMA_NEW_WEIGHT)
+            .roundToInt()
+            .coerceAtLeast(1)
     }
 
     private fun staggeredFundamentalPeriodCandidates(
@@ -525,13 +553,14 @@ internal class NewTriggerEngine(
         return (anchor - pre).coerceIn(0, max(0, n - nominalWindowSize))
     }
 
-    private fun isLegalAnchor(anchor: Int, n: Int, preTriggerRatio: Float): Boolean {
+    private fun isLegalAnchor(anchor: Int, n: Int, preferredAnchorSamples: Int): Boolean {
         if (n < nominalWindowSize) return false
-        val pre = (nominalWindowSize * preTriggerRatio.coerceIn(0.05f, 0.45f)).roundToInt()
-        val rawStart = anchor - pre
+        val rawStart = anchor - preferredAnchorSamples.coerceIn(1, nominalWindowSize - 1)
         val rawEnd = rawStart + nominalWindowSize
         return rawStart >= 0 && rawEnd <= n
     }
+
+    private fun preferredAnchorSamples(): Int = (nominalWindowSize / 5).coerceAtLeast(1)
 
     fun extractTriggeredWindow(source: FloatArray, result: Result?): FloatArray {
         if (source.isEmpty()) return source
@@ -541,9 +570,22 @@ internal class NewTriggerEngine(
         return extractLinearWindow(source, start, nominalWindowSize)
     }
 
-    private fun collectHysteresisCrossings(x: FloatArray, n: Int, mode: Mode, threshold: Float, hysteresisRatio: Float): IntArray {
+    private fun collectHysteresisCrossings(
+        x: FloatArray,
+        n: Int,
+        mode: Mode,
+        threshold: Float,
+        rms: Float,
+        config: Config,
+    ): IntArray {
         val list = ArrayList<Int>(64)
-        val hysteresis = max(0.001f, abs(threshold) * hysteresisRatio.coerceIn(0.02f, 0.9f))
+        val hysteresis = max(
+            config.triggerCrossingHysteresisFloor,
+            max(
+                abs(threshold) * config.triggerCrossingHysteresisRatio,
+                rms * 0.06f,
+            ),
+        )
         val lowThreshold = threshold - hysteresis
         val highThreshold = threshold + hysteresis
         var armed = true
@@ -578,8 +620,12 @@ internal class NewTriggerEngine(
         return kotlin.math.sqrt(sumSq / n.toFloat())
     }
 
-    private fun adaptiveThreshold(rms: Float): Float {
-        return max(MIN_TRIGGER_THRESHOLD, rms * ADAPTIVE_THRESHOLD_RMS_SCALE)
+    private fun primaryMode(config: Config): Mode {
+        if (config.mode == Mode.OFF) return Mode.OFF
+        return when (config.mode) {
+            Mode.FALLING -> Mode.FALLING
+            else -> if (config.triggerPreferRisingPrimaryReference) Mode.RISING else Mode.FALLING
+        }
     }
 
     private fun extractLinearWindow(source: FloatArray, start: Int, size: Int): FloatArray {

@@ -77,7 +77,7 @@ class TriggerEngineTest {
         assertTrue(result.locked)
         assertTrue("anchor not in latest valid plateau: ${result.anchorIndex}", result.anchorIndex in 1100..1250)
         assertTrue("anchor spilled into invalid late plateau: ${result.anchorIndex}", result.anchorIndex < 1320)
-        val expectedStart = (result.anchorIndex - (512f * 0.16f).toInt()).coerceAtLeast(0)
+        val expectedStart = (result.anchorIndex - (512 / 5)).coerceAtLeast(0)
         assertTrue("start mismatch: ${result.startIndex} vs $expectedStart", abs(result.startIndex - expectedStart) <= 2)
     }
 
