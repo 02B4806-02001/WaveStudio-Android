@@ -36,6 +36,7 @@ data class FilterPreset(
         val freqHz: Float,
         val gainDb: Float,
         val q: Float,
+        val type: String = "PEAK",  // PEAK, LOW_SHELF, HIGH_SHELF
     )
 
     fun toJsonString(pretty: Boolean = true): String {
@@ -85,6 +86,7 @@ data class FilterPreset(
                                     .put("freqHz", b.freqHz)
                                     .put("gainDb", b.gainDb)
                                     .put("q", b.q)
+                                    .put("type", b.type)
                             )
                         }
                     }
@@ -116,6 +118,7 @@ data class FilterPreset(
                     freqHz = o.optDouble("freqHz", 1000.0).toFloat(),
                     gainDb = o.optDouble("gainDb", 0.0).toFloat(),
                     q = o.optDouble("q", AudioEngineViewModel.DEFAULT_EQ_Q.toDouble()).toFloat(),
+                    type = o.optString("type", "PEAK"),
                 )
             }
 

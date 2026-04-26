@@ -2452,6 +2452,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 freqHz = it.freqHz,
                 gainDb = it.gainDb,
                 q = it.q,
+                type = it.type.name,
             )
         }
 
@@ -2493,16 +2494,22 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
         _eqEnabled.value = preset.eqEnabled
 
-        // merge bands by id (keep label/type from existing list)
+        // merge bands by id (import type from preset, keep label from existing list)
         val importedById = preset.eqBands.associateBy { it.id }
         _eqBands.update { list ->
             list.map { b ->
                 val p = importedById[b.id] ?: return@map b
+                val importedType = try {
+                    EqBandType.valueOf(p.type)
+                } catch (e: IllegalArgumentException) {
+                    b.type  // fallback to existing type if invalid
+                }
                 b.copy(
                     enabled = p.enabled,
                     freqHz = p.freqHz.coerceIn(20f, 20000f),
                     gainDb = p.gainDb.coerceIn(-40f, 40f),
                     q = p.q.coerceIn(0.2f, 6f),
+                    type = importedType,
                 )
             }
         }
