@@ -1,4 +1,4 @@
-package com.example.oscope
+package org.mhrri.wavestudio
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement

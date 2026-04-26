@@ -1,4 +1,4 @@
-package com.example.oscope
+package org.mhrri.wavestudio
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState

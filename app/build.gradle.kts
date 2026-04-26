@@ -1,18 +1,18 @@
 plugins {
-    alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.android.application)
 }
 
 android {
-    namespace = "com.example.oscope"
+    namespace = "org.mhrri.wavestudio"
     compileSdk = 36 // Gradle 9.0+ 推荐简化写法
 
     defaultConfig {
-        applicationId = "com.example.oscope"
+        applicationId = "org.mhrri.wavestudio"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.12.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -58,8 +58,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
@@ -67,8 +67,8 @@ android {
     }
 
     composeOptions {
-        // Kotlin 2.3.0 匹配的 Compose 编译器版本
-        kotlinCompilerExtensionVersion = "1.6.0"
+        // Kotlin 2.3.20 匹配的 Compose 编译器版本
+        kotlinCompilerExtensionVersion = "2.3.20"
     }
 
     packaging {
@@ -80,7 +80,7 @@ android {
 
 // Kotlin 2.3.0 适配的 JVM 工具链
 kotlin {
-    jvmToolchain(11)
+    jvmToolchain(17)
 }
 
 dependencies {
@@ -121,4 +121,5 @@ dependencies {
     // Debug 工具依赖
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
 }

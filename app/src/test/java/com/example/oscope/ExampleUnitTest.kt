@@ -1,4 +1,4 @@
-package com.example.oscope
+package org.mhrri.wavestudio
 
 import org.junit.Test
 

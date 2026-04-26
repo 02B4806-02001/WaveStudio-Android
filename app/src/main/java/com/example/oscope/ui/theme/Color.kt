@@ -1,4 +1,4 @@
-package com.example.oscope.ui.theme
+package org.mhrri.wavestudio.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

@@ -1,4 +1,4 @@
-package com.example.oscope
+package org.mhrri.wavestudio
 
 import kotlin.math.PI
 import kotlin.math.sin
