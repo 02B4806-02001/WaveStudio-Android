@@ -56,7 +56,9 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import androidx.media3.exoplayer.ExoPlayer
 import android.media.MediaCodec
+import android.media.MediaCodecInfo
 import android.media.MediaMuxer
+import java.nio.ByteBuffer
 
 class AudioEngineViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
@@ -638,7 +640,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private var recordingPtsUs: Long = 0L
 
     // WAV (raw PCM) recording
-    private var wavOut: java.io.RandomAccessFile? = null
+    private var wavOut: RandomAccessFile? = null
     private var wavDataBytes: Long = 0L
     private var wavSampleRate: Int = 44100
     private var recordingActiveFormat: RecordingFormat? = null
@@ -999,7 +1001,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     val significantChange =
                         alive != lastPublishedAlive ||
                                 readSamples != lastPublishedRead ||
-                                kotlin.math.abs(maxAbs - lastPublishedMaxAbs) >= 512
+                                abs(maxAbs - lastPublishedMaxAbs) >= 512
                     val publishIntervalMs = currentPublishIntervalMs()
                     val shouldPublish = force ||
                             alive != lastPublishedAlive ||
@@ -1433,7 +1435,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 _lastMaxAbsPcm.value = 32767
 
                 // 测试模式也跟随当前波形刷新率发布，方便在流畅度/性能之间切换
-                kotlinx.coroutines.delay(currentPublishIntervalMs())
+                delay(currentPublishIntervalMs())
             }
         }
     }
@@ -1877,7 +1879,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 outBuf.get(data)
 
                                 if (outEncoding == AudioFormat.ENCODING_PCM_FLOAT) {
-                                    val bb = java.nio.ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+                                    val bb = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
                                     val frameCount = info.size / (4 * outChannels)
                                     for (f in 0 until frameCount) {
                                         var s = 0f
@@ -1885,7 +1887,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                         writeSample(s / outChannels)
                                     }
                                 } else {
-                                    val bb = java.nio.ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+                                    val bb = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
                                     val frameCount = info.size / (2 * outChannels)
                                     for (f in 0 until frameCount) {
                                         var s = 0f
@@ -2009,7 +2011,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             label = "m4a",
             extension = "m4a",
             muxerFormat = MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4,
-            mimeType = android.media.MediaFormat.MIMETYPE_AUDIO_AAC,
+            mimeType = MediaFormat.MIMETYPE_AUDIO_AAC,
             usesMuxer = true
         ),
         WAV(
@@ -2505,31 +2507,31 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         // Encoder sample rate might differ from capture sampleRate.
         val encSr = targetSampleRate.coerceIn(8000, sampleRate)
 
-        fun buildAacFormat(sr: Int): android.media.MediaFormat {
-            return android.media.MediaFormat.createAudioFormat(fmt.mimeType, sr, 1).apply {
+        fun buildAacFormat(sr: Int): MediaFormat {
+            return MediaFormat.createAudioFormat(fmt.mimeType, sr, 1).apply {
                 setInteger(
-                    android.media.MediaFormat.KEY_AAC_PROFILE,
-                    android.media.MediaCodecInfo.CodecProfileLevel.AACObjectLC
+                    MediaFormat.KEY_AAC_PROFILE,
+                    MediaCodecInfo.CodecProfileLevel.AACObjectLC
                 )
-                setInteger(android.media.MediaFormat.KEY_BIT_RATE, 128_000)
-                setInteger(android.media.MediaFormat.KEY_MAX_INPUT_SIZE, 16_384)
+                setInteger(MediaFormat.KEY_BIT_RATE, 128_000)
+                setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16_384)
             }
         }
 
         val codec = try {
-            android.media.MediaCodec.createEncoderByType(fmt.mimeType)
+            MediaCodec.createEncoderByType(fmt.mimeType)
         } catch (t: Throwable) {
             throw IllegalStateException("Failed to create AAC encoder (${fmt.mimeType}): ${t.message}", t)
         }
 
         try {
             try {
-                codec.configure(buildAacFormat(encSr), null, null, android.media.MediaCodec.CONFIGURE_FLAG_ENCODE)
+                codec.configure(buildAacFormat(encSr), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
                 codec.start()
             } catch (t: Throwable) {
                 // Fallback to capture sample rate
                 try { codec.reset() } catch (_: Throwable) {}
-                codec.configure(buildAacFormat(sampleRate), null, null, android.media.MediaCodec.CONFIGURE_FLAG_ENCODE)
+                codec.configure(buildAacFormat(sampleRate), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
                 codec.start()
             }
         } catch (t: Throwable) {
@@ -2615,18 +2617,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private fun startWavRecording(outFile: File, targetSampleRate: Int) {
         wavSampleRate = targetSampleRate.coerceIn(8000, sampleRate)
         wavDataBytes = 0L
-        val raf = java.io.RandomAccessFile(outFile, "rw")
+        val raf = RandomAccessFile(outFile, "rw")
         raf.setLength(0L)
         writeWavHeader(raf, wavSampleRate, 0L)
         wavOut = raf
     }
 
-    private fun finalizeWavRecording(raf: java.io.RandomAccessFile, sampleRate: Int, dataBytes: Long) {
+    private fun finalizeWavRecording(raf: RandomAccessFile, sampleRate: Int, dataBytes: Long) {
         raf.seek(0L)
         writeWavHeader(raf, sampleRate, dataBytes)
     }
 
-    private fun writeWavHeader(raf: java.io.RandomAccessFile, sampleRate: Int, dataBytes: Long) {
+    private fun writeWavHeader(raf: RandomAccessFile, sampleRate: Int, dataBytes: Long) {
         val channels = 1
         val bitsPerSample = 16
         val byteRate = sampleRate * channels * bitsPerSample / 8
@@ -3163,10 +3165,10 @@ private fun safeShelfSlope(rawSlope: Float, gainDb: Float): Float {
     return s.coerceAtMost(sMax)
 }
 
-private fun rtDesignLowPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / kotlin.math.sqrt(2f)): RtBiquad {
-    val w0 = (2f * kotlin.math.PI.toFloat() * cutoffHz) / sampleRate
-    val cosW0 = kotlin.math.cos(w0)
-    val sinW0 = kotlin.math.sin(w0)
+private fun rtDesignLowPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / sqrt(2f)): RtBiquad {
+    val w0 = (2f * PI.toFloat() * cutoffHz) / sampleRate
+    val cosW0 = cos(w0)
+    val sinW0 = sin(w0)
     val alpha = sinW0 / (2f * q)
 
     val b0 = (1f - cosW0) / 2f
@@ -3185,10 +3187,10 @@ private fun rtDesignLowPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / ko
     )
 }
 
-private fun rtDesignHighPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / kotlin.math.sqrt(2f)): RtBiquad {
-    val w0 = (2f * kotlin.math.PI.toFloat() * cutoffHz) / sampleRate
-    val cosW0 = kotlin.math.cos(w0)
-    val sinW0 = kotlin.math.sin(w0)
+private fun rtDesignHighPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / sqrt(2f)): RtBiquad {
+    val w0 = (2f * PI.toFloat() * cutoffHz) / sampleRate
+    val cosW0 = cos(w0)
+    val sinW0 = sin(w0)
     val alpha = sinW0 / (2f * q)
 
     val b0 = (1f + cosW0) / 2f
@@ -3208,9 +3210,9 @@ private fun rtDesignHighPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / k
 }
 
 private fun rtDesignPeakingEq(sampleRate: Int, centerHz: Float, q: Float, gainDb: Float): RtBiquad {
-    val w0 = (2f * kotlin.math.PI.toFloat() * centerHz) / sampleRate
-    val cosW0 = kotlin.math.cos(w0)
-    val sinW0 = kotlin.math.sin(w0)
+    val w0 = (2f * PI.toFloat() * centerHz) / sampleRate
+    val cosW0 = cos(w0)
+    val sinW0 = sin(w0)
     val a = 10f.pow(gainDb / 40f)
     val alpha = sinW0 / (2f * q)
 
@@ -3231,15 +3233,15 @@ private fun rtDesignPeakingEq(sampleRate: Int, centerHz: Float, q: Float, gainDb
 }
 
 private fun rtDesignLowShelf(sampleRate: Int, centerHz: Float, slope: Float, gainDb: Float): RtBiquad {
-    val w0 = (2f * kotlin.math.PI.toFloat() * centerHz) / sampleRate
-    val cosW0 = kotlin.math.cos(w0)
-    val sinW0 = kotlin.math.sin(w0)
+    val w0 = (2f * PI.toFloat() * centerHz) / sampleRate
+    val cosW0 = cos(w0)
+    val sinW0 = sin(w0)
     val a = 10f.pow(gainDb / 40f)
     val s = safeShelfSlope(slope, gainDb)
 
     val alphaTerm = max((a + 1f / a) * (1f / s - 1f) + 2f, 0f)
-    val alpha = sinW0 / 2f * kotlin.math.sqrt(alphaTerm)
-    val twoSqrtAAlpha = 2f * kotlin.math.sqrt(a) * alpha
+    val alpha = sinW0 / 2f * sqrt(alphaTerm)
+    val twoSqrtAAlpha = 2f * sqrt(a) * alpha
 
     val b0 = a * ((a + 1f) - (a - 1f) * cosW0 + twoSqrtAAlpha)
     val b1 = 2f * a * ((a - 1f) - (a + 1f) * cosW0)
@@ -3258,15 +3260,15 @@ private fun rtDesignLowShelf(sampleRate: Int, centerHz: Float, slope: Float, gai
 }
 
 private fun rtDesignHighShelf(sampleRate: Int, centerHz: Float, slope: Float, gainDb: Float): RtBiquad {
-    val w0 = (2f * kotlin.math.PI.toFloat() * centerHz) / sampleRate
-    val cosW0 = kotlin.math.cos(w0)
-    val sinW0 = kotlin.math.sin(w0)
+    val w0 = (2f * PI.toFloat() * centerHz) / sampleRate
+    val cosW0 = cos(w0)
+    val sinW0 = sin(w0)
     val a = 10f.pow(gainDb / 40f)
     val s = safeShelfSlope(slope, gainDb)
 
     val alphaTerm = max((a + 1f / a) * (1f / s - 1f) + 2f, 0f)
-    val alpha = sinW0 / 2f * kotlin.math.sqrt(alphaTerm)
-    val twoSqrtAAlpha = 2f * kotlin.math.sqrt(a) * alpha
+    val alpha = sinW0 / 2f * sqrt(alphaTerm)
+    val twoSqrtAAlpha = 2f * sqrt(a) * alpha
 
     val b0 = a * ((a + 1f) + (a - 1f) * cosW0 + twoSqrtAAlpha)
     val b1 = -2f * a * ((a - 1f) + (a + 1f) * cosW0)

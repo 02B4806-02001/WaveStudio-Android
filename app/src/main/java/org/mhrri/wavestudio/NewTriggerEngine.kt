@@ -1,10 +1,12 @@
 package org.mhrri.wavestudio
 
+import kotlin.collections.iterator
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 internal class NewTriggerEngine(
     private val nominalWindowSize: Int = 512,
@@ -367,7 +369,7 @@ internal class NewTriggerEngine(
         }
         var rmsSq = 0f
         for (v in fp) rmsSq += v * v
-        val inv = 1f / kotlin.math.sqrt((rmsSq / taps).coerceAtLeast(1e-6f))
+        val inv = 1f / sqrt((rmsSq / taps).coerceAtLeast(1e-6f))
         for (i in fp.indices) fp[i] *= inv
         return fp
     }
@@ -383,7 +385,7 @@ internal class NewTriggerEngine(
             aa += a[i] * a[i]
             bb += b[i] * b[i]
         }
-        val den = kotlin.math.sqrt((aa * bb).coerceAtLeast(1e-6f))
+        val den = sqrt((aa * bb).coerceAtLeast(1e-6f))
         if (den <= 1e-6f) return 0.5f
         return ((ab / den) * 0.5f + 0.5f).coerceIn(0f, 1f)
     }
@@ -617,7 +619,7 @@ internal class NewTriggerEngine(
             val v = x[i]
             sumSq += v * v
         }
-        return kotlin.math.sqrt(sumSq / n.toFloat())
+        return sqrt(sumSq / n.toFloat())
     }
 
     private fun primaryMode(config: Config): Mode {

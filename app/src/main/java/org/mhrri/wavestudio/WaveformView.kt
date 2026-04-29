@@ -1,5 +1,6 @@
 package org.mhrri.wavestudio
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -33,7 +34,7 @@ fun WaveformView(
     triggerMarkerColor: Color = Color(0x66FFFF00),
 ) {
     // 用 drawWithCache 缓存 Path/Stroke，避免每帧分配对象导致的“周期性小卡顿”
-    androidx.compose.foundation.layout.Box(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(120.dp)

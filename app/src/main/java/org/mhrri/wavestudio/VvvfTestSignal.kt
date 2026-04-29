@@ -1,6 +1,7 @@
 package org.mhrri.wavestudio
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.sin
 
 /**
@@ -91,7 +92,7 @@ object VvvfTestSignal {
             // Occasional impulse noise (deterministic) to test robustness
             val impulse = if (interference) {
                 // About 1 impulse per ~2000 samples on average (depends on rng)
-                val p = kotlin.math.abs(nextFloatSigned())
+                val p = abs(nextFloatSigned())
                 if (p > 0.9992f) (0.8f * interferenceLevel) * nextFloatSigned() else 0f
             } else 0f
 
@@ -124,6 +125,6 @@ object VvvfTestSignal {
     private fun tri(freqHz: Double, tSec: Double): Double {
         // wrap: avoid negative modulo issues
         val x = ((tSec * freqHz) % 1.0 + 1.0) % 1.0 // [0,1)
-        return 4.0 * kotlin.math.abs(x - 0.5) - 1.0
+        return 4.0 * abs(x - 0.5) - 1.0
     }
 }

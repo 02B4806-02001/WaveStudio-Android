@@ -3,6 +3,8 @@ package org.mhrri.wavestudio
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mhrri.wavestudio.Autocorrelation
+import org.mhrri.wavestudio.NewTriggerEngine
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.min
