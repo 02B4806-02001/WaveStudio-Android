@@ -39,9 +39,6 @@ import kotlin.math.PI
 import java.util.Locale
 import androidx.core.content.edit
 
-// Constants needed for shared components
-private const val SETTINGS_PREFS_NAME = "oscope_settings"
-private const val KEY_TRIGGER_MODE_NAME = "trigger_mode_name"
 
 // Note: Shared utility functions (toEnglishOrdinal, rememberDisplayLowPass, computeEqResponse)
 // are now in OscopeUIUtils.kt to avoid duplication
@@ -656,7 +653,7 @@ fun EqPanel(
         val gainMax = 40f
         val qMin = 0.2f
 
-        var selectedId by remember { mutableStateOf(bands.firstOrNull()?.id ?: 0) }
+        var selectedId by rememberSaveable { mutableStateOf(bands.firstOrNull()?.id ?: 0) }
         LaunchedEffect(bands) {
             if (bands.none { it.id == selectedId } && bands.isNotEmpty()) selectedId = bands.first().id
         }

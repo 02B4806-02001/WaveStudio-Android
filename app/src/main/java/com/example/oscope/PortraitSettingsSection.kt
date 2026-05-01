@@ -1,0 +1,842 @@
+package org.mhrri.wavestudio
+
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import android.view.Gravity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.text.style.TextAlign
+import java.io.File
+import java.io.InputStream
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.ln
+import kotlin.math.pow
+import kotlin.math.round
+
+internal data class PortraitSettingsState(
+    val isRunning: Boolean,
+    val useTestSignal: Boolean,
+    val testSignalPreset: AudioEngineViewModel.TestSignalPreset,
+    val useImportedSignal: Boolean,
+    val importedAudioLabel: String?,
+    val isImportingAudio: Boolean,
+    val isRecording: Boolean,
+    val isMonitoring: Boolean,
+    val engineError: String?,
+    val recordings: List<RecordedClip>,
+    val lowPassEnabled: Boolean,
+    val lowPassCutoff: Float,
+    val highPassEnabled: Boolean,
+    val highPassCutoff: Float,
+    val lowPassOrder: Int,
+    val highPassOrder: Int,
+    val windowMs: Float,
+    val filterGain: Float,
+    val eqEnabled: Boolean,
+    val eqBands: List<AudioEngineViewModel.EqBand>,
+    val playingId: String?,
+)
+
+internal data class PortraitSettingsActions(
+    val onStartStopAction: () -> Unit,
+    val onRecordAction: () -> Unit,
+    val onMonitoringToggle: () -> Unit,
+    val onToggleLowPass: (Boolean) -> Unit,
+    val onToggleHighPass: (Boolean) -> Unit,
+    val onSetLowPassOrder: (Int) -> Unit,
+    val onSetHighPassOrder: (Int) -> Unit,
+    val onUpdateFilterGain: (Float) -> Unit,
+    val onUpdateTimeSlider: (Float) -> Unit,
+    val onSetEqEnabled: (Boolean) -> Unit,
+    val onResetEq: () -> Unit,
+    val onSetEqBandEnabled: (Int, Boolean) -> Unit,
+    val onSetEqBandType: (Int, AudioEngineViewModel.EqBandType) -> Unit,
+    val onSetEqBandFreq: (Int, Float) -> Unit,
+    val onSetEqBandGainDb: (Int, Float) -> Unit,
+    val onSetEqBandQ: (Int, Float) -> Unit,
+    val onSetEqGraphDragging: (Boolean) -> Unit,
+    val onToggleVvvfTestSignal: () -> Unit,
+    val onSetTestSignalPreset: (AudioEngineViewModel.TestSignalPreset) -> Unit,
+)
+
+private fun showCenterToast(context: android.content.Context, msg: String) {
+    try {
+        val t = Toast.makeText(context, msg, Toast.LENGTH_SHORT)
+        try {
+            val tv = t.view?.findViewById<android.widget.TextView>(android.R.id.message)
+            tv?.gravity = Gravity.CENTER
+            tv?.textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
+        } catch (_: Throwable) {
+        }
+        t.setGravity(Gravity.CENTER, 0, 0)
+        t.show()
+    } catch (_: Throwable) {
+    }
+}
+
+private fun exportCurrentPresetToCache(context: android.content.Context, audioViewModel: AudioEngineViewModel, nameNoExt: String): File? {
+    return try {
+        val safeBase = nameNoExt.trim().ifEmpty { "oscope_preset" }
+            .replace(Regex("[^a-zA-Z0-9_\u4e00-\u9fa5-]+"), "_")
+            .take(64)
+            .ifEmpty { "oscope_preset" }
+
+        val preset = audioViewModel.exportPreset()
+        val json = preset.toJsonString(pretty = true)
+
+        val dir = File(context.externalCacheDir, "presets").apply { mkdirs() }
+        val file = File(dir, "$safeBase.json")
+        file.writeText(json, Charsets.UTF_8)
+        file
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+private fun shareAnyFile(context: android.content.Context, file: File, mime: String) {
+    try {
+        if (!file.exists()) return
+        val uri: Uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            context.packageName + ".fileprovider",
+            file,
+        )
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_title_generic)))
+    } catch (_: Throwable) {
+    }
+}
+
+private fun mimeForRecording(path: String): String {
+    val lower = path.lowercase(Locale.getDefault())
+    return when {
+        lower.endsWith(".m4a") -> "audio/mp4"
+        lower.endsWith(".mp4") -> "audio/mp4"
+        lower.endsWith(".aac") -> "audio/aac"
+        else -> "application/octet-stream"
+    }
+}
+
+private fun nextRecordingFormat(current: AudioEngineViewModel.RecordingFormat): AudioEngineViewModel.RecordingFormat {
+    return if (current == AudioEngineViewModel.RecordingFormat.WAV) {
+        AudioEngineViewModel.RecordingFormat.M4A_AAC
+    } else {
+        AudioEngineViewModel.RecordingFormat.WAV
+    }
+}
+
+private fun nextRecordingSampleRate(current: Int, options: List<Int>): Int {
+    val idx = options.indexOf(current)
+    if (idx < 0) return options.first()
+    return options[(idx + 1) % options.size]
+}
+
+private fun prevPublishRateOption(current: AudioEngineViewModel.PublishRateOption): AudioEngineViewModel.PublishRateOption {
+    val options = AudioEngineViewModel.PublishRateOption.entries
+    val idx = options.indexOf(current)
+    if (idx <= 0) return options.first()
+    return options[idx - 1]
+}
+
+private fun nextPublishRateOption(current: AudioEngineViewModel.PublishRateOption): AudioEngineViewModel.PublishRateOption {
+    val options = AudioEngineViewModel.PublishRateOption.entries
+    val idx = options.indexOf(current)
+    if (idx < 0) return options.first()
+    if (idx >= options.lastIndex) return options.last()
+    return options[idx + 1]
+}
+
+private fun cutoffStepLowPass(hz: Float): Float {
+    val v = hz.coerceAtLeast(0f)
+    return when {
+        v < 5000f -> 100f
+        v < 10000f -> 200f
+        else -> 500f
+    }
+}
+
+private fun cutoffStepHighPass(hz: Float): Float {
+    val v = hz.coerceAtLeast(0f)
+    return when {
+        v < 100f -> 5f
+        v < 500f -> 10f
+        v < 1000f -> 20f
+        v < 2000f -> 50f
+        else -> 100f
+    }
+}
+
+private fun snapLowPassHz(hz: Float): Float {
+    val v = hz.coerceIn(800f, 30001f)
+    val step = cutoffStepLowPass(v)
+    return (round(v / step) * step).coerceIn(800f, 30001f)
+}
+
+private fun snapHighPassHz(hz: Float): Float {
+    val v = hz.coerceIn(30f, 8001f)
+    val step = cutoffStepHighPass(v)
+    return (round(v / step) * step).coerceIn(30f, 8001f)
+}
+
+private fun formatLowPassHz(hz: Float): String = snapLowPassHz(hz).toInt().toString()
+
+private fun formatHighPassHz(hz: Float): String {
+    val v = snapHighPassHz(hz)
+    return if (v < 100f) String.format(Locale.US, "%.0f", v) else v.toInt().toString()
+}
+
+private fun gainToDb(gain: Float): Float {
+    val g = gain.coerceAtLeast(1e-6f)
+    return 20f * (ln(g) / ln(10f))
+}
+
+private fun dbToGain(db: Float): Float {
+    return exp((db / 20f) * ln(10f))
+}
+
+@Composable
+internal fun PortraitSettingsSection(
+    modifier: Modifier = Modifier,
+    settingsScroll: androidx.compose.foundation.ScrollState,
+    eqGraphDragging: Boolean,
+    audioViewModel: AudioEngineViewModel,
+    state: PortraitSettingsState,
+    actions: PortraitSettingsActions,
+) {
+    val context = LocalContext.current
+    val resources = context.resources
+    val coroutineScope = rememberCoroutineScope()
+
+    var presetShareDialog by rememberSaveable { mutableStateOf(false) }
+    var presetShareName by rememberSaveable { mutableStateOf("oscope_preset") }
+    var presetResetConfirmDialog by rememberSaveable { mutableStateOf(false) }
+
+    var showRecordList by rememberSaveable { mutableStateOf(false) }
+    var renameTarget by remember { mutableStateOf<RecordedClip?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<RecordedClip?>(null) }
+    var testSignalMenu by remember { mutableStateOf(false) }
+
+    var lpFreq01 by remember { mutableStateOf(hzToSliderBlend(state.lowPassCutoff, 800f, 30001f, linearWeight = 0.5f)) }
+    var hpFreq01 by remember { mutableStateOf(hzToSlider(state.highPassCutoff, 30f, 8001f)) }
+    var lpDragging by remember { mutableStateOf(false) }
+    var hpDragging by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.lowPassCutoff) {
+        if (!lpDragging) lpFreq01 = hzToSliderBlend(state.lowPassCutoff, 800f, 30001f, linearWeight = 0.5f)
+    }
+    LaunchedEffect(state.highPassCutoff) {
+        if (!hpDragging) hpFreq01 = hzToSlider(state.highPassCutoff, 30f, 8001f)
+    }
+
+    val importPresetLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            context.contentResolver.openInputStream(uri).use { inS: InputStream? ->
+                val text = inS?.bufferedReader(Charsets.UTF_8)?.readText()
+                if (text.isNullOrBlank()) {
+                    showCenterToast(context, resources.getString(R.string.preset_import_failed_empty))
+                } else {
+                    val preset = FilterPreset.fromJsonString(text)
+                    audioViewModel.applyPreset(preset)
+                    val presetName = preset.name?.takeIf { it.isNotBlank() }
+                    showCenterToast(
+                        context,
+                        if (presetName != null) resources.getString(R.string.preset_import_success_named, presetName)
+                        else resources.getString(R.string.preset_import_success),
+                    )
+                }
+            }
+        } catch (t: Throwable) {
+            showCenterToast(context, resources.getString(R.string.preset_import_failed_with_message, t.message ?: ""))
+        }
+    }
+
+    val importAudioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        audioViewModel.importAudioAsInput(context, uri)
+    }
+
+    fun shareRecording(clip: RecordedClip) {
+        try {
+            val file = File(clip.fileURL)
+            if (!file.exists()) return
+            val uri: Uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                context.packageName + ".fileprovider",
+                file,
+            )
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeForRecording(file.name)
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, resources.getString(R.string.share_title_recording)))
+        } catch (_: Throwable) {
+        }
+    }
+
+    val recordingSampleRateOptions = remember { listOf(16000, 22050, 32000, 44100, 48000) }
+
+    fun openPresetShareDialog() {
+        presetShareName = "oscope_preset"
+        presetShareDialog = true
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(settingsScroll, enabled = !eqGraphDragging)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .imePadding(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Button(
+                onClick = actions.onStartStopAction,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (state.isRunning || state.useImportedSignal || state.useTestSignal) Color(0xFFC62828) else Color(0xFF2E7D32),
+                ),
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    if (state.useTestSignal || state.useImportedSignal || state.isRunning) stringResource(R.string.action_stop) else stringResource(R.string.action_start),
+                    fontSize = 15.sp,
+                )
+            }
+
+        if (state.engineError != null) {
+            Text(
+                text = stringResource(R.string.error_prefix_with_message, state.engineError ?: ""),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFC62828),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+            Button(
+                onClick = actions.onRecordAction,
+                enabled = state.isRunning || state.useImportedSignal,
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(if (state.isRecording) stringResource(R.string.action_stop) else stringResource(R.string.action_record), fontSize = 15.sp)
+            }
+
+            Button(
+                onClick = actions.onMonitoringToggle,
+                enabled = state.isRunning || state.useImportedSignal,
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(if (state.isMonitoring) stringResource(R.string.monitor_off) else stringResource(R.string.monitor_on), fontSize = 15.sp)
+            }
+
+            Button(
+                onClick = { importAudioLauncher.launch(arrayOf("audio/*")) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (state.useImportedSignal) Color(0xFF1565C0) else MaterialTheme.colorScheme.primary,
+                ),
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier = Modifier.weight(1f),
+                enabled = !state.isImportingAudio,
+            ) {
+                Text(
+                    when {
+                        state.isImportingAudio -> stringResource(R.string.importing)
+                        state.useImportedSignal -> stringResource(R.string.audio_input_mode)
+                        else -> stringResource(R.string.load_audio)
+                    },
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            TextButton(
+                onClick = { showRecordList = true },
+                enabled = state.recordings.isNotEmpty(),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                modifier = Modifier.align(Alignment.CenterVertically),
+            ) { Text(stringResource(R.string.list_title)) }
+        }
+
+        if (state.useImportedSignal) {
+            Text(
+                text = stringResource(R.string.input_source_imported_audio, state.importedAudioLabel?.let { " ($it)" } ?: ""),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFF1565C0),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ClickToEditNumberText(
+                    text = stringResource(R.string.low_pass_value_hz, formatLowPassHz(state.lowPassCutoff)),
+                    initialText = formatLowPassHz(state.lowPassCutoff),
+                    title = stringResource(R.string.low_pass_set_title),
+                    unit = "Hz",
+                    parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.let { snapLowPassHz(it) } },
+                    onValue = { hz ->
+                        lpDragging = false
+                        val snapped = snapLowPassHz(hz)
+                        audioViewModel.updateLowPassSlider(snapped)
+                        lpFreq01 = hzToSliderBlend(snapped, 800f, 30001f, linearWeight = 0.5f)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.weight(1f),
+                    trailingIcon = {
+                        InfoIconButton(
+                            stringResource(R.string.low_pass_info_title),
+                            stringResource(R.string.low_pass_info_message),
+                        )
+                    },
+                )
+                Switch(
+                    checked = state.lowPassEnabled,
+                    onCheckedChange = actions.onToggleLowPass,
+                )
+            }
+            FilterOrderSelector(
+                order = state.lowPassOrder,
+                orderOptions = (1..8).toList(),
+                onOrderChange = actions.onSetLowPassOrder,
+            )
+        }
+
+        LowHighPassRow(
+            freq01 = lpFreq01,
+            onFreq01Change = {
+                lpDragging = true
+                lpFreq01 = it
+            },
+            onFreq01ChangeFinished = {
+                lpDragging = false
+                audioViewModel.updateLowPassSlider(snapLowPassHz(sliderToHzBlend(lpFreq01, 800f, 30001f, linearWeight = 0.5f)))
+            },
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ClickToEditNumberText(
+                    text = stringResource(R.string.high_pass_value_hz, formatHighPassHz(state.highPassCutoff)),
+                    initialText = formatHighPassHz(state.highPassCutoff),
+                    title = stringResource(R.string.high_pass_set_title),
+                    unit = "Hz",
+                    parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.let { snapHighPassHz(it) } },
+                    onValue = { hz ->
+                        hpDragging = false
+                        val snapped = snapHighPassHz(hz)
+                        audioViewModel.updateHighPassSlider(snapped)
+                        hpFreq01 = hzToSlider(snapped, 30f, 8001f)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.weight(1f),
+                    trailingIcon = {
+                        InfoIconButton(
+                            stringResource(R.string.high_pass_info_title),
+                            stringResource(R.string.high_pass_info_message),
+                        )
+                    },
+                )
+                Switch(
+                    checked = state.highPassEnabled,
+                    onCheckedChange = actions.onToggleHighPass,
+                )
+            }
+            FilterOrderSelector(
+                order = state.highPassOrder,
+                orderOptions = (1..8).toList(),
+                onOrderChange = actions.onSetHighPassOrder,
+            )
+        }
+
+        LowHighPassRow(
+            freq01 = hpFreq01,
+            onFreq01Change = {
+                hpDragging = true
+                hpFreq01 = it
+            },
+            onFreq01ChangeFinished = {
+                hpDragging = false
+                audioViewModel.updateHighPassSlider(snapHighPassHz(sliderToHz(hpFreq01, 30f, 8001f)))
+            },
+        )
+
+        EqPanel(
+            enabled = state.eqEnabled,
+            onEnabledChange = actions.onSetEqEnabled,
+            bands = state.eqBands,
+            onReset = actions.onResetEq,
+            onBandEnabled = actions.onSetEqBandEnabled,
+            onBandType = actions.onSetEqBandType,
+            onBandFreq = actions.onSetEqBandFreq,
+            onBandGainDb = actions.onSetEqBandGainDb,
+            onBandQ = actions.onSetEqBandQ,
+            logToSlider = ::hzToSlider,
+            sliderToLog = ::sliderToHz,
+            onGraphDragging = actions.onSetEqGraphDragging,
+            filterGain = state.filterGain,
+            lowPassEnabled = state.lowPassEnabled,
+            lowPassCutoff = state.lowPassCutoff,
+            lowPassOrder = state.lowPassOrder,
+            highPassEnabled = state.highPassEnabled,
+            highPassCutoff = state.highPassCutoff,
+            highPassOrder = state.highPassOrder,
+            sampleRate = 44100,
+        )
+
+        run {
+            val gainDb = gainToDb(state.filterGain)
+            val displayGainDb = rememberDisplayLowPass(gainDb, resetKey = "filterGainDb", alpha = 0.44f, snapThreshold = 0.03f)
+            val displayGainX = dbToGain(displayGainDb)
+            val gainDbText = String.format(Locale.US, "%+.1f", displayGainDb)
+            val gainXText = if (displayGainX < 1f) String.format(Locale.US, "%.2f", displayGainX) else String.format(Locale.US, "%.1f", displayGainX)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                ClickToEditNumberText(
+                    text = stringResource(R.string.processed_gain_value, gainDbText, gainXText),
+                    initialText = String.format(Locale.US, "%.2f", gainDb),
+                    title = stringResource(R.string.processed_gain_set_title),
+                    unit = "dB",
+                    parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(-20f, 40f) },
+                    onValue = { db -> actions.onUpdateFilterGain(dbToGain(db).coerceIn(0.1f, 100f)) },
+                    style = MaterialTheme.typography.bodyMedium,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.weight(1f),
+                    trailingIcon = {
+                        InfoIconButton(
+                            stringResource(R.string.processed_gain_info_title),
+                            stringResource(R.string.processed_gain_info_message),
+                        )
+                    },
+                )
+                ResetIconButton(
+                    onClick = { actions.onUpdateFilterGain(dbToGain(0f).coerceIn(0.1f, 100f)) },
+                )
+            }
+
+            val gainDbMin = -16f
+            val gainDbMax = 32.05f
+            val powerCurve = 2.5f
+            val linearWeight = 0.65f
+
+            fun dbToSlider(db: Float): Float {
+                val d = db.coerceIn(gainDbMin, gainDbMax)
+                val normTarget = (d - gainDbMin) / (gainDbMax - gainDbMin)
+                var lo = 0f
+                var hi = 1f
+                repeat(20) {
+                    val mid = (lo + hi) * 0.5f
+                    val midNorm = mid.pow(powerCurve) * (1f - linearWeight) + mid * linearWeight
+                    if (midNorm < normTarget) lo = mid else hi = mid
+                }
+                return (lo + hi) * 0.5f
+            }
+
+            fun sliderToDb(p01: Float): Float {
+                val p = p01.coerceIn(0f, 1f)
+                val norm = p.pow(powerCurve) * (1f - linearWeight) + p * linearWeight
+                return gainDbMin + norm * (gainDbMax - gainDbMin)
+            }
+
+            val v01 = dbToSlider(gainDb)
+            OscopeSlider(
+                value = v01,
+                onValueChange = { p -> actions.onUpdateFilterGain(dbToGain(sliderToDb(p)).coerceIn(0.1f, 100f)) },
+                valueRange = 0f..1f,
+                steps = 0,
+                accentColor = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        run {
+            val displayWindowMs = rememberDisplayLowPass(state.windowMs, resetKey = "windowMs", alpha = 0.44f, snapThreshold = 0.05f)
+            val winText = if (displayWindowMs < 10f) String.format(Locale.US, "%.1f", displayWindowMs) else String.format(Locale.US, "%.0f", displayWindowMs)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                ClickToEditNumberText(
+                    text = stringResource(R.string.time_window_value_ms, winText),
+                    initialText = winText,
+                    title = stringResource(R.string.time_window_set_title),
+                    unit = "ms",
+                    parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(5f, 300f) },
+                    onValue = actions.onUpdateTimeSlider,
+                    style = MaterialTheme.typography.bodyMedium,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.weight(1f),
+                    trailingIcon = {
+                        InfoIconButton(
+                            stringResource(R.string.time_window_info_title),
+                            stringResource(R.string.time_window_info_message),
+                        )
+                    },
+                )
+                ResetIconButton(
+                    onClick = { actions.onUpdateTimeSlider(20f) },
+                )
+            }
+
+            val p01 = hzToSlider(state.windowMs, 5f, 300f)
+            OscopeSlider(
+                value = p01,
+                onValueChange = { p -> actions.onUpdateTimeSlider(sliderToHz(p, 5f, 300f)) },
+                valueRange = 0f..1f,
+                steps = 180,
+                accentColor = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        if (presetShareDialog) {
+            PresetShareDialog(
+                visible = true,
+                presetShareName = presetShareName,
+                onPresetShareNameChange = { presetShareName = it },
+                onDismiss = { presetShareDialog = false },
+                onShare = {
+                    val file = exportCurrentPresetToCache(context, audioViewModel, presetShareName)
+                    if (file != null) {
+                        showCenterToast(context, resources.getString(R.string.preset_share_success_named, file.name))
+                        shareAnyFile(context, file, "application/json")
+                    } else {
+                        showCenterToast(context, resources.getString(R.string.preset_share_failed))
+                    }
+                    presetShareDialog = false
+                },
+            )
+        }
+
+        if (presetResetConfirmDialog) {
+            PresetResetConfirmDialog(
+                visible = true,
+                onDismiss = { presetResetConfirmDialog = false },
+                onConfirm = {
+                    audioViewModel.resetFilterPresetToDefault()
+                    showCenterToast(context, resources.getString(R.string.preset_restore_default_done))
+                    presetResetConfirmDialog = false
+                },
+            )
+        }
+
+        RecordingsListDialog(
+            visible = showRecordList,
+            recordings = state.recordings,
+            playbackPositionMs = 0L,
+            playbackDurationMs = 0L,
+            playingId = state.playingId,
+            onDismiss = { showRecordList = false },
+            onShareClick = { shareRecording(it) },
+            onRenameClick = {
+                renameTarget = it
+                renameText = it.fileName.substringBeforeLast('.')
+            },
+            onDeleteClick = { deleteTarget = it },
+        )
+
+        RenameRecordingDialog(
+            clip = renameTarget,
+            renameText = renameText,
+            onRenameTextChange = { renameText = it },
+            onDismiss = { renameTarget = null },
+            onConfirm = { clip, name ->
+                val trimmed = name.trim()
+                if (trimmed.isNotEmpty()) {
+                    audioViewModel.renameRecording(clip.id, trimmed)
+                }
+                renameTarget = null
+            },
+        )
+
+        DeleteRecordingDialog(
+            clip = deleteTarget,
+            onDismiss = { deleteTarget = null },
+            onConfirm = {
+                audioViewModel.deleteRecording(it.id)
+                deleteTarget = null
+            },
+        )
+
+        run {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.test_mode_label),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.widthIn(min = 64.dp),
+                )
+                Box {
+                    OutlinedButton(
+                        onClick = actions.onToggleVvvfTestSignal,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Text(if (state.useTestSignal) stringResource(R.string.test_mode_running) else stringResource(R.string.test_mode_start))
+                    }
+                }
+
+                Text(
+                    text = stringResource(R.string.test_mode_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.test_waveform_label),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.widthIn(min = 64.dp),
+                )
+                Box {
+                    OutlinedButton(
+                        onClick = { testSignalMenu = true },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Text(state.testSignalPreset.label)
+                    }
+                    DropdownMenu(
+                        expanded = testSignalMenu,
+                        onDismissRequest = { testSignalMenu = false },
+                    ) {
+                        AudioEngineViewModel.TestSignalPreset.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.label) },
+                                onClick = {
+                                    testSignalMenu = false
+                                    actions.onSetTestSignalPreset(option)
+                                },
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = stringResource(R.string.test_waveform_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+        }
+    }
+}
+
+
+
+
+
+

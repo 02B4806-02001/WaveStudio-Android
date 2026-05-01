@@ -1,0 +1,622 @@
+Initialized native services in: /Users/leleli/.gradle/native
+Initialized jansi services in: /Users/leleli/.gradle/native
+Found daemon DaemonInfo{pid=55676, address=[465137f2-4d88-4bc9-80d0-0b31084b0a79 port:52470, addresses:[/127.0.0.1]], state=Idle, lastBusy=1776503230663, context=DefaultDaemonContext[uid=53019e6a-c2c4-4ce1-bb3f-79da68091aa4,javaHome=/Applications/Android Studio.app/Contents/jbr/Contents/Home,javaVersion=21,javaVendor=JetBrains s.r.o.,daemonRegistryDir=/Users/leleli/.gradle/daemon,pid=55676,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx2048m,-Dfile.encoding=UTF-8,-Duser.country=CN,-Duser.language=zh,-Duser.variant]} however its context does not match the desired criteria.
+JVM is incompatible.
+Wanted: DaemonRequestContext{jvmCriteria=/Library/Java/JavaVirtualMachines/liberica-jre-17-full.jre/Contents/Home (no JDK specified, using current Java home), daemonOpts=[-Xmx2048m, -Dfile.encoding=UTF-8, -Duser.country=CN, -Duser.language=zh, -Duser.variant], applyInstrumentationAgent=true, nativeServicesMode=ENABLED, priority=NORMAL}
+Actual: DefaultDaemonContext[uid=53019e6a-c2c4-4ce1-bb3f-79da68091aa4,javaHome=/Applications/Android Studio.app/Contents/jbr/Contents/Home,javaVersion=21,javaVendor=JetBrains s.r.o.,daemonRegistryDir=/Users/leleli/.gradle/daemon,pid=55676,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx2048m,-Dfile.encoding=UTF-8,-Duser.country=CN,-Duser.language=zh,-Duser.variant]
+
+  Looking for a different daemon...
+The client will now receive all logging from the daemon (pid: 61998). The daemon log file: /Users/leleli/.gradle/daemon/9.1.0/daemon-61998.out.log
+Starting 8th build in daemon [uptime: 47 mins 59.734 secs, performance: 98%, GC rate: 0.00/s, heap usage: 0% of 2 GiB]
+Using 10 worker leases.
+Now considering [/Users/leleli/AndroidStudioProjects/Oscope] as hierarchies to watch
+Watching the file system is configured to be enabled if available
+File system watching is active
+Starting Build
+Resolved plugin [id: 'org.gradle.toolchains.foojay-resolver-convention', version: '1.0.0']
+Settings evaluated using settings file '/Users/leleli/AndroidStudioProjects/Oscope/settings.gradle.kts'.
+Projects loaded. Root project using build file '/Users/leleli/AndroidStudioProjects/Oscope/build.gradle.kts'.
+Included projects: [root project 'Oscope', project ':app']
+
+> Configure project :
+Evaluating root project 'Oscope' using build file '/Users/leleli/AndroidStudioProjects/Oscope/build.gradle.kts'.
+Resolved plugin [id: 'com.android.application', version: '9.0.1', apply: false]
+Resolved plugin [id: 'org.jetbrains.kotlin.plugin.compose', version: '2.3.0', apply: false]
+
+> Configure project :app
+Evaluating project ':app' using build file '/Users/leleli/AndroidStudioProjects/Oscope/app/build.gradle.kts'.
+Resolved plugin [id: 'com.android.application', version: '9.0.1']
+Resolved plugin [id: 'org.jetbrains.kotlin.plugin.compose', version: '2.3.0']
+Build 64352272-0a19-42fb-bc92-440f5885f116 is started
+Using default execution profile
+Detected Android Gradle Plugin compose compiler configuration
+Detected Android Gradle Plugin compose compiler configuration
+Detected Android Gradle Plugin compose compiler configuration
+Detected Android Gradle Plugin compose compiler configuration
+All projects evaluated.
+Task name matched 'clean'
+Task name matched 'assembleDebug'
+Selected primary task 'clean' from project :
+Selected primary task 'assembleDebug' from project :
+Starting process 'command '/usr/libexec/java_home''. Working directory: /Users/leleli/.gradle/daemon/9.1.0 Command: /usr/libexec/java_home -V
+Successfully started process 'command '/usr/libexec/java_home''
+Adding -Xuse-inline-scopes-numbers Kotlin compiler flag for task :app:compileDebugKotlin
+Tasks to be executed: [task ':app:clean', task ':app:preBuild', task ':app:preDebugBuild', task ':app:mergeDebugNativeDebugMetadata', task ':app:generateDebugResources', task ':app:packageDebugResources', task ':app:processDebugNavigationResources', task ':app:parseDebugLocalResources', task ':app:generateDebugRFile', task ':app:compileDebugKotlin', task ':app:javaPreCompileDebug', task ':app:compileDebugJavaWithJavac', task ':app:generateDebugAssets', task ':app:mergeDebugAssets', task ':app:compressDebugAssets', task ':app:processDebugJavaRes', task ':app:mergeDebugJavaResource', task ':app:checkDebugDuplicateClasses', task ':app:desugarDebugFileDependencies', task ':app:mergeExtDexDebug', task ':app:mergeLibDexDebug', task ':app:checkDebugAarMetadata', task ':app:compileDebugNavigationResources', task ':app:mapDebugSourceSetPaths', task ':app:mergeDebugResources', task ':app:createDebugCompatibleScreenManifests', task ':app:extractDeepLinksDebug', task ':app:processDebugMainManifest', task ':app:processDebugManifest', task ':app:processDebugManifestForPackage', task ':app:processDebugResources', task ':app:dexBuilderDebug', task ':app:mergeProjectDexDebug', task ':app:mergeDebugJniLibFolders', task ':app:mergeDebugNativeLibs', task ':app:stripDebugDebugSymbols', task ':app:validateSigningDebug', task ':app:writeDebugAppMetadata', task ':app:writeDebugSigningConfigVersions', task ':app:packageDebug', task ':app:createDebugApkListingFileRedirect', task ':app:assembleDebug']
+Tasks that were excluded: []
+Resolve mutations for :app:clean (Thread[Execution worker,5,main]) started.
+:app:clean (Thread[Execution worker,5,main]) started.
+destroyer locations for task group 0 (Thread[included builds,5,main]) started.
+
+> Task :app:clean
+Caching disabled for task ':app:clean' because:
+  Build cache is disabled
+Task ':app:clean' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Resolve mutations for :app:preBuild (Thread[Execution worker,5,main]) started.
+:app:preBuild (Thread[Execution worker,5,main]) started.
+
+> Task :app:preBuild UP-TO-DATE
+Skipping task ':app:preBuild' as it has no actions.
+Resolve mutations for :app:preDebugBuild (Thread[Execution worker,5,main]) started.
+:app:preDebugBuild (Thread[Execution worker,5,main]) started.
+
+> Task :app:preDebugBuild UP-TO-DATE
+Skipping task ':app:preDebugBuild' as it has no actions.
+Resolve mutations for :app:mergeDebugNativeDebugMetadata (Thread[Execution worker,5,main]) started.
+:app:mergeDebugNativeDebugMetadata (Thread[Execution worker,5,main]) started.
+
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+Skipping task ':app:mergeDebugNativeDebugMetadata' as it has no source files and no previous output files.
+Resolve mutations for :app:generateDebugResources (Thread[Execution worker,5,main]) started.
+:app:generateDebugResources (Thread[Execution worker,5,main]) started.
+
+> Task :app:generateDebugResources
+Caching disabled for task ':app:generateDebugResources' because:
+  Build cache is disabled
+Task ':app:generateDebugResources' is not up-to-date because:
+  Output property 'validationReportFile' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt has been removed.
+Resolve mutations for :app:packageDebugResources (Thread[Execution worker,5,main]) started.
+:app:packageDebugResources (Thread[Execution worker,5,main]) started.
+
+> Task :app:packageDebugResources
+Caching disabled for task ':app:packageDebugResources' because:
+  Build cache is disabled
+Task ':app:packageDebugResources' is not up-to-date because:
+  Output property 'dataBindingLayoutInfoOutFolder' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/data_binding_layout_info_type_package/debug/packageDebugResources/out has been removed.
+  Output property 'incrementalFolder' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/packageDebugResources has been removed.
+  Output property 'incrementalFolder' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties has been removed.
+  and more...
+The input changes require a full rebuild for incremental task ':app:packageDebugResources'.
+[MergeResources] Inputs are non-incremental full task action.
+Resolve mutations for :app:processDebugNavigationResources (Thread[Execution worker,5,main]) started.
+:app:processDebugNavigationResources (Thread[Execution worker,5,main]) started.
+
+> Task :app:processDebugNavigationResources
+Caching disabled for task ':app:processDebugNavigationResources' because:
+  Build cache is disabled
+Task ':app:processDebugNavigationResources' is not up-to-date because:
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/generated/updated_navigation_xml/debug has been removed.
+Resolve mutations for :app:parseDebugLocalResources (Thread[Execution worker,5,main]) started.
+:app:parseDebugLocalResources (Thread[Execution worker,5,main]) started.
+Resolve mutations for :app:javaPreCompileDebug (Thread[included builds,5,main]) started.
+:app:javaPreCompileDebug (Thread[included builds,5,main]) started.
+Resolve mutations for :app:generateDebugAssets (Thread[Execution worker Thread 9,5,main]) started.
+:app:generateDebugAssets (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :app:generateDebugAssets UP-TO-DATE
+Skipping task ':app:generateDebugAssets' as it has no actions.
+Resolve mutations for :app:mergeDebugAssets (Thread[Execution worker Thread 9,5,main]) started.
+:app:mergeDebugAssets (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :app:javaPreCompileDebug
+Caching disabled for task ':app:javaPreCompileDebug' because:
+  Build cache is disabled
+Task ':app:javaPreCompileDebug' is not up-to-date because:
+  Output property 'annotationProcessorListFile' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json has been removed.
+
+> Task :app:mergeDebugAssets
+Caching disabled for task ':app:mergeDebugAssets' because:
+  Build cache is disabled
+  Simple merging task
+Task ':app:mergeDebugAssets' is not up-to-date because:
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/assets/debug/mergeDebugAssets has been removed.
+The input changes require a full rebuild for incremental task ':app:mergeDebugAssets'.
+Resolve mutations for :app:compressDebugAssets (Thread[Execution worker Thread 9,5,main]) started.
+:app:compressDebugAssets (Thread[Execution worker Thread 9,5,main]) started.
+
+> Task :app:compressDebugAssets
+Caching disabled for task ':app:compressDebugAssets' because:
+  Build cache is disabled
+Task ':app:compressDebugAssets' is not up-to-date because:
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/compressed_assets/debug/compressDebugAssets/out has been removed.
+The input changes require a full rebuild for incremental task ':app:compressDebugAssets'.
+Resolve mutations for :app:checkDebugDuplicateClasses (Thread[Execution worker Thread 9,5,main]) started.
+:app:checkDebugDuplicateClasses (Thread[Execution worker Thread 9,5,main]) started.
+Resolve mutations for :app:desugarDebugFileDependencies (Thread[Execution worker Thread 6,5,main]) started.
+:app:desugarDebugFileDependencies (Thread[Execution worker Thread 6,5,main]) started.
+
+> Task :app:parseDebugLocalResources
+Caching disabled for task ':app:parseDebugLocalResources' because:
+  Build cache is disabled
+Task ':app:parseDebugLocalResources' is not up-to-date because:
+  Output property 'librarySymbolsFile' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt has been removed.
+The input changes require a full rebuild for incremental task ':app:parseDebugLocalResources'.
+
+> Task :app:desugarDebugFileDependencies
+Caching disabled for task ':app:desugarDebugFileDependencies' because:
+  Build cache is disabled
+Task ':app:desugarDebugFileDependencies' is not up-to-date because:
+  Output property 'outputDirectory' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/external_file_lib_dex_archives/debug/desugarDebugFileDependencies has been removed.
+Resolve mutations for :app:generateDebugRFile (Thread[Execution worker Thread 6,5,main]) started.
+:app:generateDebugRFile (Thread[Execution worker Thread 6,5,main]) started.
+Resolve mutations for :app:checkDebugAarMetadata (Thread[Execution worker,5,main]) started.
+:app:checkDebugAarMetadata (Thread[Execution worker,5,main]) started.
+Resolve mutations for :app:compileDebugNavigationResources (Thread[Execution worker Thread 2,5,main]) started.
+:app:compileDebugNavigationResources (Thread[Execution worker Thread 2,5,main]) started.
+
+> Task :app:generateDebugRFile
+Caching disabled for task ':app:generateDebugRFile' because:
+  Build cache is disabled
+Task ':app:generateDebugRFile' is not up-to-date because:
+  Output property 'RClassOutputJar' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar has been removed.
+  Output property 'symbolsWithPackageNameOutputFile' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt has been removed.
+  Output property 'textSymbolOutputFileProperty' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt has been removed.
+The input changes require a full rebuild for incremental task ':app:generateDebugRFile'.
+
+> Task :app:checkDebugDuplicateClasses
+Caching disabled for task ':app:checkDebugDuplicateClasses' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Task ':app:checkDebugDuplicateClasses' is not up-to-date because:
+  Output property 'dummyOutputDirectory' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/duplicate_classes_check/debug/checkDebugDuplicateClasses has been removed.
+
+> Task :app:checkDebugAarMetadata
+Caching disabled for task ':app:checkDebugAarMetadata' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Task ':app:checkDebugAarMetadata' is not up-to-date because:
+  Output property 'dummyOutputDirectory' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/aar_metadata_check/debug/checkDebugAarMetadata has been removed.
+Resolve mutations for :app:compileDebugKotlin (Thread[Execution worker,5,main]) started.
+
+> Task :app:compileDebugNavigationResources
+Caching disabled for task ':app:compileDebugNavigationResources' because:
+  Build cache is disabled
+Task ':app:compileDebugNavigationResources' is not up-to-date because:
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/compiled_navigation_res/debug/compileDebugNavigationResources has been removed.
+The input changes require a full rebuild for incremental task ':app:compileDebugNavigationResources'.
+:app:compileDebugKotlin (Thread[Execution worker,5,main]) started.
+Resolve mutations for :app:mergeExtDexDebug (Thread[Execution worker Thread 3,5,main]) started.
+:app:mergeExtDexDebug (Thread[Execution worker Thread 3,5,main]) started.
+Resolve mutations for :app:mergeLibDexDebug (Thread[Execution worker Thread 5,5,main]) started.
+:app:mergeLibDexDebug (Thread[Execution worker Thread 5,5,main]) started.
+Resolve mutations for :app:mapDebugSourceSetPaths (Thread[Execution worker Thread 8,5,main]) started.
+:app:mapDebugSourceSetPaths (Thread[Execution worker Thread 8,5,main]) started.
+
+> Task :app:mergeLibDexDebug
+Caching disabled for task ':app:mergeLibDexDebug' because:
+  Build cache is disabled
+Task ':app:mergeLibDexDebug' is not up-to-date because:
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/dex/debug/mergeLibDexDebug has been removed.
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/dex/debug/mergeLibDexDebug/0 has been removed.
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/dex/debug/mergeLibDexDebug/1 has been removed.
+  and more...
+The input changes require a full rebuild for incremental task ':app:mergeLibDexDebug'.
+
+> Task :app:mapDebugSourceSetPaths
+Caching disabled for task ':app:mapDebugSourceSetPaths' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Task ':app:mapDebugSourceSetPaths' is not up-to-date because:
+  Output property 'filepathMappingFile' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/android_res_source_set_path_map/debug/mapDebugSourceSetPaths/file-map.txt has been removed.
+Resolve mutations for :app:mergeDebugResources (Thread[Execution worker Thread 8,5,main]) started.
+:app:mergeDebugResources (Thread[Execution worker Thread 8,5,main]) started.
+Resolve mutations for :app:createDebugCompatibleScreenManifests (Thread[Execution worker Thread 5,5,main]) started.
+:app:createDebugCompatibleScreenManifests (Thread[Execution worker Thread 6,5,main]) started.
+
+> Task :app:createDebugCompatibleScreenManifests
+Caching disabled for task ':app:createDebugCompatibleScreenManifests' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Task ':app:createDebugCompatibleScreenManifests' is not up-to-date because:
+  Output property 'outputFolder' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/compatible_screen_manifest/debug/createDebugCompatibleScreenManifests has been removed.
+  Output property 'outputFolder' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/compatible_screen_manifest/debug/createDebugCompatibleScreenManifests/output-metadata.json has been removed.
+Resolve mutations for :app:extractDeepLinksDebug (Thread[Execution worker Thread 6,5,main]) started.
+:app:extractDeepLinksDebug (Thread[Execution worker Thread 6,5,main]) started.
+
+> Task :app:mergeDebugResources FAILED
+Caching disabled for task ':app:mergeDebugResources' because:
+  Build cache is disabled
+Task ':app:mergeDebugResources' is not up-to-date because:
+  Task has failed previously.
+The input changes require a full rebuild for incremental task ':app:mergeDebugResources'.
+[MergeResources] Inputs are non-incremental full task action.
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-hi/values-hi.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-hi_values-hi.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-de/values-de.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-de_values-de.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-lt/values-lt.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-lt_values-lt.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-lv/values-lv.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-lv_values-lv.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-pt/values-pt.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-pt_values-pt.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-lo/values-lo.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-lo_values-lo.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values/values.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values_values.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-mk/values-mk.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-mk_values-mk.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-mn/values-mn.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-mn_values-mn.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ml/values-ml.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ml_values-ml.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-uk/values-uk.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-uk_values-uk.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ur/values-ur.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ur_values-ur.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-uz/values-uz.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-uz_values-uz.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-is/values-is.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-is_values-is.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-zh-rHK/values-zh-rHK.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-zh-rHK_values-zh-rHK.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en/values-en.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-en_values-en.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-zh-rTW/values-zh-rTW.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-zh-rTW_values-zh-rTW.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ms/values-ms.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ms_values-ms.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-as/values-as.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-as_values-as.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-el/values-el.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-el_values-el.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-zu/values-zu.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-zu_values-zu.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-b+sr+Latn/values-b+sr+Latn.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-b+sr+Latn_values-b+sr+Latn.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-eu/values-eu.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-eu_values-eu.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-bn/values-bn.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-bn_values-bn.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-pt-rPT/values-pt-rPT.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-pt-rPT_values-pt-rPT.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ja/values-ja.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ja_values-ja.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-es/values-es.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-es_values-es.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-bg/values-bg.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-bg_values-bg.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ca/values-ca.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ca_values-ca.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-et/values-et.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-et_values-et.arsc.flat
+/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/values-en/strings.xml:101:4: Failed to flatten XML for resource 'startup_note_do_not_show' with error: Invalid unicode escape sequence in string
+"{str}"
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-fi/values-fi.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-fi_values-fi.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-az/values-az.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-az_values-az.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ne/values-ne.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ne_values-ne.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-sl/values-sl.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-sl_values-sl.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ta/values-ta.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ta_values-ta.arsc.flat
+/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/values-en/strings.xml:101:4: string/startup_note_do_not_show does not contain a valid string resource.
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ka/values-ka.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ka_values-ka.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en-rXC/values-en-rXC.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-en-rXC_values-en-rXC.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ru/values-ru.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ru_values-ru.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-sw/values-sw.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-sw_values-sw.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-kn/values-kn.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-kn_values-kn.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-da/values-da.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-da_values-da.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-te/values-te.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-te_values-te.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-si/values-si.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-si_values-si.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-tl/values-tl.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-tl_values-tl.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-sk/values-sk.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-sk_values-sk.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ko/values-ko.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ko_values-ko.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-or/values-or.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-or_values-or.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-th/values-th.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-th_values-th.arsc.flat
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-hdpi/ic_launcher_round.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-hdpi_ic_launcher_round.webp.flat
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-xhdpi/ic_launcher.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-xhdpi_ic_launcher.webp.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-pa/values-pa.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-pa_values-pa.arsc.flat
+Compiling xml file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-anydpi-v26_ic_launcher.xml.flat
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-mdpi/ic_launcher.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-mdpi_ic_launcher.webp.flat
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-xhdpi/ic_launcher_round.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-xhdpi_ic_launcher_round.webp.flat
+/Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en/values-en.xml: Failed to compile file
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-xxxhdpi_ic_launcher.webp.flat
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-xxxhdpi_ic_launcher_round.webp.flat
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-xxhdpi_ic_launcher_round.webp.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-hr/values-hr.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-hr_values-hr.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-hu/values-hu.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-hu_values-hu.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en-rIN/values-en-rIN.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-en-rIN_values-en-rIN.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-af/values-af.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-af_values-af.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-my/values-my.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-my_values-my.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-mr/values-mr.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-mr_values-mr.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-fr-rCA/values-fr-rCA.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-fr-rCA_values-fr-rCA.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-it/values-it.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-it_values-it.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-am/values-am.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-am_values-am.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-vi/values-vi.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-vi_values-vi.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-nb/values-nb.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-nb_values-nb.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-v21/values-v21.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-v21_values-v21.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ro/values-ro.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ro_values-ro.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-nl/values-nl.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-nl_values-nl.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-bs/values-bs.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-bs_values-bs.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-sr/values-sr.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-sr_values-sr.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en-rCA/values-en-rCA.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-en-rCA_values-en-rCA.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-ky/values-ky.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-ky_values-ky.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-kk/values-kk.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-kk_values-kk.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-tr/values-tr.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-tr_values-tr.arsc.flat
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-mdpi/ic_launcher_round.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-mdpi_ic_launcher_round.webp.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-gu/values-gu.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-gu_values-gu.arsc.flat
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-hdpi/ic_launcher.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-hdpi_ic_launcher.webp.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en-rAU/values-en-rAU.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-en-rAU_values-en-rAU.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-zh-rCN/values-zh-rCN.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-zh-rCN_values-zh-rCN.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-v30/values-v30.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-v30_values-v30.arsc.flat
+Compiling xml file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/xml/backup_rules.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/xml_backup_rules.xml.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-km/values-km.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-km_values-km.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-pt-rBR/values-pt-rBR.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-pt-rBR_values-pt-rBR.arsc.flat
+Compiling xml file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-anydpi-v26_ic_launcher_round.xml.flat
+Compiling xml file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/drawable/ic_launcher_background.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/drawable_ic_launcher_background.xml.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-hy/values-hy.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-hy_values-hy.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-in/values-in.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-in_values-in.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-iw/values-iw.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-iw_values-iw.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-es-rUS/values-es-rUS.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-es-rUS_values-es-rUS.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-be/values-be.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-be_values-be.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en-rGB/values-en-rGB.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-en-rGB_values-en-rGB.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-sv/values-sv.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-sv_values-sv.arsc.flat
+Compiling XML table /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-cs/values-cs.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/values-cs_values-cs.arsc.flat
+Compiling xml file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/xml/file_paths.xml to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/xml_file_paths.xml.flat
+Compiling file /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp to /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/merged_res/debug/mergeDebugResources/mipmap-xxhdpi_ic_launcher.webp.flat
+
+> Task :app:extractDeepLinksDebug
+Caching disabled for task ':app:extractDeepLinksDebug' because:
+  Build cache is disabled
+Task ':app:extractDeepLinksDebug' is not up-to-date because:
+  Output property 'navigationJson' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json has been removed.
+
+> Task :app:compileDebugKotlin
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+Custom actions are attached to task ':app:compileDebugKotlin'.
+Caching disabled for task ':app:compileDebugKotlin' because:
+  Build cache is disabled
+Task ':app:compileDebugKotlin' is not up-to-date because:
+  Output property 'classpathSnapshotProperties.classpathSnapshotDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/kotlin/compileDebugKotlin/classpath-snapshot has been removed.
+  Output property 'classpathSnapshotProperties.classpathSnapshotDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin has been removed.
+  Output property 'destinationDirectory' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes has been removed.
+  and more...
+The input changes require a full rebuild for incremental task ':app:compileDebugKotlin'.
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/main/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/kotlin', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+file or directory '/Users/leleli/AndroidStudioProjects/Oscope/app/src/debug/java', not found
+Kotlin source files: /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/Autocorrelation.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/ui/theme/Color.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/ui/theme/Theme.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/ui/theme/Type.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/FilterPreset.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/MainActivity.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/VvvfTestSignal.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/NewTriggerEngine.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/AudioPlaybackController.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/RecordedClip.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/MainUiComponents.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/OscopeSlider.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/RecordingsListView.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/PlayerProgress.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/WaveformView.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/StartSignalGenerator.kt, /Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/AudioEngineViewModel.kt
+Java source files: 
+Script source files: 
+Script file extensions: 
+Using Kotlin/JVM incremental compilation
+[KOTLIN] Kotlin compilation 'jdkHome' argument: /Users/leleli/.gradle/jdks/eclipse_adoptium-11-aarch64-os_x.2/jdk-11.0.28+6/Contents/Home
+Options for KOTLIN DAEMON: IncrementalCompilationOptions(super=CompilationOptions(compilerMode=INCREMENTAL_COMPILER, targetPlatform=JVM, reportCategories=[0, 3], reportSeverity=2, requestedCompilationResults=[0], kotlinScriptExtensions=[]), sourceChanges=org.jetbrains.kotlin.buildtools.api.SourcesChanges$Unknown@2973a379, classpathChanges=NotAvailableForNonIncrementalRun, workingDir=/Users/leleli/AndroidStudioProjects/Oscope/app/build/kotlin/compileDebugKotlin/cacheable, multiModuleICSettings=MultiModuleICSettings(buildHistoryFile=/Users/leleli/AndroidStudioProjects/Oscope/app/build/kotlin/compileDebugKotlin/local-state/build-history.bin, useModuleDetection=true), icFeatures=IncrementalCompilationFeatures(usePreciseJavaTracking=true, withAbiSnapshot=false, preciseCompilationResultsBackup=true, keepIncrementalCompilationCachesInMemory=true, enableUnsafeIncrementalCompilationForMultiplatform=false, enableMonotonousIncrementalCompileSetExpansion=true), outputFiles=[/Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes, /Users/leleli/AndroidStudioProjects/Oscope/app/build/kotlin/compileDebugKotlin/cacheable, /Users/leleli/AndroidStudioProjects/Oscope/app/build/kotlin/compileDebugKotlin/local-state])
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/AudioEngineViewModel.kt:696:101 Elvis operator (?:) always returns the left operand of non-nullable type 'Int'.
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/AudioEngineViewModel.kt:1260:40 Elvis operator (?:) always returns the left operand of non-nullable type 'RandomAccessFile'.
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/AudioEngineViewModel.kt:1321:56 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ShortArray'.
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/MainActivity.kt:97:19 'fun updateConfiguration(p0: Configuration!, p1: DisplayMetrics!): Unit' is deprecated. Deprecated in Java.
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/MainActivity.kt:133:20 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/MainActivity.kt:134:20 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/MainActivity.kt:198:28 'var view: View?' is deprecated. Deprecated in Java.
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/MainActivity.kt:223:26 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/MainActivity.kt:224:26 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/leleli/AndroidStudioProjects/Oscope/app/src/main/java/com/example/oscope/VvvfTestSignal.kt:87:85 Redundant call of conversion method.
+Finished executing kotlin compiler using DAEMON strategy
+
+> Task :app:mergeExtDexDebug
+Caching disabled for task ':app:mergeExtDexDebug' because:
+  Build cache is disabled
+Task ':app:mergeExtDexDebug' is not up-to-date because:
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/dex/debug/mergeExtDexDebug has been removed.
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/dex/debug/mergeExtDexDebug/classes.dex has been removed.
+  Output property 'outputDir' file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/dex/debug/mergeExtDexDebug/classes2.dex has been removed.
+  and more...
+The input changes require a full rebuild for incremental task ':app:mergeExtDexDebug'.
+Merging to '/Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/dex/debug/mergeExtDexDebug' with D8 from all or a subset of dex files in /Users/leleli/.gradle/caches/9.1.0/transforms/c8c3b0b73b21dd7dec6c08df34122a18/transformed/accompanist-permissions-0.37.3-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/95a5d02f6e54b681f2cd465e1085b56a/transformed/navigationevent-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/100d4752c4330928936e50c666e35902/transformed/navigationevent-compose-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/52dcd830f538cc16ab632e1cd67a56dc/transformed/material3-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/afeb5560b1d58af76d89c97a22cf9403/transformed/material-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/aa7550419b8d766efc40765f4f9bd17e/transformed/animation-core-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/121b374ba571dde77698fbdfc4897787/transformed/material-ripple-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/287de8ee9201cd1b7d24b703f07e189a/transformed/animation-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/9a0f751b01043a58e7262e3f292304f3/transformed/foundation-layout-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/ff699e96040a9eeebfd122b49c27f87a/transformed/foundation-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/c4c29150eccca2d8a8ca1e5ac81d017a/transformed/ui-tooling-data-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/3d58ed087eda58e6f6d09679bda41104/transformed/ui-unit-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/1192d88e0bdc754676da5525b5a8192e/transformed/ui-geometry-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/e5ff60bce3f019cc105441b01f9c46bd/transformed/ui-util-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/fe55460e7e458160d2757135ee550bb1/transformed/ui-text-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/387a8a3720968ebf61bb7307c321f979/transformed/ui-tooling-preview-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/959df7eaa578781c03351fe19317acd3/transformed/ui-tooling-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/16e017adde051d993701337dbd500d1d/transformed/ui-graphics-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/23d1f47e1886d556fbba8b2ecb919825/transformed/runtime-retain-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/c0293ea795117439b50f4920f204e3ff/transformed/runtime-annotation-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/43db2a36a024186ed60d7891cc9bb82e/transformed/media3-extractor-1.9.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/ec3e52e601c29e5d5d80743e936d381f/transformed/media3-container-1.9.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/360198ae6dce30f504f15b830604388b/transformed/media3-datasource-1.9.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/87dc897809ba3a0b582b3ba077e43c14/transformed/media3-decoder-1.9.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/15979f679a2cb2323aa60b34e70141db/transformed/media3-database-1.9.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/1bc9205ecadd784d54de6b2e8fa79415/transformed/media3-common-1.9.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/be978cd8bd45c09c9fd040759c13852f/transformed/media3-exoplayer-1.9.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/ad14fa4be7af1c8c72c55e2bceea4f73/transformed/autofill-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/b1e7ded0005f5553a964c0330dd081cb/transformed/transition-1.6.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/e271e3e3ba2435d1de2dd010d6098e20/transformed/window-core-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/c43c6422f22fd8e453d68bf813a158da/transformed/window-1.5.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/79c80c39294263251890e83db7f0fc5e/transformed/graphics-path-1.0.1-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/a79a85f4139852dd409c85b14c42516b/transformed/dynamicanimation-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/28c158a16e8e119cd13ca6b6f8eb6c15/transformed/emoji2-1.4.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/a2fc4d2a74eb3f65cf4b6303540541ed/transformed/legacy-support-core-utils-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/233cb25af07cbfabe91091d673594f62/transformed/loader-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/fb66d8ba4c0814527d3f6e8f8a17afab/transformed/core-1.17.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/a99d830ab3cf91825051121ba7d49aac/transformed/lifecycle-livedata-2.10.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/1fefff52e87de3a9f5669ad6b459b642/transformed/lifecycle-process-2.10.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/5a62a41bf5fb97863259b0e8639b7f61/transformed/lifecycle-livedata-core-2.10.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/ec0868ff9fc6fc7f255e09af16258b2f/transformed/lifecycle-runtime-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/2541b6295aea203cfa87ff49b3d90bb3/transformed/lifecycle-common-jvm-2.10.0, /Users/leleli/.gradle/caches/9.1.0/transforms/2e26283ce19d78d3430b6515beb711dc/transformed/lifecycle-viewmodel-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/f43afff4c7c21cd9729d11345de98cfe/transformed/lifecycle-viewmodel-savedstate-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/ada77974fe18f4bff2c20842ffad0931/transformed/savedstate-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/83f69319c84fd8dfa9f651f0fe5bcbce/transformed/savedstate-compose-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/8b2200159d9f64f06e4c54dbd4943e0d/transformed/runtime-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/2741e349e7e23bf75ad3a75886af89e4/transformed/runtime-saveable-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/1404547009541faea7af8180e237520e/transformed/lifecycle-runtime-compose-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/794523c8672d3699643a7f608e6e9262/transformed/lifecycle-viewmodel-compose-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/3134aad76b7151adae6f6a9aee6657a6/transformed/ui-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/06512d118d5024ab6699df3634ed4bc9/transformed/activity-1.12.2-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/7704e2e54b5c036a9bd252ef9931f84d/transformed/activity-compose-1.12.2-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/608c2463f14fd81fc4c17c504b63cea8/transformed/customview-poolingcontainer-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/9cd5d50dab5591de897e32aebdf6fd51/transformed/core-ktx-1.17.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/1cada9009bd60ae843eb8b87b0ce9d4d/transformed/kotlinx-coroutines-core-jvm-1.9.0, /Users/leleli/.gradle/caches/9.1.0/transforms/3259f9d4960241cac9008a8cc6e43d8e/transformed/kotlinx-coroutines-android-1.9.0, /Users/leleli/.gradle/caches/9.1.0/transforms/c59c7628b4076e33fafe6501a4297a0c/transformed/annotation-experimental-1.4.1-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/e14ebf3143b5a93c44238ec4b92a533f/transformed/core-viewtree-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/537146d2219183d9f50f3e0c555bf839/transformed/exifinterface-1.3.6-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/a99c5d40e133cbb62c19eb822a9daec2/transformed/interpolator-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/6f75a2081b7f4567ebf3c13ace06ad72/transformed/profileinstaller-1.4.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/afd0d7fe7a198b96c9be867c026ece8c/transformed/startup-runtime-1.1.1-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/9fd63185df06d9b0b2b094a381c3871e/transformed/tracing-1.2.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/2c5eeb9a3c6d212285b64da04e5c3393/transformed/versionedparcelable-1.1.1-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/c69b467b88cc4ee07c48a9c900395807/transformed/concurrent-futures-1.1.0, /Users/leleli/.gradle/caches/9.1.0/transforms/05d97a2b6a6cce0a5b2338d3e3015db2/transformed/core-runtime-2.2.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/b5921e32f9be54c123a39ada4abfe8ce/transformed/core-common-2.2.0, /Users/leleli/.gradle/caches/9.1.0/transforms/464b9f90eb413151b99a754bee0186c7/transformed/collection-jvm-1.5.0, /Users/leleli/.gradle/caches/9.1.0/transforms/0ce0da484ae811fab3cc3e68cfc02f0b/transformed/documentfile-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/ba7185e2077cdeb8d369c59f483474d6/transformed/localbroadcastmanager-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/23a83823b9ca672f3f66b6537f8593c9/transformed/print-1.0.0-runtime, /Users/leleli/.gradle/caches/9.1.0/transforms/cc00ffcbaedef001e3b368179aac0983/transformed/annotation-jvm-1.9.1, /Users/leleli/.gradle/caches/9.1.0/transforms/d5f352f691d50658e459538b94d1a47c/transformed/kotlinx-serialization-core-jvm-1.7.3, /Users/leleli/.gradle/caches/9.1.0/transforms/88b2b699cd50218f7441d5e01e2b6570/transformed/kotlin-stdlib-2.3.0, /Users/leleli/.gradle/caches/9.1.0/transforms/4aa7f1facfdd2b589680b5af75de3174/transformed/annotations-23.0.0, /Users/leleli/.gradle/caches/9.1.0/transforms/858c8e4ece90c3dbf224448ba82b4a36/transformed/guava-33.3.1-android, /Users/leleli/.gradle/caches/9.1.0/transforms/6d51f7c4780a0ddc03fb84c20e04a13e/transformed/jspecify-1.0.0, /Users/leleli/.gradle/caches/9.1.0/transforms/fbb6acc2f7ab3479a2a5a5de2f0023aa/transformed/failureaccess-1.0.2, and from all global synthetics files in 
+Build 64352272-0a19-42fb-bc92-440f5885f116 is closed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:mergeDebugResources'.
+> A failure occurred while executing com.android.build.gradle.internal.res.ResourceCompilerRunnable
+   > Resource compilation failed (Failed to compile values resource file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en/values-en.xml. Cause: java.lang.IllegalStateException: Can not extract resource from com.android.aaptcompiler.ParsedResource@5a4121ce.). Check logs for more details.
+
+* Try:
+> Run with --debug option to get more log output.
+> Run with --scan to generate a Build Scan (Powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+* Exception is:
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:mergeDebugResources'.
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:135)
+	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:288)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:133)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:121)
+	at org.gradle.api.internal.tasks.execution.ProblemsTaskPathTrackingTaskExecuter.execute(ProblemsTaskPathTrackingTaskExecuter.java:41)
+	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+	at org.gradle.execution.plan.LocalTaskNodeExecutor.execute(LocalTaskNodeExecutor.java:45)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:355)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:342)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecutionGraph.java:338)
+	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:338)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:327)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:459)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:376)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing com.android.build.gradle.internal.res.ResourceCompilerRunnable
+	at org.gradle.workers.internal.DefaultWorkerExecutor$WorkItemExecution.waitForCompletion(DefaultWorkerExecutor.java:289)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.lambda$waitForItemsAndGatherFailures$2(DefaultAsyncWorkTracker.java:130)
+	at org.gradle.internal.Factories$1.create(Factories.java:31)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:335)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:318)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLock(DefaultWorkerLeaseService.java:323)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:126)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:92)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForAll(DefaultAsyncWorkTracker.java:78)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForCompletion(DefaultAsyncWorkTracker.java:66)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$3.run(TaskExecution.java:260)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:29)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:26)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:47)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(TaskExecution.java:237)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(TaskExecution.java:220)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(TaskExecution.java:203)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.execute(TaskExecution.java:170)
+	at org.gradle.internal.execution.steps.ExecuteStep.executeInternal(ExecuteStep.java:105)
+	at org.gradle.internal.execution.steps.ExecuteStep.access$000(ExecuteStep.java:44)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:59)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:56)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:56)
+	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:44)
+	at org.gradle.internal.execution.steps.CancelExecutionStep.execute(CancelExecutionStep.java:42)
+	at org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(TimeoutStep.java:75)
+	at org.gradle.internal.execution.steps.TimeoutStep.execute(TimeoutStep.java:55)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:50)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:28)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.execute(RemovePreviousOutputsStep.java:68)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.execute(RemovePreviousOutputsStep.java:38)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:61)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:26)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:69)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:46)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.execute(ResolveInputChangesStep.java:39)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.execute(ResolveInputChangesStep.java:28)
+	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:189)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$1(BuildCacheStep.java:75)
+	at org.gradle.internal.Either$Right.fold(Either.java:176)
+	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:73)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:48)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:46)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:35)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(SkipUpToDateStep.java:75)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(SkipUpToDateStep.java:53)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:53)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:35)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:37)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:27)
+	at org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:49)
+	at org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:27)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:71)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:39)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.execute(ResolveChangesStep.java:64)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.execute(ResolveChangesStep.java:35)
+	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:62)
+	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:40)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:76)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:45)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.executeWithNonEmptySources(AbstractSkipEmptyWorkStep.java:136)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:61)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:38)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:36)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:23)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.execute(HandleStaleOutputsStep.java:75)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.execute(HandleStaleOutputsStep.java:41)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$execute$0(AssignMutableWorkspaceStep.java:35)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:297)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:31)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:22)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:47)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:34)
+	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:64)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
+	... 29 more
+Caused by: com.android.aaptcompiler.ResourceCompilationException: Resource compilation failed (Failed to compile values resource file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en/values-en.xml. Cause: java.lang.IllegalStateException: Can not extract resource from com.android.aaptcompiler.ParsedResource@5a4121ce.). Check logs for more details.
+	at com.android.aaptcompiler.ResourceCompiler.compileResource(ResourceCompiler.kt:129)
+	at com.android.build.gradle.internal.res.ResourceCompilerRunnable$Companion.compileSingleResource(ResourceCompilerRunnable.kt:34)
+	at com.android.build.gradle.internal.res.ResourceCompilerRunnable.run(ResourceCompilerRunnable.kt:15)
+	at com.android.build.gradle.internal.profile.ProfileAwareWorkAction.execute(ProfileAwareWorkAction.kt:74)
+	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:68)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:66)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:62)
+	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:100)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:62)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:59)
+	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:176)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:194)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:127)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:169)
+	at org.gradle.internal.Factories$1.create(Factories.java:31)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:263)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:127)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:132)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:164)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:133)
+	... 2 more
+Caused by: com.android.aaptcompiler.ResourceCompilationException: Failed to compile values resource file /Users/leleli/AndroidStudioProjects/Oscope/app/build/intermediates/incremental/debug/mergeDebugResources/merged.dir/values-en/values-en.xml
+	at com.android.aaptcompiler.ResourceCompiler.compileTable(ResourceCompiler.kt:192)
+	at com.android.aaptcompiler.ResourceCompiler.access$compileTable(ResourceCompiler.kt:1)
+	at com.android.aaptcompiler.ResourceCompiler$getCompileMethod$1.invoke(ResourceCompiler.kt:138)
+	at com.android.aaptcompiler.ResourceCompiler$getCompileMethod$1.invoke(ResourceCompiler.kt:138)
+	at com.android.aaptcompiler.ResourceCompiler.compileResource(ResourceCompiler.kt:123)
+	... 31 more
+Caused by: java.lang.IllegalStateException: Can not extract resource from com.android.aaptcompiler.ParsedResource@5a4121ce.
+	at com.android.aaptcompiler.TableExtractor.extractResourceValues(TableExtractor.kt:270)
+	at com.android.aaptcompiler.TableExtractor.extract(TableExtractor.kt:181)
+	at com.android.aaptcompiler.ResourceCompiler.compileTable(ResourceCompiler.kt:188)
+	... 35 more
+
+
+BUILD FAILED in 10s
+20 actionable tasks: 20 executed
+Watched directory hierarchies: [/Users/leleli/AndroidStudioProjects/Oscope]
