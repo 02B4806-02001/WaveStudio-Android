@@ -21,6 +21,9 @@
     <string name="action_delete">Delete</string>
     <string name="action_start">Start</string>
     <string name="action_stop">Stop</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_controller">Controller</string>
     <string name="action_record">Record</string>
     <string name="action_restore_default">Restore Defaults</string>
 
@@ -69,6 +72,10 @@
     <string name="load_audio">Load Audio</string>
     <string name="importing">Importing</string>
     <string name="audio_input_mode">Audio Input</string>
+    <string name="audio_input_controller_title">Imported Audio Controller</string>
+    <string name="audio_input_controller_hint">Current imported audio</string>
+    <string name="audio_input_controller_playing">Playing</string>
+    <string name="audio_input_controller_paused">Paused</string>
     <string name="list_title">List</string>
     <string name="error_prefix_with_message">Error: %1$s</string>
     <string name="input_source_imported_audio">Input Source: Imported Audio%1$s</string>
@@ -114,6 +121,7 @@
 
     <!-- Trigger / UI toggles -->
     <string name="trigger_label">Trigger</string>
+    <string name="eq_graph_dragging_label">EQ graph can be dragged</string>
     <string name="trigger_on">Trigger On</string>
     <string name="trigger_off">Trigger Off</string>
     <string name="trigger_advanced_title">Trigger Advanced</string>

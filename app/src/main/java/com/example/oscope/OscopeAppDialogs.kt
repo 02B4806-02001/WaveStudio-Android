@@ -16,7 +16,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +34,9 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Stop
 
 @Composable
 internal fun PresetShareDialog(
@@ -84,6 +90,82 @@ internal fun PresetResetConfirmDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        },
+    )
+}
+
+@Composable
+internal fun ImportedAudioControllerDialog(
+    visible: Boolean,
+    importedAudioLabel: String?,
+    progress: Float,
+    isPaused: Boolean,
+    onDismiss: () -> Unit,
+    onTogglePause: () -> Unit,
+    onStop: () -> Unit,
+) {
+    if (!visible) return
+
+    val clampedProgress = progress.coerceIn(0f, 1f)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.audio_input_controller_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = importedAudioLabel?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.audio_input_controller_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LinearProgressIndicator(
+                        progress = { clampedProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = if (isPaused) stringResource(R.string.audio_input_controller_paused) else stringResource(R.string.audio_input_controller_playing),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        IconButton(onClick = onTogglePause) {
+                            Icon(
+                                imageVector = Icons.Filled.Pause,
+                                contentDescription = if (isPaused) stringResource(R.string.action_resume) else stringResource(R.string.action_pause),
+                            )
+                        }
+                        Text(
+                            text = if (isPaused) stringResource(R.string.action_resume) else stringResource(R.string.action_pause),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        IconButton(onClick = onStop) {
+                            Icon(
+                                imageVector = Icons.Filled.Stop,
+                                contentDescription = stringResource(R.string.action_stop),
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.action_stop),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) }
         },
     )
 }
@@ -247,8 +329,13 @@ internal fun AboutDialog(
 
     val aboutMainLines = if (isZhAbout) {
         listOf(
-            "Wave Studio v0.12.1 by 磁拾音器研究所",
+            "Wave Studio v0.13.0 by 磁拾音器研究所",
             "提示：使用前请授予麦克风权限。",
+            "",
+            "0.13.0版本主要更新内容如下：",
+            "- 均衡器 EQ 频响图支持拖拽调节",
+            "- 新增导入音频控制器",
+            "- 竖屏模式下的最大波形高度提升至 200dp",
             "",
             "0.12.1版本主要更新内容如下：",
             "- 均衡器折叠后持久化保存",
@@ -277,11 +364,17 @@ internal fun AboutDialog(
         )
     } else {
         listOf(
-            "Wave Studio v0.12.1 by MoHa-Radio Institute",
+            "Wave Studio v0.13.0 by MoHa-Radio Institute",
             "Note: Please grant microphone permission before use.",
+            "",
+            "Key updates in version 0.13.0:",
+            "- EQ frequency response graph now supports drag adjustment",
+            "- Added an imported audio controller",
+            "- Increased the maximum waveform height to 200dp",
             "",
             "Key updates in version 0.12.1:",
             "- Persist equalizer collapsed state",
+            "- Build and stability fixes",
             "- Fixed several other bugs",
             "",
             "Key updates in version 0.12.0:",

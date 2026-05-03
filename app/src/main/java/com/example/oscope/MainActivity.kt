@@ -19,6 +19,7 @@ internal const val LANG_ZH = "zh"
 internal const val LANG_EN = "en"
 internal const val KEY_TRIGGER_MODE_NAME = "trigger_mode_name"
 internal const val KEY_TRIGGER_NORMAL_ENABLED = "trigger_normal_enabled"
+internal const val KEY_EQ_DRAGGABLE = "eq_draggable"
 internal const val KEY_RAW_WAVE_HEIGHT_DP = "raw_wave_height_dp"
 internal const val KEY_FILTERED_WAVE_HEIGHT_DP = "filtered_wave_height_dp"
 

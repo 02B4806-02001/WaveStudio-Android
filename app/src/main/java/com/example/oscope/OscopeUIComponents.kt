@@ -589,6 +589,7 @@ fun FilterOrderSelector(
 @Composable
 fun EqPanel(
     enabled: Boolean,
+    draggable: Boolean = false,
     onEnabledChange: (Boolean) -> Unit,
     bands: List<AudioEngineViewModel.EqBand>,
     onReset: () -> Unit,
@@ -687,6 +688,10 @@ fun EqPanel(
             highPassCutoff = highPassCutoff,
             filterGain = filterGain,
             sampleRate = sampleRate,
+            draggable = draggable,
+            onBandFreq = onBandFreq,
+            onBandGainDb = onBandGainDb,
+            onGraphDragging = onGraphDragging,
         )
 
         Row(
@@ -943,6 +948,10 @@ fun EqResponseGraph(
     highPassCutoff: Float,
     filterGain: Float,
     sampleRate: Int,
+    draggable: Boolean = false,
+    onBandFreq: (id: Int, hz: Float) -> Unit = { _, _ -> },
+    onBandGainDb: (id: Int, db: Float) -> Unit = { _, _ -> },
+    onGraphDragging: (Boolean) -> Unit = {},
 ) {
     // Theme-aware colors
     val curveColor = MaterialTheme.colorScheme.onSurface
@@ -950,7 +959,35 @@ fun EqResponseGraph(
     val dotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
     val selectedColor = MaterialTheme.colorScheme.primary
 
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.pointerInput(draggable, selectedId) {
+        if (!draggable) return@pointerInput
+        detectDragGestures(
+            onDragStart = { onGraphDragging(true) },
+            onDragEnd = { onGraphDragging(false) },
+            onDragCancel = { onGraphDragging(false) },
+            onDrag = { change, _ ->
+                change.consume()
+                val w = size.width.toFloat()
+                val h = size.height.toFloat()
+                
+                // Use absolute position instead of delta for more stable tracking
+                val x = change.position.x.coerceIn(0f, w)
+                val y = change.position.y.coerceIn(0f, h)
+
+                // Inverse log map for freq
+                val lmin = ln(freqMin)
+                val lmax = ln(freqMax)
+                val newLf = lmin + (x / w) * (lmax - lmin)
+                val newFreq = exp(newLf).coerceIn(freqMin, freqMax)
+                onBandFreq(selectedId, newFreq)
+
+                // Inverse linear map for gain
+                val newT = 1f - (y / h)
+                val newGainDb = (gainMin + newT * (gainMax - gainMin)).coerceIn(gainMin, gainMax)
+                onBandGainDb(selectedId, newGainDb)
+            }
+        )
+    }) {
         val w = size.width
         val h = size.height
 

@@ -519,7 +519,7 @@ fun OscopeApp(
 
     // ===== 竖屏：两条波形高度可调（标题行控件） =====
     val waveHeightMin = 50
-    val waveHeightMax = 150
+    val waveHeightMax = 200
     val waveHeightStep = 10
 
     fun clampWaveHeight(v: Int): Int {
@@ -650,6 +650,16 @@ fun OscopeApp(
 
     val settingsScroll = rememberScrollState()
     val uiScope = rememberCoroutineScope()
+    val eqDraggableInitial = remember(triggerPrefs) {
+        triggerPrefs.getBoolean(KEY_EQ_DRAGGABLE, false)
+    }
+    var eqDraggable by rememberSaveable { mutableStateOf(eqDraggableInitial) }
+
+    LaunchedEffect(eqDraggable) {
+        audioViewModel.setEqGraphDraggable(eqDraggable)
+        triggerPrefs.edit { putBoolean(KEY_EQ_DRAGGABLE, eqDraggable) }
+    }
+
     // EQ 图拖动时，禁用外层滚动，避免“拖动节点同时界面滚动”
     val eqGraphDragging by audioViewModel.eqGraphDragging.collectAsStateWithLifecycle()
 
@@ -884,6 +894,22 @@ fun OscopeApp(
                                 }
                             },
                             onClick = { normalTriggerEnabled = !normalTriggerEnabled }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.eq_graph_dragging_label))
+                                    Spacer(Modifier.weight(1f))
+                                    Switch(
+                                        checked = eqDraggable,
+                                        onCheckedChange = { eqDraggable = it }
+                                    )
+                                }
+                            },
+                            onClick = { eqDraggable = !eqDraggable }
                         )
                         DropdownMenuItem(
                             text = {
@@ -1244,6 +1270,7 @@ fun OscopeApp(
             modifier = Modifier.fillMaxSize(),
             settingsScroll = settingsScroll,
             eqGraphDragging = eqGraphDragging,
+            eqDraggable = eqDraggable,
             audioViewModel = audioViewModel,
             state = PortraitSettingsState(
                 isRunning = isRunning,
@@ -1361,148 +1388,12 @@ fun OscopeApp(
         )
     }
 
-    val aboutDialogMaxHeight = minOf(configuration.screenHeightDp.dp * 0.55f, 360.dp)
-
-    if (showAboutDialog) {
-        val aboutDialogScrollState = rememberScrollState()
-        val isZhAbout = selectedLanguage == LANG_ZH
-        val aboutMainLines = if (isZhAbout) {
-            listOf(
-                "Wave Studio v0.12.1 by 磁拾音器研究所",
-                "提示：使用前请授予麦克风权限。",
-                "",
-                "0.12.1版本主要更新内容如下：",
-                "- 构建与稳定性修复",
-                "- 修复了一些其他 bug",
-                "",
-                "0.12.0版本主要更新内容如下：",
-                "- 全局资源化，适配中英双语",
-                "- 处理后增益滑块显示逻辑更改",
-                "- 处理后增益和 EQ 增益滑块手感调整",
-                "- 滑块交互更跟手",
-                "- 顶部 UI 部分按钮改成图标",
-                "- 波形高度值持久化",
-                "- 优化了 Trigger 功能",
-                "- 构建与稳定性修复",
-                "- 修复了一些其他 bug",
-                "",
-                "0.11.4版本主要更新内容如下：",
-                "- 滤波器改为默认关闭",
-                "- 修复了监听模式卡顿的问题",
-                "- 修复了一些其他 bug",
-                "",
-                "0.11.3版本主要更新内容如下：",
-                "- 加回“显示/隐藏参考线”按钮",
-                "- 滤波器与均衡器改为默认开启",
-                "- 均衡器 Shelf 模式下限制有效Q值",
-                "- 修复了一些情况下的掉帧问题",
-                "- 修复了导入音频时监听卡顿的问题",
-                "- 改动了一些细节",
-                "",
-                "参与开发人员（B站名）：02B4806長-02001、某地铁迷_、莓喵の小风扇、TEP-28WG01等",
-                "",
-                "磁拾音器QQ交流群：762852552",
-            )
-        } else {
-            listOf(
-                "Wave Studio v0.12.1 by MoHa-Radio Institute",
-                "Note: Please grant microphone permission before use.",
-                "",
-                "Key updates in version 0.12.1:",
-                "- Build and stability fixes",
-                "- Fixed several other bugs",
-                "",
-                "Key updates in version 0.12.0:",
-                "- Support for both Chinese and English",
-                "- Changed display logic for Processing Gain slider",
-                "- Adjusted slider feel for Processing gain and EQ gain",
-                "- Smoother and more responsive slider interaction",
-                "- Changed some buttons in the top UI to icons",
-                "- Persisted waveform height value",
-                "- Optimized the Trigger function",
-                "- Build and stability fixes",
-                "- Fixed several other bugs",
-                "",
-                "Key updates in version 0.11.4:",
-                "- Filter is now disabled by default",
-                "- Fixed lag issue in monitoring mode",
-                "- Fixed several other bugs",
-                "",
-                "Key updates in version 0.11.3:",
-                "- Added back the 'Show/Hide Reference Line' button",
-                "- Filter and equalizer are now enabled by default",
-                "- Restricted effective Q value in EQ Shelf mode",
-                "- Fixed frame drop issues in certain situations",
-                "- Fixed lag issue when importing audio during monitoring",
-                "- Made some minor tweaks",
-                "",
-                "Contributing developers (Bilibili usernames): 02B4806長-02001, 某地铁迷_, 莓喵の小风扇, TEP-28WG01, etc.",
-                "",
-                "MoHa-Radio QQ group: 762852552"
-            )
-        }
-        val aboutWebsiteLabel = if (isZhAbout) "磁拾音器研究所官网：" else "Official website:"
-        val aboutPresetPlaceholder = if (isZhAbout) "预设配置下载：（暂时预留）" else "Preset download: (reserved)"
-        AlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            title = { Text(stringResource(R.string.about_title)) },
-            text = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = aboutDialogMaxHeight)
-                ) {
-                    Column(
-                        modifier = Modifier.verticalScroll(aboutDialogScrollState),
-                        verticalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        aboutMainLines.forEach { line -> Text(line) }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(aboutWebsiteLabel)
-                            val url = "https://www.mhrri.org/"
-                            val linkText = buildAnnotatedString {
-                                withStyle(
-                                    SpanStyle(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        textDecoration = TextDecoration.Underline
-                                    )
-                                ) {
-                                    append(url)
-                                }
-                            }
-                            Text(
-                                text = linkText,
-                                modifier = Modifier
-                                    .padding(start = 2.dp)
-                                    .clickable {
-                                        try {
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                            context.startActivity(intent)
-                                        } catch (_: Throwable) {
-                                        }
-                                    }
-                            )
-                        }
-                        Text("")
-                        Text(aboutPresetPlaceholder)
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showAboutDialog = false
-                        openStartupNoteDialog()
-                    }
-                ) {
-                    Text(stringResource(R.string.startup_note_show_button))
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showAboutDialog = false }) { Text(stringResource(R.string.common_confirm)) }
-            }
-        )
-    }
+    AboutDialog(
+        visible = showAboutDialog,
+        selectedLanguage = selectedLanguage,
+        onDismiss = { showAboutDialog = false },
+        onShowStartupNote = { openStartupNoteDialog() }
+    )
 
     if (showExitConfirmDialog) {
         AlertDialog(

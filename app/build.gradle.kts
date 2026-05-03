@@ -95,6 +95,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material:material-icons-extended")
 
     // ViewModel + Compose 集成（直接写死版本号）
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0")
