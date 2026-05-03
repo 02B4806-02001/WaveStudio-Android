@@ -28,9 +28,17 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -268,6 +277,7 @@ internal fun PortraitSettingsSection(
     modifier: Modifier = Modifier,
     settingsScroll: androidx.compose.foundation.ScrollState,
     eqGraphDragging: Boolean,
+    eqDraggable: Boolean,
     audioViewModel: AudioEngineViewModel,
     state: PortraitSettingsState,
     actions: PortraitSettingsActions,
@@ -351,6 +361,16 @@ internal fun PortraitSettingsSection(
 
     val recordingSampleRateOptions = remember { listOf(16000, 22050, 32000, 44100, 48000) }
 
+    val importedPlaybackPositionMs by audioViewModel.importedPlaybackPositionMs.collectAsStateWithLifecycle()
+    val importedPlaybackDurationMs by audioViewModel.importedPlaybackDurationMs.collectAsStateWithLifecycle()
+    val importedSignalPaused by audioViewModel.importedSignalPaused.collectAsStateWithLifecycle()
+
+    var showImportedAudioControllerDialog by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(state.useImportedSignal) {
+        if (!state.useImportedSignal) showImportedAudioControllerDialog = false
+    }
+
     fun openPresetShareDialog() {
         presetShareName = "oscope_preset"
         presetShareDialog = true
@@ -368,18 +388,25 @@ internal fun PortraitSettingsSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            // Main start/stop action: always keep start/stop behavior here. The imported-audio
+            // controller is opened from the import button (see below) per user request.
+            val mainActionText = when {
+                state.useTestSignal || state.isRunning -> stringResource(R.string.action_stop)
+                else -> stringResource(R.string.action_start)
+            }
+            val mainActionColor = when {
+                state.useTestSignal || state.isRunning -> Color(0xFFC62828)
+                else -> Color(0xFF2E7D32)
+            }
             Button(
-                onClick = actions.onStartStopAction,
+                onClick = { actions.onStartStopAction() },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (state.isRunning || state.useImportedSignal || state.useTestSignal) Color(0xFFC62828) else Color(0xFF2E7D32),
+                    containerColor = mainActionColor,
                 ),
                 contentPadding = PaddingValues(vertical = 8.dp),
                 modifier = Modifier.weight(1f),
             ) {
-                Text(
-                    if (state.useTestSignal || state.useImportedSignal || state.isRunning) stringResource(R.string.action_stop) else stringResource(R.string.action_start),
-                    fontSize = 15.sp,
-                )
+                Text(mainActionText, fontSize = 15.sp)
             }
 
         if (state.engineError != null) {
@@ -412,18 +439,14 @@ internal fun PortraitSettingsSection(
             Button(
                 onClick = { importAudioLauncher.launch(arrayOf("audio/*")) },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (state.useImportedSignal) Color(0xFF1565C0) else MaterialTheme.colorScheme.primary,
+                    containerColor = MaterialTheme.colorScheme.primary,
                 ),
                 contentPadding = PaddingValues(vertical = 8.dp),
                 modifier = Modifier.weight(1f),
                 enabled = !state.isImportingAudio,
             ) {
                 Text(
-                    when {
-                        state.isImportingAudio -> stringResource(R.string.importing)
-                        state.useImportedSignal -> stringResource(R.string.audio_input_mode)
-                        else -> stringResource(R.string.load_audio)
-                    },
+                    if (state.isImportingAudio) stringResource(R.string.importing) else stringResource(R.string.load_audio),
                     fontSize = 13.sp,
                     maxLines = 1,
                     softWrap = false,
@@ -446,6 +469,51 @@ internal fun PortraitSettingsSection(
                 color = Color(0xFF1565C0),
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            val progress = if (importedPlaybackDurationMs > 0L) {
+                (importedPlaybackPositionMs.toFloat() / importedPlaybackDurationMs.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(
+                    onClick = { audioViewModel.toggleImportedSignalPause() },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = if (importedSignalPaused) androidx.compose.material.icons.Icons.Filled.PlayArrow else androidx.compose.material.icons.Icons.Filled.Pause,
+                        contentDescription = if (importedSignalPaused) stringResource(R.string.action_resume) else stringResource(R.string.action_pause),
+                    )
+                }
+
+                Slider(
+                    value = progress,
+                    onValueChange = { frac -> 
+                        audioViewModel.seekImportedSignalTo((frac * importedPlaybackDurationMs).toLong())
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+
+                IconButton(
+                    onClick = { audioViewModel.stopImportedSignalInput() },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Filled.Stop,
+                        contentDescription = stringResource(R.string.action_stop),
+                        tint = Color(0xFFC62828)
+                    )
+                }
+            }
         }
 
         Row(
@@ -562,6 +630,7 @@ internal fun PortraitSettingsSection(
 
         EqPanel(
             enabled = state.eqEnabled,
+            draggable = eqDraggable,
             onEnabledChange = actions.onSetEqEnabled,
             bands = state.eqBands,
             onReset = actions.onResetEq,
@@ -834,6 +903,12 @@ internal fun PortraitSettingsSection(
         }
     }
 }
+
+
+
+
+
+
 
 
 

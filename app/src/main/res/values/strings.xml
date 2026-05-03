@@ -17,6 +17,9 @@
     <string name="action_delete">删除</string>
     <string name="action_start">开始</string>
     <string name="action_stop">停止</string>
+    <string name="action_pause">暂停</string>
+    <string name="action_resume">继续</string>
+    <string name="action_controller">控制器</string>
     <string name="action_record">录音</string>
     <string name="action_restore_default">恢复默认</string>
 
@@ -62,6 +65,10 @@
     <string name="load_audio">导入音频</string>
     <string name="importing">导入中</string>
     <string name="audio_input_mode">音频输入</string>
+    <string name="audio_input_controller_title">导入音频控制器</string>
+    <string name="audio_input_controller_hint">当前导入音频</string>
+    <string name="audio_input_controller_playing">播放中</string>
+    <string name="audio_input_controller_paused">已暂停</string>
     <string name="list_title">列表</string>
     <string name="error_prefix_with_message">错误：%1$s</string>
     <string name="input_source_imported_audio">输入源：导入音频 %1$s</string>
@@ -103,6 +110,7 @@
     <string name="startup_note_show_button">显示提示弹窗</string>
 
     <string name="trigger_label">Trigger</string>
+    <string name="eq_graph_dragging_label">EQ 频响曲线可拖动</string>
     <string name="trigger_on">Trigger 开</string>
     <string name="trigger_off">Trigger 关</string>
     <string name="trigger_advanced_title">Trigger 增强</string>

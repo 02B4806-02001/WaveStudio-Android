@@ -254,6 +254,14 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    // ===== UI state: EQ graph draggable (to allow touch dragging on nodes) =====
+    private val _eqGraphDraggable = MutableStateFlow(false)
+    val eqGraphDraggable: StateFlow<Boolean> = _eqGraphDraggable.asStateFlow()
+
+    fun setEqGraphDraggable(draggable: Boolean) {
+        _eqGraphDraggable.value = draggable
+    }
+
     // ===== UI state: EQ graph dragging (to disable surrounding scroll while dragging nodes) =====
     private val _eqGraphDragging = MutableStateFlow(false)
     val eqGraphDragging: StateFlow<Boolean> = _eqGraphDragging.asStateFlow()
@@ -354,6 +362,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private val _isImportingAudio = MutableStateFlow(false)
     val isImportingAudio: StateFlow<Boolean> = _isImportingAudio.asStateFlow()
 
+    private val _importedSignalPaused = MutableStateFlow(false)
+    val importedSignalPaused: StateFlow<Boolean> = _importedSignalPaused.asStateFlow()
+
+    private val _importedPlaybackPositionMs = MutableStateFlow(0L)
+    val importedPlaybackPositionMs: StateFlow<Long> = _importedPlaybackPositionMs.asStateFlow()
+
+    private val _importedPlaybackDurationMs = MutableStateFlow(0L)
+    val importedPlaybackDurationMs: StateFlow<Long> = _importedPlaybackDurationMs.asStateFlow()
+
     // ===== EQ (Parametric) =====
     enum class EqBandType { PEAK, LOW_SHELF, HIGH_SHELF }
 
@@ -374,8 +391,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         listOf(
             // Keep original 4-band EQ layout (do not change defaults)
             EqBand(id = 0, label = "1", type = EqBandType.LOW_SHELF, enabled = true, freqHz = 200f, gainDb = 0f, q = 0.3f),
-            EqBand(id = 1, label = "2", type = EqBandType.PEAK, enabled = true, freqHz = 800f, gainDb = 0f, q = 0.6f),
-            EqBand(id = 2, label = "3", type = EqBandType.PEAK, enabled = true, freqHz = 2000f, gainDb = 0f, q = 0.6f),
+            EqBand(id = 1, label = "2", type = EqBandType.PEAK, enabled = true, freqHz = 800f, gainDb = 0f, q = 0.5f),
+            EqBand(id = 2, label = "3", type = EqBandType.PEAK, enabled = true, freqHz = 2000f, gainDb = 0f, q = 0.5f),
             EqBand(id = 3, label = "4", type = EqBandType.HIGH_SHELF, enabled = true, freqHz = 5000f, gainDb = 0f, q = 0.3f),
         )
     )
@@ -559,6 +576,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
                 importedSignalData = decoded
                 _importedAudioLabel.value = decoded.label
+                _importedSignalPaused.value = false
+                _importedPlaybackPositionMs.value = 0L
+                _importedPlaybackDurationMs.value = (
+                    (decoded.pcmFile.length().coerceAtLeast(0L) / 2L) * 1000L / decoded.sampleRate.coerceAtLeast(1)
+                ).coerceAtLeast(1L)
                 _useImportedSignal.value = true
                 _isRunning.value = true
                 startImportedSignalJob()
@@ -572,8 +594,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     fun stopImportedSignalInput() {
         _useImportedSignal.value = false
+        _importedSignalPaused.value = false
+        _importedPlaybackPositionMs.value = 0L
+        _importedPlaybackDurationMs.value = 0L
         stopImportedSignalJob()
-        _isMonitoring.value = false
         if (_isRecording.value) stopRecording()
         monitorTrack?.let {
             try { it.pause() } catch (_: Throwable) {}
@@ -587,6 +611,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         _lastMaxAbsPcm.value = 0
         clearImportedSignalData(importedSignalData)
         importedSignalData = null
+    }
+
+    fun toggleImportedSignalPause() {
+        if (!_useImportedSignal.value) return
+        _importedSignalPaused.value = !_importedSignalPaused.value
     }
 
     fun startEngine(context: Context) {
@@ -1105,6 +1134,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private var testJob: Job? = null
     private var importedSignalJob: Job? = null
     private var importedSignalData: ImportedAudioData? = null
+    private var importedSeekRequestBytes: Long? = null
 
     private data class ImportedAudioData(
         val sampleRate: Int,
@@ -1178,6 +1208,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         testJob = null
     }
 
+    fun seekImportedSignalTo(positionMs: Long) {
+        val totalMs = _importedPlaybackDurationMs.value.coerceAtLeast(1L)
+        val posMs = positionMs.coerceIn(0L, totalMs)
+        val sRate = importedSignalData?.sampleRate?.coerceAtLeast(8000) ?: return
+        val posBytes = (posMs * sRate / 1000L) * 2L
+        importedSeekRequestBytes = posBytes - (posBytes % 2L)
+        _importedPlaybackPositionMs.value = posMs
+    }
+
     private fun startImportedSignalJob() {
         if (importedSignalJob != null) return
         val data = importedSignalData ?: return
@@ -1197,6 +1236,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 val importSampleRate = data.sampleRate.coerceAtLeast(8000)
                 sampleRate = importSampleRate
                 monitorRecordFilter = RtBiquadCascade(sampleRate)
+
+                val totalAudioBytes = (sourceBytes - (sourceBytes % 2L)).coerceAtLeast(2L)
+                val totalDurationMs = ((totalAudioBytes / 2L) * 1000L / sampleRate.coerceAtLeast(1)).coerceAtLeast(1L)
+                _importedPlaybackDurationMs.value = totalDurationMs
+                _importedPlaybackPositionMs.value = 0L
 
                 val maxWindowSamples = max(64, (sampleRate * 1.0f).toInt())
                 val ring = FloatArray(maxWindowSamples)
@@ -1267,6 +1311,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     val localRaf = raf ?: return 0
                     var filled = 0
                     while (filled < chunkBytes.size && isActive && _useImportedSignal.value) {
+                        val seekReq = importedSeekRequestBytes
+                        if (seekReq != null) {
+                            filePosBytes = seekReq
+                            importedSeekRequestBytes = null
+                        }
                         if (filePosBytes >= sourceBytes) filePosBytes = 0L
                         localRaf.seek(filePosBytes)
                         val maxRead = minOf((sourceBytes - filePosBytes).toInt(), chunkBytes.size - filled)
@@ -1281,7 +1330,20 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     return filled
                 }
 
+                fun publishImportedPosition() {
+                    val durationBytes = totalAudioBytes.coerceAtLeast(2L)
+                    val posBytes = (filePosBytes % durationBytes).coerceAtLeast(0L)
+                    val posMs = ((posBytes / 2L) * 1000L / sampleRate.coerceAtLeast(1)).coerceIn(0L, totalDurationMs)
+                    _importedPlaybackPositionMs.value = posMs
+                }
+
                 while (isActive && _useImportedSignal.value) {
+                    if (_importedSignalPaused.value) {
+                        _audioInputAlive.value = true
+                        delay(50)
+                        continue
+                    }
+
                     val now = SystemClock.elapsedRealtime()
                     if (now < nextChunkAtMs) {
                         delay(nextChunkAtMs - now)
@@ -1294,6 +1356,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     if (bytesRead < chunkBytes.size) {
                         if (bytesRead <= 0) break
                     }
+
+                    publishImportedPosition()
 
                     for (i in 0 until chunkSize) {
                         val lo = chunkBytes[i * 2].toInt() and 0xFF
@@ -1595,7 +1659,6 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     fun stopEngine() {
         _isRunning.value = false
         _isRecording.value = false
-        _isMonitoring.value = false
 
         // reset realtime filter states so next start doesn't pop
         try { monitorRecordFilter.resetState() } catch (_: Throwable) {}
