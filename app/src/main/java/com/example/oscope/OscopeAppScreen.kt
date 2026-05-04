@@ -728,13 +728,11 @@ fun OscopeApp(
                 gestureMode = gestureMode,
                 onGestureMode = { gestureMode = it },
                 waveformSpanMs = immersiveWaveformSpanMs,
-                ampScale = immersiveAmpScale,
-                onAmpScale = { v ->
-                    filteredDisplayScale = v
-                    audioViewModel.updateAmpSlider(v)
-                },
-                onWindowMs = { v -> audioViewModel.updateTimeSlider(v) },
-                onTriggerEnabled = { v -> audioViewModel.setTriggerEnabled(v) },
+                ampScale = ampScale,
+                onAmpScale = audioViewModel::updateAmpSlider,
+                onWindowMs = audioViewModel::updateTimeSlider,
+                onTriggerEnabled = audioViewModel::setTriggerEnabled,
+                triggerResultState = audioViewModel.triggerResult,
             )
         }
         return
