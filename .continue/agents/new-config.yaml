@@ -8,16 +8,10 @@ schema: v1
 # Define which models can be used
 # https://docs.continue.dev/customization/models
 models:
-  - name: my gpt-5
+  - name: Qwen3 Coder
     provider: openai
-    model: gpt-5
-    apiKey: YOUR_OPENAI_API_KEY_HERE
-  - uses: ollama/qwen2.5-coder-7b
-  - uses: anthropic/claude-4-sonnet
-    with:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-
-# MCP Servers that Continue can access
-# https://docs.continue.dev/customization/mcp-tools
-mcpServers:
-  - uses: anthropic/memory-mcp
+    apiBase: https://integrate.api.nvidia.com/v1
+    model: qwen/qwen3-coder-480b-a35b-instruct
+    apiKey: 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
+    requestOptions:
+      timeout: 50000

@@ -6,7 +6,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-internal class NewTriggerEngine(
+class NewTriggerEngine(
     private val nominalWindowSize: Int = 512,
 ) {
     companion object {
