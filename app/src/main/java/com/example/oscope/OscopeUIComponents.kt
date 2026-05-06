@@ -26,13 +26,16 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.round
+import kotlin.math.sqrt
+import kotlin.math.log10
+import kotlin.math.PI
 import java.util.Locale
 import androidx.core.content.edit
 
@@ -40,7 +43,6 @@ import androidx.core.content.edit
 // Note: Shared utility functions (toEnglishOrdinal, rememberDisplayLowPass, computeEqResponse)
 // are now in OscopeUIUtils.kt to avoid duplication
 
-@Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE")
 @Composable
 fun ImmersiveScreen(
     modifier: Modifier,
@@ -69,13 +71,7 @@ fun ImmersiveScreen(
     onAmpScale: (Float) -> Unit,
     onWindowMs: (Float) -> Unit,
     onTriggerEnabled: (Boolean) -> Unit,
-    triggerResultState: StateFlow<NewTriggerEngine.Result?>?,
-    triggerMarkerState: StateFlow<Int?>? = null,
 ) {
-    // keep unused params referenced to avoid compiler/lint warnings; no functional effect
-    val _unused_useTestSignal = useTestSignal
-    val _unused_waveformSpanMs = waveformSpanMs
-
     // Display-only snapping (keeps gesture feel continuous).
     fun snapForDisplay(v: Float): Float {
         val clamped = v.coerceIn(ampMin, ampMax)
@@ -94,7 +90,6 @@ fun ImmersiveScreen(
     val currentGestureMode by rememberUpdatedState(gestureMode)
     val currentAmpScale by rememberUpdatedState(ampScale)
     val filteredSamples by filteredWaveform.collectAsStateWithLifecycle()
-    val triggerResult by (triggerResultState ?: MutableStateFlow(null)).collectAsStateWithLifecycle()
     val context = LocalContext.current
     val triggerPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -120,6 +115,7 @@ fun ImmersiveScreen(
         }
     }
     val triggerMode = parseTriggerMode(triggerModeName)
+    val triggerEngine = remember(triggerMode) { NewTriggerEngine(nominalWindowSize = 512) }
 
     LaunchedEffect(triggerMode) {
         onTriggerEnabled(triggerMode != NewTriggerEngine.Mode.OFF)
@@ -129,6 +125,40 @@ fun ImmersiveScreen(
         NewTriggerEngine.Mode.OFF.name -> "ON"
         else -> NewTriggerEngine.Mode.OFF.name
     }
+
+    fun buildTriggeredWindow(
+        source: FloatArray,
+        mode: NewTriggerEngine.Mode,
+        waveformSpanMs: Float,
+    ): Pair<FloatArray, NewTriggerEngine.Result?> {
+        val nominalWindowSize = 512
+        if (source.isEmpty()) return source to null
+        if (source.size <= nominalWindowSize) return source to null
+
+        val preferAutocorrelation = mode != NewTriggerEngine.Mode.OFF
+
+        val cfg = NewTriggerEngine.Config(
+            mode = if (mode == NewTriggerEngine.Mode.OFF) NewTriggerEngine.Mode.OFF else NewTriggerEngine.Mode.RISING,
+            sampleRateHz = (source.size.toFloat() / (waveformSpanMs / 1000f).coerceAtLeast(1e-4f)).coerceAtLeast(1000f),
+            strongLowPassHz = if (preferAutocorrelation) 240f else 160f,
+            fMaxHz = if (preferAutocorrelation) 280f else 2000f,
+            useAutocorrelation = preferAutocorrelation,
+            autocorrRefreshFrames = 8,
+            autocorrMaxSamples = 512,
+            preTriggerRatio = 0.16f,
+            hysteresisRatio = 0.16f,
+            holdoffRatio = 0.60f,
+        )
+        val res = triggerEngine.process(source, cfg)
+        val window = if (mode == NewTriggerEngine.Mode.OFF) {
+            val maxStart = (source.size - nominalWindowSize).coerceAtLeast(0)
+            source.copyOfRange(maxStart, maxStart + nominalWindowSize)
+        } else {
+            triggerEngine.extractTriggeredWindow(source, res)
+        }
+        return window to if (mode == NewTriggerEngine.Mode.OFF) null else res
+    }
+
 
     Box(
         modifier = modifier
@@ -200,11 +230,12 @@ fun ImmersiveScreen(
                 .padding(bottom = 12.dp, start = 12.dp, end = 12.dp)
         ) {
             val immersiveRef = filteredDisplayScale.coerceAtLeast(1e-4f)
-
-            val markerIndex by (triggerMarkerState ?: MutableStateFlow<Int?>(null)).collectAsStateWithLifecycle()
+            val triggeredWindowAndResult = buildTriggeredWindow(filteredSamples, triggerMode, waveformSpanMs)
+            val displaySamples = triggeredWindowAndResult.first
+            val triggerResult = triggeredWindowAndResult.second
 
             WaveformView(
-                samples = filteredSamples,
+                samples = displaySamples,
                 ampScale = filteredDisplayScale,
                 lineColor = Color.White,
                 modifier = Modifier.fillMaxSize(),
@@ -213,15 +244,13 @@ fun ImmersiveScreen(
                 referenceColor = Color(0x44FFFFFF),
                 referenceDashed = true,
                 lineWidthDp = 2f,
-                triggerMarkerIndex = markerIndex,
             )
 
-            val currentTriggerRes = triggerResult
-            if (triggerMode != NewTriggerEngine.Mode.OFF && currentTriggerRes != null) {
-                val conf = String.format(Locale.US, "%.2f", currentTriggerRes.confidence)
-                val hz = String.format(Locale.US, "%.1f", currentTriggerRes.freqHz)
+            if (triggerMode != NewTriggerEngine.Mode.OFF && triggerResult != null) {
+                val conf = String.format(Locale.US, "%.2f", triggerResult.confidence)
+                val hz = String.format(Locale.US, "%.1f", triggerResult.freqHz)
                 Text(
-                    text = "TRG ON  f=${hz}Hz  per=${currentTriggerRes.periodSamples}  s=${currentTriggerRes.startIndex}  a=${currentTriggerRes.anchorIndex}  lock=${currentTriggerRes.locked}  c=$conf",
+                    text = "TRG ON  f=${hz}Hz  per=${triggerResult.periodSamples}  s=${triggerResult.startIndex}  a=${triggerResult.anchorIndex}  lock=${triggerResult.locked}  c=$conf",
                     color = Color.White,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier
@@ -345,10 +374,8 @@ fun LiveWaveformView(
     referenceAmpNormalized: Float,
     referenceColor: Color,
     modifier: Modifier = Modifier,
-    triggerMarkerFlow: StateFlow<Int?>? = null,
 ) {
     val samples by samplesFlow.collectAsStateWithLifecycle()
-    val markerIndex by (triggerMarkerFlow ?: MutableStateFlow<Int?>(null)).collectAsStateWithLifecycle()
     WaveformView(
         samples = samples,
         ampScale = ampScale,
@@ -358,7 +385,6 @@ fun LiveWaveformView(
         referenceColor = referenceColor,
         referenceDashed = true,
         modifier = modifier,
-        triggerMarkerIndex = markerIndex,
     )
 }
 
@@ -506,7 +532,7 @@ fun FilterOrderSelector(
     onOrderChange: (Int) -> Unit,
 ) {
     var orderMenu by remember { mutableStateOf(false) }
-    val currentLanguage = LocalConfiguration.current.locales.get(0)?.language ?: Locale.getDefault().language
+    val currentLanguage = androidx.compose.ui.platform.LocalConfiguration.current.locales.get(0)?.language ?: Locale.getDefault().language
     val useEnglishOrdinal = currentLanguage.startsWith("en")
     val minO = orderOptions.minOrNull() ?: 1
     val maxO = orderOptions.maxOrNull() ?: 8
@@ -560,7 +586,6 @@ fun FilterOrderSelector(
     }
 }
 
-@Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE")
 @Composable
 fun EqPanel(
     enabled: Boolean,
@@ -585,10 +610,6 @@ fun EqPanel(
     highPassOrder: Int,
     sampleRate: Int,
 ) {
-    // reference unused order params to avoid lint warnings; no functional effect
-    val _unused_lowPassOrder = lowPassOrder
-    val _unused_highPassOrder = highPassOrder
-
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         var expanded by rememberSaveable { mutableStateOf(false) }
 
@@ -948,7 +969,7 @@ fun EqResponseGraph(
                 change.consume()
                 val w = size.width.toFloat()
                 val h = size.height.toFloat()
-
+                
                 // Use absolute position instead of delta for more stable tracking
                 val x = change.position.x.coerceIn(0f, w)
                 val y = change.position.y.coerceIn(0f, h)
