@@ -1,22 +1,29 @@
 package org.mhrri.wavestudio
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.widget.Toast
 import android.view.Gravity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.edit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -24,14 +31,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpOffset
+import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -42,11 +60,22 @@ import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
 import java.util.Locale
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.exp
+import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.round
+import kotlin.math.roundToInt
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
+import kotlin.math.log10
+import kotlin.math.PI
 
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -110,9 +139,12 @@ fun OscopeApp(
     // ===== 仅给沉浸模式用的最小状态集合（避免大量无关 state 更新导致全屏重组/掉帧） =====
     val immersiveFilteredWaveform = audioViewModel.immersiveFilteredWaveform
     val immersiveWaveformSpanMs by audioViewModel.publishedWaveformSpanMs.collectAsStateWithLifecycle()
+    val immersiveAmpScale by audioViewModel.ampScale.collectAsStateWithLifecycle()
 
     val resources = context.resources
     val startupNoteText = stringResource(R.string.startup_note_text)
+    val shareTitleGeneric = stringResource(R.string.share_title_generic)
+    val shareTitleRecording = stringResource(R.string.share_title_recording)
     val startupPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
     }
@@ -160,6 +192,15 @@ fun OscopeApp(
         )
     )
 
+    // ===== 播放进度（录音列表里显示） =====
+    val playbackPositionMs by audioViewModel.playbackPositionMs.collectAsStateWithLifecycle()
+    val playbackDurationMs by audioViewModel.playbackDurationMs.collectAsStateWithLifecycle()
+
+    // ===== 录音列表：重命名/删除对话框状态 =====
+    var renameTarget by remember { mutableStateOf<RecordedClip?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<RecordedClip?>(null) }
+
     fun setLandscape(landscape: Boolean) {
         try {
             activity?.requestedOrientation =
@@ -171,6 +212,50 @@ fun OscopeApp(
 
     // ===== 预设：导入/导出/分享（SAF + FileProvider） =====
     // 预设提示：改为系统 Toast（不再用 SnackbarHost/presetTip）
+
+    // 分享当前预设：先弹出重命名，再写入缓存文件并分享
+    var presetShareDialog by remember { mutableStateOf(false) }
+    var presetShareName by remember { mutableStateOf("oscope_preset") }
+
+    // 预设“默认”：误触保护二次确认
+    var presetResetConfirmDialog by remember { mutableStateOf(false) }
+
+    fun exportCurrentPresetToCache(nameNoExt: String): File? {
+        return try {
+            val safeBase = nameNoExt.trim().ifEmpty { "oscope_preset" }
+                .replace(Regex("[^a-zA-Z0-9_\u4e00-\u9fa5-]+"), "_")
+                .take(64)
+                .ifEmpty { "oscope_preset" }
+
+            val preset = audioViewModel.exportPreset()
+            val json = preset.toJsonString(pretty = true)
+
+            val dir = File(context.externalCacheDir, "presets").apply { mkdirs() }
+            val file = File(dir, "$safeBase.json")
+            file.writeText(json, Charsets.UTF_8)
+            file
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    fun shareAnyFile(file: File, mime: String) {
+        try {
+            if (!file.exists()) return
+            val uri: Uri = FileProvider.getUriForFile(
+                context,
+                context.packageName + ".fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = mime
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, shareTitleGeneric))
+        } catch (_: Throwable) {
+        }
+    }
 
     // Import preset JSON
     val importPresetLauncher = rememberLauncherForActivityResult(
@@ -197,7 +282,14 @@ fun OscopeApp(
         }
     }
 
-    // Export preset JSON
+    val importAudioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        audioViewModel.importAudioAsInput(context, uri)
+    }
+
+    // Export preset JSON via SAF
     val exportPresetLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
@@ -205,7 +297,7 @@ fun OscopeApp(
         try {
             val preset = audioViewModel.exportPreset()
             val json = preset.toJsonString(pretty = true)
-            context.contentResolver.openOutputStream(uri).use { outS ->
+            context.contentResolver.openOutputStream(uri).use { outS: OutputStream? ->
                 outS?.write(json.toByteArray(Charsets.UTF_8))
                 outS?.flush()
             }
@@ -222,6 +314,11 @@ fun OscopeApp(
         } catch (t: Throwable) {
             showCenterToast(resources.getString(R.string.preset_export_failed_with_message, t.message ?: ""))
         }
+    }
+
+    fun formatHz(hz: Float): String {
+        val v = hz.coerceAtLeast(0f)
+        return if (v < 10f) String.format(Locale.US, "%.1f", v) else v.toInt().toString()
     }
 
     fun cutoffStepLowPass(hz: Float): Float {
@@ -256,6 +353,15 @@ fun OscopeApp(
         return (round(v / step) * step).coerceIn(30f, 8001f)
     }
 
+    fun formatLowPassHz(hz: Float): String {
+        return snapLowPassHz(hz).toInt().toString()
+    }
+
+    fun formatHighPassHz(hz: Float): String {
+        val v = snapHighPassHz(hz)
+        return if (v < 100f) String.format(Locale.US, "%.0f", v) else v.toInt().toString()
+    }
+
     // ===== 0dB 参考线显示开关（竖屏默认开启） =====
     var showRefWaveforms by rememberSaveable { mutableStateOf(true) }
     val normalTriggerEnabledInitial = remember(triggerPrefs) {
@@ -267,6 +373,38 @@ fun OscopeApp(
     val recordingFormat by audioViewModel.recordingFormat.collectAsStateWithLifecycle()
     val recordingSampleRate by audioViewModel.recordingSampleRate.collectAsStateWithLifecycle()
     val publishRateOption by audioViewModel.publishRateOption.collectAsStateWithLifecycle()
+
+    fun mimeForRecording(path: String): String {
+        val lower = path.lowercase(Locale.getDefault())
+        return when {
+            lower.endsWith(".m4a") -> "audio/mp4"
+            lower.endsWith(".mp4") -> "audio/mp4"
+            lower.endsWith(".aac") -> "audio/aac"
+            else -> "application/octet-stream"
+        }
+    }
+
+    fun shareRecording(clip: RecordedClip) {
+        try {
+            val file = File(clip.fileURL)
+            if (!file.exists()) return
+
+            val uri: Uri = FileProvider.getUriForFile(
+                context,
+                context.packageName + ".fileprovider",
+                file
+            )
+
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeForRecording(file.name)
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, shareTitleRecording))
+        } catch (_: Throwable) {
+            // ignore
+        }
+    }
 
     val recordingSampleRateOptions = remember {
         listOf(16000, 22050, 32000, 44100, 48000)
@@ -330,13 +468,21 @@ fun OscopeApp(
     }
 
     fun buildNormalTriggeredWindow(source: FloatArray, waveformSpanMs: Float): FloatArray {
-        val nominalWindowSize = 512
+        // 1. 采集最近200ms的波形作为Trigger参考
+        val referenceMs = 200f
+        val sampleRate = if (waveformSpanMs > 0f) (source.size.toFloat() / (waveformSpanMs / 1000f)) else 44100f
+        val referenceSamples = (sampleRate * (referenceMs / 1000f)).toInt().coerceAtMost(source.size)
         if (!normalTriggerEnabled) return source
-        if (source.isEmpty() || source.size <= nominalWindowSize) return source
+        if (source.isEmpty() || referenceSamples < 32) return source
 
+        // 取最近200ms的数据
+        val refStart = source.size - referenceSamples
+        val refWave = source.copyOfRange(refStart, source.size)
+
+        // 2. 在200ms参考波形上做Trigger检测
         val cfg = NewTriggerEngine.Config(
             mode = NewTriggerEngine.Mode.RISING,
-            sampleRateHz = (source.size.toFloat() / (waveformSpanMs / 1000f).coerceAtLeast(1e-4f)).coerceAtLeast(1000f),
+            sampleRateHz = sampleRate.coerceAtLeast(1000f),
             strongLowPassHz = 220f,
             fMinHz = 5f,
             fMaxHz = 1200f,
@@ -347,8 +493,33 @@ fun OscopeApp(
             hysteresisRatio = 0.16f,
             holdoffRatio = 0.60f,
         )
-        val result = normalTriggerEngine.process(source, cfg)
-        return normalTriggerEngine.extractTriggeredWindow(source, result)
+        val result = normalTriggerEngine.process(refWave, cfg)
+        val triggered = normalTriggerEngine.extractTriggeredWindow(refWave, result)
+
+        // 3. 将200ms参考波形按当前windowMs横向缩放适配显示
+        val targetMs = waveformSpanMs.coerceAtLeast(10f)
+        val targetSamples = (sampleRate * (targetMs / 1000f)).toInt().coerceAtLeast(16)
+        // 若triggered长度不足，补零；若过长，插值缩放
+        val scaled = if (triggered.size == targetSamples) {
+            triggered
+        } else if (triggered.size > 1 && targetSamples > 1) {
+            // 线性插值缩放
+            val arr = FloatArray(targetSamples)
+            for (i in 0 until targetSamples) {
+                val pos = i * (triggered.size - 1).toFloat() / (targetSamples - 1)
+                val idx = pos.toInt()
+                val frac = pos - idx
+                arr[i] = if (idx + 1 < triggered.size) {
+                    triggered[idx] * (1 - frac) + triggered[idx + 1] * frac
+                } else {
+                    triggered[idx]
+                }
+            }
+            arr
+        } else {
+            triggered
+        }
+        return scaled
     }
 
     // ===== 显示幅度（倍数）范围：0.5..30（手势/显示用） =====
@@ -422,6 +593,17 @@ fun OscopeApp(
     val rawScaleText = String.format(Locale.US, "%.2f", snapAmp(rawScaleDisplay))
     val filteredScaleText = String.format(Locale.US, "%.2f", snapAmp(filteredScaleDisplay))
 
+    // ===== 手势用：滤波后增益 dB <-> linear =====
+    fun gainToDb(gain: Float): Float {
+        val g = gain.coerceAtLeast(1e-6f)
+        return (20f * (ln(g) / ln(10f)))
+    }
+
+    fun dbToGain(db: Float): Float {
+        // gain = 10^(db/20)
+        return exp((db / 20f) * ln(10f))
+    }
+
     // ===== 频率滑块：拖动时用本地 0..1 状态避免“映射回写”造成手指/滑块不贴合 =====
     val lowPassMin = 800f
     val lowPassMax = 30001f
@@ -435,6 +617,26 @@ fun OscopeApp(
     var lpDragging by remember { mutableStateOf(false) }
     var hpDragging by remember { mutableStateOf(false) }
 
+    // 拖动时标题显示值：做轻微低通平滑；实际参数仍实时生效
+    val lowPassDisplayHzTarget = if (lpDragging)
+        sliderToHzBlend(lpFreq01, lowPassMin, lowPassMax, linearWeight = lowPassLinearW)
+    else lowPassCutoff
+    val lowPassDisplayHz = rememberDisplayLowPass(
+        target = lowPassDisplayHzTarget,
+        resetKey = "lowPassHz",
+        alpha = 0.44f,
+        snapThreshold = 1f,
+    )
+
+    val highPassDisplayHzTarget = if (hpDragging)
+        sliderToHz(hpFreq01, highPassMin, highPassMax)
+    else highPassCutoff
+    val highPassDisplayHz = rememberDisplayLowPass(
+        target = highPassDisplayHzTarget,
+        resetKey = "highPassHz",
+        alpha = 0.44f,
+        snapThreshold = 0.25f,
+    )
 
     // 拖动时也要实时影响滤波：节流（约 60Hz），避免每次 onValueChange 都回写引发抖动/性能问题
     LaunchedEffect(lpDragging, lpFreq01) {
@@ -474,6 +676,11 @@ fun OscopeApp(
     val playingId by audioViewModel.playingId.collectAsStateWithLifecycle()
 
     // 录音列表弹窗状态
+    var showRecordList by rememberSaveable { mutableStateOf(false) }
+
+    // 阶数选项：1..8（任意整数）
+    val orderOptions = (1..8).toList()
+
     val settingsScroll = rememberScrollState()
     val uiScope = rememberCoroutineScope()
     val eqDraggableInitial = remember(triggerPrefs) {
@@ -489,9 +696,18 @@ fun OscopeApp(
     // EQ 图拖动时，禁用外层滚动，避免“拖动节点同时界面滚动”
     val eqGraphDragging by audioViewModel.eqGraphDragging.collectAsStateWithLifecycle()
 
+    // 对数映射：0..1 <-> [min,max]
+    fun logToSlider(v: Float, min: Float, max: Float): Float = hzToSlider(v, min, max)
+    fun sliderToLog(v01: Float, min: Float, max: Float): Float = sliderToHz(v01, min, max)
+
     // 时间窗（ms）范围：5..300
     val windowMinMs = 5f
     val windowMaxMs = 300f
+
+    // 滤波后增益（线性）范围：-20dB..40dB (~0.1..100)
+    val gainMin = 0.1f
+    val gainMax = 100f
+
 
     // ===== 横屏手势：锁/解锁 + 实时显示（必须在 isLandscape 分支前定义） =====
     var landscapeLocked by remember { mutableStateOf(false) }
@@ -545,12 +761,13 @@ fun OscopeApp(
                 gestureMode = gestureMode,
                 onGestureMode = { gestureMode = it },
                 waveformSpanMs = immersiveWaveformSpanMs,
-                ampScale = ampScale,
-                onAmpScale = audioViewModel::updateAmpSlider,
-                onWindowMs = audioViewModel::updateTimeSlider,
-                onTriggerEnabled = audioViewModel::setTriggerEnabled,
-                triggerResultState = audioViewModel.triggerResult,
-                triggerMarkerState = audioViewModel.triggerMarkerIndex,
+                ampScale = immersiveAmpScale,
+                onAmpScale = { v ->
+                    filteredDisplayScale = v
+                    audioViewModel.updateAmpSlider(v)
+                },
+                onWindowMs = { v -> audioViewModel.updateTimeSlider(v) },
+                onTriggerEnabled = { v -> audioViewModel.setTriggerEnabled(v) },
             )
         }
         return
@@ -634,12 +851,15 @@ fun OscopeApp(
                             text = { Text(stringResource(R.string.action_share)) },
                             onClick = {
                                 presetMenuExpanded = false
+                                presetShareName = "oscope_preset"
+                                presetShareDialog = true
                             }
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_default)) },
                             onClick = {
                                 presetMenuExpanded = false
+                                presetResetConfirmDialog = true
                             }
                         )
 
@@ -943,10 +1163,8 @@ fun OscopeApp(
                     showReference = showRefWaveforms,
                     referenceAmpNormalized = rawDisplayScale.coerceAtLeast(1e-4f),
                     referenceColor = Color(0x22000000),
-                    modifier = Modifier.fillMaxSize(),
-                    triggerMarkerFlow = audioViewModel.triggerMarkerIndex,
+                    modifier = Modifier.fillMaxSize()
                 )
-
             }
 
             Row(
