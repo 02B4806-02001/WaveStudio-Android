@@ -28,15 +28,11 @@ import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.round
-import kotlin.math.sqrt
-import kotlin.math.log10
-import kotlin.math.PI
 import java.util.Locale
 import androidx.core.content.edit
 
@@ -44,6 +40,7 @@ import androidx.core.content.edit
 // Note: Shared utility functions (toEnglishOrdinal, rememberDisplayLowPass, computeEqResponse)
 // are now in OscopeUIUtils.kt to avoid duplication
 
+@Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE")
 @Composable
 fun ImmersiveScreen(
     modifier: Modifier,
@@ -73,7 +70,12 @@ fun ImmersiveScreen(
     onWindowMs: (Float) -> Unit,
     onTriggerEnabled: (Boolean) -> Unit,
     triggerResultState: StateFlow<NewTriggerEngine.Result?>?,
+    triggerMarkerState: StateFlow<Int?>? = null,
 ) {
+    // keep unused params referenced to avoid compiler/lint warnings; no functional effect
+    val _unused_useTestSignal = useTestSignal
+    val _unused_waveformSpanMs = waveformSpanMs
+
     // Display-only snapping (keeps gesture feel continuous).
     fun snapForDisplay(v: Float): Float {
         val clamped = v.coerceIn(ampMin, ampMax)
@@ -199,6 +201,8 @@ fun ImmersiveScreen(
         ) {
             val immersiveRef = filteredDisplayScale.coerceAtLeast(1e-4f)
 
+            val markerIndex by (triggerMarkerState ?: MutableStateFlow<Int?>(null)).collectAsStateWithLifecycle()
+
             WaveformView(
                 samples = filteredSamples,
                 ampScale = filteredDisplayScale,
@@ -209,6 +213,7 @@ fun ImmersiveScreen(
                 referenceColor = Color(0x44FFFFFF),
                 referenceDashed = true,
                 lineWidthDp = 2f,
+                triggerMarkerIndex = markerIndex,
             )
 
             val currentTriggerRes = triggerResult
@@ -340,8 +345,10 @@ fun LiveWaveformView(
     referenceAmpNormalized: Float,
     referenceColor: Color,
     modifier: Modifier = Modifier,
+    triggerMarkerFlow: StateFlow<Int?>? = null,
 ) {
     val samples by samplesFlow.collectAsStateWithLifecycle()
+    val markerIndex by (triggerMarkerFlow ?: MutableStateFlow<Int?>(null)).collectAsStateWithLifecycle()
     WaveformView(
         samples = samples,
         ampScale = ampScale,
@@ -351,6 +358,7 @@ fun LiveWaveformView(
         referenceColor = referenceColor,
         referenceDashed = true,
         modifier = modifier,
+        triggerMarkerIndex = markerIndex,
     )
 }
 
@@ -498,7 +506,7 @@ fun FilterOrderSelector(
     onOrderChange: (Int) -> Unit,
 ) {
     var orderMenu by remember { mutableStateOf(false) }
-    val currentLanguage = androidx.compose.ui.platform.LocalConfiguration.current.locales.get(0)?.language ?: Locale.getDefault().language
+    val currentLanguage = LocalConfiguration.current.locales.get(0)?.language ?: Locale.getDefault().language
     val useEnglishOrdinal = currentLanguage.startsWith("en")
     val minO = orderOptions.minOrNull() ?: 1
     val maxO = orderOptions.maxOrNull() ?: 8
@@ -552,6 +560,7 @@ fun FilterOrderSelector(
     }
 }
 
+@Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE")
 @Composable
 fun EqPanel(
     enabled: Boolean,
@@ -576,6 +585,10 @@ fun EqPanel(
     highPassOrder: Int,
     sampleRate: Int,
 ) {
+    // reference unused order params to avoid lint warnings; no functional effect
+    val _unused_lowPassOrder = lowPassOrder
+    val _unused_highPassOrder = highPassOrder
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         var expanded by rememberSaveable { mutableStateOf(false) }
 
