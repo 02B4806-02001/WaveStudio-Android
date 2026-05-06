@@ -43,7 +43,9 @@ import kotlin.math.sqrt
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.AudioTrack
+import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.Player
 import android.media.MediaCodec
 import android.media.MediaMuxer
 
@@ -220,10 +222,6 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _filteredWaveform = MutableStateFlow(floatArrayOf())
     val filteredWaveform: StateFlow<FloatArray> = _filteredWaveform.asStateFlow()
-
-    // Marker index in the published (downsampled) waveform array where trigger point lies.
-    private val _triggerMarkerIndex = MutableStateFlow<Int?>(null)
-    val triggerMarkerIndex: StateFlow<Int?> = _triggerMarkerIndex.asStateFlow()
 
     // 沉浸模式专用：保相位的均匀重采样波形，用于 Trigger 和全屏显示
     private val _immersiveFilteredWaveform = MutableStateFlow(floatArrayOf())
@@ -464,14 +462,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private var currentRecordingPath: String? = null
     private var recordingMuxer: MediaMuxer? = null
     private var recordingCodec: MediaCodec? = null
-
-    private var recordingMuxerStarted = false
-    private var recordingTrackIndex = -1
-    private var recordingPtsUs = 0L
-
-    private val triggerEngine = NewTriggerEngine(nominalWindowSize = 512)
-    private val _triggerResult = MutableStateFlow<NewTriggerEngine.Result?>(null)
-    val triggerResult: StateFlow<NewTriggerEngine.Result?> = _triggerResult.asStateFlow()
+    private var recordingTrackIndex: Int = -1
+    private var recordingMuxerStarted: Boolean = false
+    private var recordingPtsUs: Long = 0L
 
     // WAV (raw PCM) recording
     private var wavOut: java.io.RandomAccessFile? = null
@@ -988,8 +981,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
                     val actualPublishIntervalMs = currentPublishIntervalMs()
 
-                        if (nowUi - lastUiUpdateAt >= actualPublishIntervalMs) {
-                            lastUiUpdateAt = nowUi
+                    if (nowUi - lastUiUpdateAt >= actualPublishIntervalMs) {
+                        lastUiUpdateAt = nowUi
 
                         val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
                             .coerceAtMost(ring.size)
@@ -1043,6 +1036,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         // Simpler hack in View side implies we have the data.
                         // Currently we don't. 'downsamplePeakFloatArray' outputs exactly 'targetPoints'.
 
+                        // 监听开启时也保持足够的显示密度，避免“波形像被低通/过度平滑”。
                         val monitorOn = _isMonitoring.value
                         val triggerArmed = _triggerEnabled
                         val extraPoints = when {
@@ -1057,10 +1051,21 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             else -> 512 + extraPoints
                         }
 
-                        val displaySamples = windowSamples
-                        var fetchStart = (ringWrite - displaySamples + ring.size) % ring.size
+                        // We need more source samples to fill this larger target while keeping same time scale.
+                        // windowSamples represents the user's "30ms" setting.
+                        // We want to fetch 1.5 * 30ms so we have extra tail.
+                        val extraSamplesRatio = when {
+                            monitorOn && triggerArmed -> 0.20f
+                            monitorOn -> 0.20f
+                            busyRealtimePath -> 0.20f
+                            else -> 0.45f
+                        }
+                        val extraSamples = (windowSamples * extraSamplesRatio).toInt()
+                        val minTriggerSamples = if (triggerArmed) 640 else 0
+                        val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
+                        val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
                         val publishedSpanMs = if (windowSamples > 0) {
-                            _windowMs.value * (displaySamples.toFloat() / windowSamples.toFloat())
+                            _windowMs.value * (fetchSamples.toFloat() / windowSamples.toFloat())
                         } else {
                             _windowMs.value
                         }
@@ -1071,92 +1076,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         // So ring is large enough.
                         // uiSlice is allocated as ring.size. Safe.
 
-                        if (triggerArmed) {
-                            val triggerSearchMs = 200f
-                            val trigFetchSamples = min(ring.size, max(displaySamples, (sampleRate * triggerSearchMs / 1000f).toInt()))
-                            val trigFetchStart = (ringWrite - trigFetchSamples + ring.size) % ring.size
-
-                            for (i in 0 until trigFetchSamples) {
-                                uiSlice[i] = ring[(trigFetchStart + i) % ring.size]
-                            }
-
-                            val triggerCfg = org.mhrri.wavestudio.NewTriggerEngine.Config(
-                                mode = org.mhrri.wavestudio.NewTriggerEngine.Mode.RISING,
-                                sampleRateHz = sampleRate.toFloat(),
-                                strongLowPassHz = 240f,
-                                fMaxHz = 280f,
-                                useAutocorrelation = true,
-                                autocorrRefreshFrames = 8,
-                                autocorrMaxSamples = 512,
-                                preTriggerRatio = 0.16f,
-                                hysteresisRatio = 0.16f,
-                                holdoffRatio = 0.60f
-                            )
-                            val sourceSlice = uiSlice.copyOfRange(0, trigFetchSamples)
-                            val res = triggerEngine.process(sourceSlice, triggerCfg)
-                            _triggerResult.value = res
-
-                            // Diagnostic logging to help track discontinuities around trigger alignment
-                            try {
-                                android.util.Log.d("OscopeDiag", "triggerRes: locked=${res.locked} anchorIndex=${res.anchorIndex} periodSamples=${res.periodSamples} startIndex=${res.startIndex}")
-                                android.util.Log.d("OscopeDiag", "trigFetchStart=$trigFetchStart trigFetchSamples=$trigFetchSamples ringWrite=$ringWrite displaySamples=$displaySamples targetPoints=$targetPoints")
-                            } catch (_: Throwable) {}
-
-                            if (res.locked) {
-                                val ringAnchor = (trigFetchStart + res.anchorIndex) % ring.size
-                                val preTriggerSamples = (displaySamples * triggerCfg.preTriggerRatio).toInt()
-                                fetchStart = (ringAnchor - preTriggerSamples + ring.size) % ring.size
-
-                                // Also publish trigger marker index for live-capture branch (downsampled coordinates)
-                                try {
-                                    val approxMarker = (preTriggerSamples.toLong() * targetPoints.toLong() / displaySamples.toLong()).toInt().coerceIn(0, max(0, targetPoints - 1))
-                                    _triggerMarkerIndex.value = approxMarker
-                                } catch (_: Throwable) { _triggerMarkerIndex.value = null }
-
-                                // More diagnostics showing sample values around the chosen fetchStart
-                                try {
-                                    val idx0 = fetchStart
-                                    val idxMid = (fetchStart + (displaySamples / 2)) % ring.size
-                                    val idxEnd = (fetchStart + displaySamples - 1) % ring.size
-                                    android.util.Log.d("OscopeDiag", "fetchStartIndices: idx0=$idx0 idxMid=$idxMid idxEnd=$idxEnd values: a0=${ring[idx0]} amid=${ring[idxMid]} aend=${ring[idxEnd]}")
-                                } catch (_: Throwable) {}
-                            }
-                        } else {
-                            _triggerResult.value = null
-                        }
-
-                        for (i in 0 until displaySamples) {
+                        for (i in 0 until fetchSamples) {
                             uiSlice[i] = ring[(fetchStart + i) % ring.size]
                         }
 
-                        // downRaw: map the actual visible window -> display points
-                        val downRaw = downsamplePeakFloatArray(uiSlice, 0, displaySamples, targetPoints = targetPoints)
-
-                        // Log a brief summary of the published slice to detect intra-frame discontinuities
-                        try {
-                            if (displaySamples > 2) {
-                                val mid = displaySamples / 2
-                                val v0 = uiSlice[0]
-                                val vm = uiSlice[mid]
-                                val ve = uiSlice[displaySamples - 1]
-                                android.util.Log.d("OscopeDiag", "publishSlice summary: v0=$v0 vm=$vm ve=$ve displaySamples=$displaySamples targetPoints=$targetPoints")
-                            }
-                        } catch (_: Throwable) {}
-
-                        // If trigger locked, compute marker index in downsampled coordinates and publish it so UI can break path there.
-                        try {
-                            val currentTrigger = _triggerResult.value
-                            if (currentTrigger != null && currentTrigger.locked) {
-                                val preTriggerSamples = (displaySamples * 0.16f).toInt() // matches triggerCfg.preTriggerRatio used above
-                                val approxMarker = (preTriggerSamples.toLong() * targetPoints.toLong() / displaySamples.toLong()).toInt().coerceIn(0, max(0, targetPoints - 1))
-                                _triggerMarkerIndex.value = approxMarker
-                            } else {
-                                _triggerMarkerIndex.value = null
-                            }
-                        } catch (_: Throwable) {}
+                        // downRaw: map 'fetchSamples' -> 'targetPoints'
+                        val downRaw = downsamplePeakFloatArray(uiSlice, 0, fetchSamples, targetPoints = targetPoints)
 
                         if (needFilteredBlock && filteredOutShort != null) {
-                            for (i in 0 until displaySamples) {
+                            for (i in 0 until fetchSamples) {
                                 uiFiltered[i] = ringFiltered[(fetchStart + i) % ring.size]
                             }
                         } else {
@@ -1172,10 +1100,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 eqEnabled = eqEnabled.value,
                                 eqBands = eqBands.value,
                             )
-                            uiWaveformFilter.process(uiSlice, uiFiltered, displaySamples)
+                            uiWaveformFilter.process(uiSlice, uiFiltered, fetchSamples)
                         }
-                        val downFiltered = downsamplePeakFloatArray(uiFiltered, 0, displaySamples, targetPoints = targetPoints)
-                        val immersiveFiltered = resampleLinearFloatArray(uiFiltered, 0, displaySamples, targetPoints)
+                        val downFiltered = downsamplePeakFloatArray(uiFiltered, 0, fetchSamples, targetPoints = targetPoints)
+                        val immersiveFiltered = resampleLinearFloatArray(uiFiltered, 0, fetchSamples, targetPoints)
 
                         _rawWaveform.value = downRaw
                         _filteredWaveform.value = downFiltered
@@ -1244,7 +1172,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 // raw: 原测试波形（不注入杂波）
                 val rawList = samples.toList()
                 val visibleWindowSamples = ((sampleRate * window) / 1000f).roundToInt().coerceIn(1, samples.size)
-                val visibleStart = ((samples.size - visibleWindowSamples) / 2).coerceAtLeast(0)
+                val visibleStart = (samples.size - visibleWindowSamples).coerceAtLeast(0)
                 val downRaw = downsamplePeakFloatArray(samples, visibleStart, samples.size, targetPoints = displayTargetPoints)
 
                 // filtered: 复用当前高通/低通滤波链
@@ -1517,79 +1445,22 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     if (nowUi - lastUiUpdateAt >= actualPublishIntervalMs) {
                         lastUiUpdateAt = nowUi
 
-                        val monitorOn = _isMonitoring.value
-                        val triggerArmed = _triggerEnabled
-
-                        val targetPoints = when {
-                            monitorOn && triggerArmed -> 640
-                            monitorOn -> 384
-                            else -> 704
-                        }
-
-                        val maxDisplayWindowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
+                        val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
                             .coerceAtMost(ring.size)
-                        
-                        var actualFetchStart = (ringWrite - maxDisplayWindowSamples + ring.size) % ring.size
-                        var rawFetchSamples = maxDisplayWindowSamples
-
-                        if (triggerArmed) {
-                            val triggerSearchMs = 200f
-                            val trigFetchSamples = min(ring.size, max(maxDisplayWindowSamples, (sampleRate * triggerSearchMs / 1000f).toInt()))
-                            val trigFetchStart = (ringWrite - trigFetchSamples + ring.size) % ring.size
-
-                            for (i in 0 until trigFetchSamples) {
-                                uiSlice[i] = ring[(trigFetchStart + i) % ring.size]
-                            }
-
-                            val triggerCfg = org.mhrri.wavestudio.NewTriggerEngine.Config(
-                                mode = org.mhrri.wavestudio.NewTriggerEngine.Mode.RISING,
-                                sampleRateHz = sampleRate.toFloat(),
-                                strongLowPassHz = 240f,
-                                fMaxHz = 280f,
-                                useAutocorrelation = true,
-                                autocorrRefreshFrames = 8,
-                                autocorrMaxSamples = 512,
-                                preTriggerRatio = 0.16f,
-                                hysteresisRatio = 0.16f,
-                                holdoffRatio = 0.60f
-                            )
-                            val sourceSlice = uiSlice.copyOfRange(0, trigFetchSamples)
-                            val res = triggerEngine.process(sourceSlice, triggerCfg)
-                            _triggerResult.value = res
-
-                            // Diagnostic logging for imported-signal branch
-                            try {
-                                android.util.Log.d("OscopeDiag", "import-triggerRes: locked=${res.locked} anchorIndex=${res.anchorIndex} periodSamples=${res.periodSamples} startIndex=${res.startIndex}")
-                                android.util.Log.d("OscopeDiag", "import trigFetchStart=$trigFetchStart trigFetchSamples=$trigFetchSamples ringWrite=$ringWrite maxDisplayWindowSamples=$maxDisplayWindowSamples")
-                            } catch (_: Throwable) {}
-
-                            if (res.locked) {
-                                val ringAnchor = (trigFetchStart + res.anchorIndex) % ring.size
-                                val preTriggerSamples = (maxDisplayWindowSamples * triggerCfg.preTriggerRatio).toInt()
-                                actualFetchStart = (ringAnchor - preTriggerSamples + ring.size) % ring.size
-
-                                try {
-                                    val idx0 = actualFetchStart
-                                    val idxMid = (actualFetchStart + (maxDisplayWindowSamples / 2)) % ring.size
-                                    val idxEnd = (actualFetchStart + maxDisplayWindowSamples - 1) % ring.size
-                                    android.util.Log.d("OscopeDiag", "import fetchStartIndices: idx0=$idx0 idxMid=$idxMid idxEnd=$idxEnd values: a0=${ring[idx0]} amid=${ring[idxMid]} aend=${ring[idxEnd]}")
-                                } catch (_: Throwable) {}
-                            }
-                            rawFetchSamples = maxDisplayWindowSamples
-                        } else {
-                            _triggerResult.value = null
-                            rawFetchSamples = maxDisplayWindowSamples
-                            actualFetchStart = (ringWrite - rawFetchSamples + ring.size) % ring.size
-                        }
-
-                        if (rawFetchSamples > 0) {
-                            for (i in 0 until rawFetchSamples) {
-                                uiSlice[i] = ring[(actualFetchStart + i) % ring.size]
+                        val triggerArmed = _triggerEnabled
+                        val monitorOn = _isMonitoring.value
+                        val extraSamples = (windowSamples * 0.45f).toInt()
+                        val minTriggerSamples = if (triggerArmed) 640 else 0
+                        val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
+                        if (fetchSamples > 0) {
+                            val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
+                            for (i in 0 until fetchSamples) {
+                                uiSlice[i] = ring[(fetchStart + i) % ring.size]
                             }
 
                             if (needFilteredBlock) {
-                                for (i in 0 until rawFetchSamples) {
-                                    uiFiltered[i] = ringFiltered[(actualFetchStart + i) % ring.size]
+                                for (i in 0 until fetchSamples) {
+                                    uiFiltered[i] = ringFiltered[(fetchStart + i) % ring.size]
                                 }
                             } else {
                                 uiWaveformFilter.update(
@@ -1604,17 +1475,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                     eqEnabled = eqEnabled.value,
                                     eqBands = eqBands.value,
                                 )
-                                uiWaveformFilter.process(uiSlice, uiFiltered, rawFetchSamples)
+                                uiWaveformFilter.process(uiSlice, uiFiltered, fetchSamples)
                             }
 
-                            val downRaw = downsamplePeakFloatArray(uiSlice, 0, rawFetchSamples, targetPoints = targetPoints)
-                            val downFiltered = downsamplePeakFloatArray(uiFiltered, 0, rawFetchSamples, targetPoints = targetPoints)
-                            val immersiveFiltered = resampleLinearFloatArray(uiFiltered, 0, rawFetchSamples, targetPoints)
-                            val publishedSpanMs = if (rawFetchSamples > 0) {
-                                _windowMs.value * (rawFetchSamples.toFloat() / maxDisplayWindowSamples.toFloat())
-                            } else {
-                                _windowMs.value
+                            val targetPoints = when {
+                                monitorOn && triggerArmed -> 640
+                                monitorOn -> 384
+                                else -> 704
                             }
+                            val downRaw = downsamplePeakFloatArray(uiSlice, 0, fetchSamples, targetPoints = targetPoints)
+                            val downFiltered = downsamplePeakFloatArray(uiFiltered, 0, fetchSamples, targetPoints = targetPoints)
+                            val immersiveFiltered = resampleLinearFloatArray(uiFiltered, 0, fetchSamples, targetPoints)
+                            val publishedSpanMs = _windowMs.value * (fetchSamples.toFloat() / windowSamples.toFloat())
 
                             _rawWaveform.value = downRaw
                             _filteredWaveform.value = downFiltered

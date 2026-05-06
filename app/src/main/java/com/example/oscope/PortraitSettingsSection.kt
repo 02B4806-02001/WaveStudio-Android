@@ -497,7 +497,7 @@ internal fun PortraitSettingsSection(
 
                 Slider(
                     value = progress,
-                    onValueChange = { frac ->
+                    onValueChange = { frac -> 
                         audioViewModel.seekImportedSignalTo((frac * importedPlaybackDurationMs).toLong())
                     },
                     modifier = Modifier.weight(1f),

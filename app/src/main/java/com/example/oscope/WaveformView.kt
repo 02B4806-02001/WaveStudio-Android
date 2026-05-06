@@ -65,26 +65,11 @@ fun WaveformView(
                 val path = Path()
                 if (hasEnough) {
                     val stepX = width / (samples.size - 1)
-                    // Build path but avoid connecting across large discontinuities or across trigger marker
-                    val firstY = midY - samples[0] * ampScale * midY
-                    path.moveTo(0f, firstY)
-                    // Threshold in normalized sample units (before scaling by midY)
-                    val jumpThresholdNorm = 0.5f
-                    val marker = triggerMarkerIndex?.coerceIn(0, samples.lastIndex)
+                    path.moveTo(0f, midY - samples[0] * ampScale * midY)
                     for (i in 1 until samples.size) {
                         val x = i * stepX
-                        val curSample = samples[i]
-                        val y = midY - curSample * ampScale * midY
-
-                        // break at marker boundary (allow a small neighborhood in case marker is off-by-one)
-                        if (marker != null && i >= (marker - 1).coerceAtLeast(0) && i <= (marker + 1).coerceAtMost(samples.lastIndex)) {
-                            path.moveTo(x, y)
-                        } else if (kotlin.math.abs(curSample - samples[i - 1]) > jumpThresholdNorm) {
-                            // detect large jump in the raw sample domain and break the path
-                            path.moveTo(x, y)
-                        } else {
-                            path.lineTo(x, y)
-                        }
+                        val y = midY - samples[i] * ampScale * midY
+                        path.lineTo(x, y)
                     }
                 }
 
