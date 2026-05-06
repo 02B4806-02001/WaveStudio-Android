@@ -61,6 +61,10 @@ class NewTriggerEngine(
         val locked: Boolean,
         val mode: Mode,
         val freqHz: Float,
+        // Number of samples in the frame that produced this Result. Used to map
+        // frame-relative indices (startIndex, anchorIndex) into a larger
+        // display/capture buffer when extracting the triggered window.
+        val frameSize: Int,
     )
 
     private data class TriggerLockState(
@@ -98,7 +102,7 @@ class NewTriggerEngine(
             lockState.badFrames = 0
             val start = defaultStart(n)
             val anchor = (start + (nominalWindowSize * config.preTriggerRatio).roundToInt()).coerceIn(0, max(0, n - 1))
-            return Result(start, anchor, 0, 0f, false, config.mode, 0f)
+            return Result(start, anchor, 0, 0f, false, config.mode, 0f, n)
         }
 
         ensureCapacity(n)
@@ -204,6 +208,7 @@ class NewTriggerEngine(
             locked = lockedNow,
             mode = config.mode,
             freqHz = freqHz,
+            frameSize = n,
         )
     }
 
@@ -545,6 +550,7 @@ class NewTriggerEngine(
             locked = lockState.locked,
             mode = config.mode,
             freqHz = 0f,
+            frameSize = n,
         )
     }
 
@@ -566,8 +572,27 @@ class NewTriggerEngine(
         if (source.isEmpty()) return source
         if (source.size <= nominalWindowSize || result == null || result.mode == Mode.OFF) return source.copyOf()
         val maxStart = max(0, source.size - nominalWindowSize)
-        val start = result.startIndex.coerceIn(0, maxStart)
-        return extractLinearWindow(source, start, nominalWindowSize)
+        // Map the frame-relative startIndex into the full source buffer.
+        // The frame that produced `result` is assumed to occupy the last
+        // `result.frameSize` samples of `source` (typical for a rolling capture
+        // buffer). Compute the frame's starting index inside `source` and add
+        // the frame-relative startIndex to get the absolute start.
+        val frameStartInSource = (source.size - result.frameSize).coerceAtLeast(0)
+        val mapped = frameStartInSource + result.startIndex
+        val start = mapped.coerceIn(0, maxStart)
+        val end = (start + nominalWindowSize).coerceAtMost(source.size)
+        val window = FloatArray(nominalWindowSize)
+        // 拷贝实际数据
+        for (i in start until end) {
+            window[i - start] = source[i]
+        }
+        // 右侧不足补零
+        if (end - start < nominalWindowSize) {
+            for (i in (end - start) until nominalWindowSize) {
+                window[i] = 0f
+            }
+        }
+        return window
     }
 
     private fun collectHysteresisCrossings(
