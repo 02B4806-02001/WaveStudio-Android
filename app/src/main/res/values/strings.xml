@@ -103,6 +103,10 @@
     <string name="waveform_refresh_rate_hint">刷新率越高，越流畅，但性能消耗更大</string>
     <string name="waveform_ref_line_label">波形 0dB 参考线</string>
 
+    <!-- Global high-pass (1 Hz) -->
+    <string name="global_high_pass_label">全局 1Hz 高通</string>
+    <string name="global_high_pass_desc">在所有路径上额外应用 1 Hz 高通（用于去除直流/低频漂移）</string>
+
     <string name="startup_note_title">提示</string>
     <string name="startup_note_text">拾音器增益应维持两个波形的幅值均不超过 ±0dB 参考线以避免削波。纵向拖动可调整幅值缩放，横向拖动可调整时间窗口。</string>
     <string name="startup_note_do_not_show">不再提示</string>

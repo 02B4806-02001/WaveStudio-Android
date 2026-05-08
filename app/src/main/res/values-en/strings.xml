@@ -112,6 +112,10 @@
     <string name="waveform_refresh_rate_hint">Higher is smoother, but reduces performance</string>
     <string name="waveform_ref_line_label">Waveform 0dB Reference Line</string>
 
+    <!-- Global high-pass (1 Hz) -->
+    <string name="global_high_pass_label">Global 1 Hz high-pass</string>
+    <string name="global_high_pass_desc">Apply an extra 1 Hz high-pass on all paths (remove DC / low-frequency drift)</string>
+
     <!-- Startup note -->
     <string name="startup_note_title">Tip</string>
     <string name="startup_note_text">The pickup gain should keep both waveforms within the +/-0dB reference line to avoid clipping. Also, drag vertically on the waveform to adjust amplitude scale, and drag horizontally to adjust time window.</string>

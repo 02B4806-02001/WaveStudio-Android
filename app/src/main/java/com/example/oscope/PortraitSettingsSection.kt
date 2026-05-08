@@ -108,6 +108,8 @@ internal data class PortraitSettingsState(
     val filterGain: Float,
     val eqEnabled: Boolean,
     val eqBands: List<AudioEngineViewModel.EqBand>,
+    val globalHighPassEnabled: Boolean,
+    val globalHighPassCutoff: Float,
     val playingId: String?,
 )
 
@@ -131,6 +133,8 @@ internal data class PortraitSettingsActions(
     val onSetEqGraphDragging: (Boolean) -> Unit,
     val onToggleVvvfTestSignal: () -> Unit,
     val onSetTestSignalPreset: (AudioEngineViewModel.TestSignalPreset) -> Unit,
+    val onToggleGlobalHighPass: (Boolean) -> Unit,
+    val onSetGlobalHighPassCutoff: (Float) -> Unit,
 )
 
 private fun showCenterToast(context: android.content.Context, msg: String) {
@@ -900,6 +904,29 @@ internal fun PortraitSettingsSection(
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+        }
+
+        // Global HP setting (1 Hz)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.global_high_pass_label),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.widthIn(min = 64.dp),
+            )
+            Text(
+                text = stringResource(R.string.global_high_pass_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = state.globalHighPassEnabled,
+                onCheckedChange = actions.onToggleGlobalHighPass,
+            )
         }
     }
 }
