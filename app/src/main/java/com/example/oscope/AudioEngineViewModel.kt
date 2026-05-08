@@ -56,6 +56,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         private const val KEY_RECORDING_FORMAT = "recording_format"
         private const val KEY_RECORDING_SAMPLE_RATE = "recording_sample_rate"
         private const val KEY_WAVEFORM_PUBLISH_RATE_HZ = "waveform_publish_rate_hz"
+        // Global HP setting keys
+        private const val KEY_GLOBAL_HP_ENABLED = "global_hp_enabled"
+        private const val KEY_GLOBAL_HP_CUTOFF_HZ = "global_hp_cutoff_hz"
 
         fun maxEqQForGainDb(gainDb: Float): Float {
             val a = abs(gainDb).coerceAtLeast(1e-3f)
@@ -210,6 +213,13 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _highPassCutoff = MutableStateFlow(50f)
     val highPassCutoff: StateFlow<Float> = _highPassCutoff.asStateFlow()
+
+    // Global 1Hz high-pass setting (exposed in settings)
+    private val _globalHighPassEnabled = MutableStateFlow(true)
+    val globalHighPassEnabled: StateFlow<Boolean> = _globalHighPassEnabled.asStateFlow()
+
+    private val _globalHighPassCutoff = MutableStateFlow(1f)
+    val globalHighPassCutoff: StateFlow<Float> = _globalHighPassCutoff.asStateFlow()
 
     private val _windowMs = MutableStateFlow(20f)
     val windowMs: StateFlow<Float> = _windowMs.asStateFlow()
@@ -903,6 +913,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 filterGain = filterGain.value,
                                 eqEnabled = eqEnabled.value,
                                 eqBands = eqBands.value,
+                                globalHighPassEnabled = _globalHighPassEnabled.value,
+                                globalHighPassCutoffHz = _globalHighPassCutoff.value,
                             )
                             monitorRecordFilter.process(inBlock, filteredBlock, read)
 
@@ -1099,6 +1111,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 filterGain = filterGain.value,
                                 eqEnabled = eqEnabled.value,
                                 eqBands = eqBands.value,
+                                globalHighPassEnabled = _globalHighPassEnabled.value,
+                                globalHighPassCutoffHz = _globalHighPassCutoff.value,
                             )
                             uiWaveformFilter.process(uiSlice, uiFiltered, fetchSamples)
                         }
@@ -1391,6 +1405,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             filterGain = filterGain.value,
                             eqEnabled = eqEnabled.value,
                             eqBands = eqBands.value,
+                            globalHighPassEnabled = globalHighPassEnabled.value,
+                            globalHighPassCutoffHz = globalHighPassCutoff.value,
                         )
                         monitorRecordFilter.process(inBlock, filteredBlock, chunkSize)
 
@@ -1474,6 +1490,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                     filterGain = filterGain.value,
                                     eqEnabled = eqEnabled.value,
                                     eqBands = eqBands.value,
+                                    globalHighPassEnabled = globalHighPassEnabled.value,
+                                    globalHighPassCutoffHz = globalHighPassCutoff.value,
                                 )
                                 uiWaveformFilter.process(uiSlice, uiFiltered, fetchSamples)
                             }
@@ -1791,6 +1809,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
         val restoredPublishRateHz = settingsPrefs.getInt(KEY_WAVEFORM_PUBLISH_RATE_HZ, _publishRateOption.value.hz)
         _publishRateOption.value = sanitizePublishRateOption(restoredPublishRateHz)
+        // global HP
+        val globalHpEnabled = settingsPrefs.getBoolean(KEY_GLOBAL_HP_ENABLED, true)
+        _globalHighPassEnabled.value = globalHpEnabled
+        val globalHpCut = settingsPrefs.getFloat(KEY_GLOBAL_HP_CUTOFF_HZ, 1f)
+        _globalHighPassCutoff.value = globalHpCut.coerceAtLeast(0.1f)
     }
 
     private fun persistAppSettings() {
@@ -1798,7 +1821,19 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             .putString(KEY_RECORDING_FORMAT, _recordingFormat.value.name)
             .putInt(KEY_RECORDING_SAMPLE_RATE, _recordingSampleRate.value)
             .putInt(KEY_WAVEFORM_PUBLISH_RATE_HZ, _publishRateOption.value.hz)
+            .putBoolean(KEY_GLOBAL_HP_ENABLED, _globalHighPassEnabled.value)
+            .putFloat(KEY_GLOBAL_HP_CUTOFF_HZ, _globalHighPassCutoff.value)
             .apply()
+    }
+
+    fun setGlobalHighPassEnabled(enabled: Boolean) {
+        _globalHighPassEnabled.value = enabled
+        persistAppSettings()
+    }
+
+    fun setGlobalHighPassCutoff(hz: Float) {
+        _globalHighPassCutoff.value = hz.coerceAtLeast(0.1f)
+        persistAppSettings()
     }
 
     private fun sanitizeRecordingSampleRate(sr: Int): Int {
@@ -2246,6 +2281,12 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         if (input.isEmpty()) return emptyList()
 
         var out: List<Float> = input
+
+        // Global HP: apply if enabled in settings
+        if (_globalHighPassEnabled.value) {
+            val cut = _globalHighPassCutoff.value.coerceAtLeast(0.1f)
+            out = firstOrderHighPass(out, sampleRate, cut)
+        }
 
         val nyquist = (sampleRate / 2f) - 1f
 
@@ -2748,6 +2789,12 @@ private class RtBiquadCascade(private var sampleRate: Int) {
     private var eqCoefs: List<RtBiquad> = emptyList()
     private var filterGain: Float = 1f
 
+    // Global unconditional 1 Hz high-pass (one 1st-order RC stage).
+    // This ensures a consistent baseline HP filtering regardless of user-enabled filters.
+    private var globalHpCoef: RtBiquad = rtDesignRCHighPass(sampleRate, 1f)
+    private var globalHpZ1: Float = 0f
+    private var globalHpZ2: Float = 0f
+
     // Direct Form II Transposed states
     // Need states per stage.
     // lpZ1[stage], lpZ2[stage]
@@ -2771,6 +2818,8 @@ private class RtBiquadCascade(private var sampleRate: Int) {
     private var lastFilterGain = -1f
     // Store last bands list to avoid unnecessary recalc (assuming immutable list replacement)
     private var lastEqBands: List<AudioEngineViewModel.EqBand>? = null
+    private var lastGlobalHpEnabled: Boolean = true
+    private var lastGlobalHpCutoff: Float = 1f
 
     fun update(
         sampleRate: Int,
@@ -2783,6 +2832,8 @@ private class RtBiquadCascade(private var sampleRate: Int) {
         filterGain: Float,
         eqEnabled: Boolean,
         eqBands: List<AudioEngineViewModel.EqBand>,
+        globalHighPassEnabled: Boolean,
+        globalHighPassCutoffHz: Float,
     ) {
         var eqChanged = false
         if (this.sampleRate != sampleRate) {
@@ -2793,6 +2844,15 @@ private class RtBiquadCascade(private var sampleRate: Int) {
             lastFilterGain = -1f
             lastEqBands = null
             eqChanged = true
+            // Recompute global HP coef for new sample rate using last known cutoff
+            globalHpCoef = rtDesignRCHighPass(this.sampleRate, lastGlobalHpCutoff)
+        }
+
+        // If global HP params changed, update coefficient
+        if (globalHighPassEnabled != lastGlobalHpEnabled || globalHighPassCutoffHz != lastGlobalHpCutoff) {
+            lastGlobalHpEnabled = globalHighPassEnabled
+            lastGlobalHpCutoff = globalHighPassCutoffHz.coerceAtLeast(0.1f)
+            globalHpCoef = rtDesignRCHighPass(this.sampleRate, lastGlobalHpCutoff)
         }
 
         if (lowPassEnabled != lastLpEnabled ||
@@ -2872,6 +2932,8 @@ private class RtBiquadCascade(private var sampleRate: Int) {
         hpZ1.fill(0f); hpZ2.fill(0f)
         eqZ1.fill(0f)
         eqZ2.fill(0f)
+        globalHpZ1 = 0f
+        globalHpZ2 = 0f
     }
 
     fun process(input: FloatArray, output: FloatArray, n: Int) {
@@ -2879,6 +2941,27 @@ private class RtBiquadCascade(private var sampleRate: Int) {
 
         if (input !== output) {
             System.arraycopy(input, 0, output, 0, n)
+        }
+
+        // Apply global HP first if enabled
+        if (lastGlobalHpEnabled) {
+            val c = globalHpCoef
+            var z1 = globalHpZ1
+            var z2 = globalHpZ2
+            for (i in 0 until n) {
+                val x = output[i]
+                val yRaw = c.b0 * x + z1
+                val y = if (yRaw.isFinite()) yRaw else 0f
+                z1 = c.b1 * x - c.a1 * y + z2
+                z2 = c.b2 * x - c.a2 * y
+                if (!z1.isFinite() || !z2.isFinite()) {
+                    z1 = 0f
+                    z2 = 0f
+                }
+                output[i] = y
+            }
+            globalHpZ1 = z1
+            globalHpZ2 = z2
         }
 
         // High Pass

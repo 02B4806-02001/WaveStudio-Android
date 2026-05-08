@@ -450,6 +450,8 @@ fun OscopeApp(
     val lowPassCutoff by audioViewModel.lowPassCutoff.collectAsStateWithLifecycle()
     val highPassEnabled by audioViewModel.highPassEnabled.collectAsStateWithLifecycle()
     val highPassCutoff by audioViewModel.highPassCutoff.collectAsStateWithLifecycle()
+    val globalHighPassEnabled by audioViewModel.globalHighPassEnabled.collectAsStateWithLifecycle()
+    val globalHighPassCutoff by audioViewModel.globalHighPassCutoff.collectAsStateWithLifecycle()
 
     // 低通/高通阶数（1..8）
     val lowPassOrder by audioViewModel.lowPassOrder.collectAsStateWithLifecycle()
@@ -944,6 +946,26 @@ fun OscopeApp(
                             },
                             onClick = { eqDraggable = !eqDraggable }
                         )
+                        // Quick access: global 1Hz high-pass toggle (also present in full settings)
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.global_high_pass_label))
+                                    Spacer(Modifier.weight(1f))
+                                    Switch(
+                                        checked = globalHighPassEnabled,
+                                        onCheckedChange = { audioViewModel.setGlobalHighPassEnabled(it) }
+                                    )
+                                }
+                            },
+                            onClick = {
+                                // Toggle via click as well
+                                audioViewModel.setGlobalHighPassEnabled(!globalHighPassEnabled)
+                            }
+                        )
                         DropdownMenuItem(
                             text = {
                                 Row(
@@ -1256,7 +1278,8 @@ fun OscopeApp(
             ) {
                 val displayFilteredSamples = buildNormalTriggeredWindow(
                     source = filteredWaveSamples,
-                    waveformSpanMs = windowMs,
+                    // use the actual published span (may be larger than the current visible window)
+                    waveformSpanMs = immersiveWaveformSpanMs,
                 )
                 WaveformView(
                     samples = displayFilteredSamples,
@@ -1326,6 +1349,8 @@ fun OscopeApp(
                 filterGain = filterGain,
                 eqEnabled = eqEnabled,
                 eqBands = eqBands,
+                globalHighPassEnabled = globalHighPassEnabled,
+                globalHighPassCutoff = globalHighPassCutoff,
                 playingId = playingId,
             ),
             actions = PortraitSettingsActions(
@@ -1375,6 +1400,8 @@ fun OscopeApp(
                 onSetEqGraphDragging = { audioViewModel.setEqGraphDragging(it) },
                 onToggleVvvfTestSignal = { audioViewModel.toggleVvvfTestSignal() },
                 onSetTestSignalPreset = { audioViewModel.setTestSignalPreset(it) },
+                onToggleGlobalHighPass = { audioViewModel.setGlobalHighPassEnabled(it) },
+                onSetGlobalHighPassCutoff = { audioViewModel.setGlobalHighPassCutoff(it) },
             ),
         )
 

@@ -329,8 +329,13 @@ internal fun AboutDialog(
 
     val aboutMainLines = if (isZhAbout) {
         listOf(
-            "Wave Studio v0.13.0 by 磁拾音器研究所",
+            "Wave Studio v0.13.1 by 磁拾音器研究所",
             "提示：使用前请授予麦克风权限。",
+            "",
+            "0.13.1版本主要更新内容如下：",
+            "- 优化了 Trigger 功能",
+            "- 修复了测试信号的 bug",
+            "- 设置中新增全局 1Hz 高通开关",
             "",
             "0.13.0版本主要更新内容如下：",
             "- 均衡器 EQ 频响图支持拖拽调节",
@@ -364,8 +369,13 @@ internal fun AboutDialog(
         )
     } else {
         listOf(
-            "Wave Studio v0.13.0 by MoHa-Radio Institute",
+            "Wave Studio v0.13.1 by MoHa-Radio Institute",
             "Note: Please grant microphone permission before use.",
+            "",
+            "Key updates in version 0.13.1:",
+            "- Optimized the Trigger function",
+            "- Fixed a bug with the test signal",
+            "- Added global 1Hz high-pass",
             "",
             "Key updates in version 0.13.0:",
             "- EQ frequency response graph now supports drag adjustment",
