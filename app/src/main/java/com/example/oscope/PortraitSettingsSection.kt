@@ -1,7 +1,6 @@
 package org.mhrri.wavestudio
 
-import android.content.Intent
-import android.net.Uri
+// Intent/Uri are referenced via fully-qualified names to avoid import ambiguity in some environments.
 import android.widget.Toast
 import android.view.Gravity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -86,6 +85,7 @@ import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.round
+// duplicate imports removed
 
 internal data class PortraitSettingsState(
     val isRunning: Boolean,
@@ -174,17 +174,17 @@ private fun exportCurrentPresetToCache(context: android.content.Context, audioVi
 private fun shareAnyFile(context: android.content.Context, file: File, mime: String) {
     try {
         if (!file.exists()) return
-        val uri: Uri = androidx.core.content.FileProvider.getUriForFile(
+        val uri: android.net.Uri = androidx.core.content.FileProvider.getUriForFile(
             context,
             context.packageName + ".fileprovider",
             file,
         )
-        val intent = Intent(Intent.ACTION_SEND).apply {
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = mime
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_title_generic)))
+        context.startActivity(android.content.Intent.createChooser(intent, context.getString(R.string.share_title_generic)))
     } catch (_: Throwable) {
     }
 }
@@ -314,7 +314,7 @@ internal fun PortraitSettingsSection(
 
     val importPresetLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
+    ) { uri: android.net.Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
             context.contentResolver.openInputStream(uri).use { inS: InputStream? ->
@@ -339,26 +339,36 @@ internal fun PortraitSettingsSection(
 
     val importAudioLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
+    ) { uri: android.net.Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         audioViewModel.importAudioAsInput(context, uri)
     }
 
     fun shareRecording(clip: RecordedClip) {
         try {
-            val file = File(clip.fileURL)
-            if (!file.exists()) return
-            val uri: Uri = androidx.core.content.FileProvider.getUriForFile(
-                context,
-                context.packageName + ".fileprovider",
-                file,
-            )
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = mimeForRecording(file.name)
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (clip.fileURL.startsWith("content://")) {
+                    val uri = android.net.Uri.parse(clip.fileURL)
+                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = mimeForRecording(clip.fileName)
+                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(android.content.Intent.createChooser(intent, resources.getString(R.string.share_title_recording)))
+            } else {
+                val file = File(clip.fileURL)
+                if (!file.exists()) return
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    context.packageName + ".fileprovider",
+                    file,
+                )
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = mimeForRecording(file.name)
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(android.content.Intent.createChooser(intent, resources.getString(R.string.share_title_recording)))
             }
-            context.startActivity(Intent.createChooser(intent, resources.getString(R.string.share_title_recording)))
         } catch (_: Throwable) {
         }
     }
@@ -902,32 +912,8 @@ internal fun PortraitSettingsSection(
                     modifier = Modifier.weight(1f),
                 )
             }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
         }
-
-        // Global HP setting (1 Hz)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.global_high_pass_label),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.widthIn(min = 64.dp),
-            )
-            Text(
-                text = stringResource(R.string.global_high_pass_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                modifier = Modifier.weight(1f),
-            )
-            Switch(
-                checked = state.globalHighPassEnabled,
-                onCheckedChange = actions.onToggleGlobalHighPass,
-            )
-        }
+        // custom recording storage moved to the compact settings menu (see OscopeApp)
     }
 }
 

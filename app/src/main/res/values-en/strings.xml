@@ -159,6 +159,12 @@
 
     <string name="settings_language_label">Language</string>
     <string name="settings_language_hint">Takes effect immediately after switching</string>
+    <string name="settings_custom_storage_label">Custom storage path</string>
+    <string name="settings_custom_storage_hint">Enter absolute path (kept)</string>
+    <string name="settings_choose_directory">Choose directory from Files</string>
+    <string name="settings_save_path">Save path</string>
+    <string name="settings_choose_dir_success_message">Selected directory saved (grant write permission in system settings if needed)</string>
+    <string name="settings_invalid_path_message">Invalid or inaccessible path</string>
     <string name="settings_scroll_top">Scroll to Top</string>
     <string name="preset_help_text">Presets are .json files. Tap "Export" to save to your phone; if you want to send one to others, you can tap "Share" directly without exporting. After receiving it, tap "Import" and choose that file.</string>
 

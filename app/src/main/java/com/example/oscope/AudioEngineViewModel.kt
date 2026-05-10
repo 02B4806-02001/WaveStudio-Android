@@ -56,6 +56,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         private const val KEY_RECORDING_FORMAT = "recording_format"
         private const val KEY_RECORDING_SAMPLE_RATE = "recording_sample_rate"
         private const val KEY_WAVEFORM_PUBLISH_RATE_HZ = "waveform_publish_rate_hz"
+        private const val KEY_CUSTOM_RECORDING_PATH = "custom_recording_path"
+        private const val KEY_CUSTOM_RECORDING_TREE_URI = "custom_recording_tree_uri"
+        private const val KEY_PERSISTED_RECORDINGS_JSON = "persisted_recordings_json"
         // Global HP setting keys
         private const val KEY_GLOBAL_HP_ENABLED = "global_hp_enabled"
         private const val KEY_GLOBAL_HP_CUTOFF_HZ = "global_hp_cutoff_hz"
@@ -89,6 +92,44 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     private val settingsPrefs: SharedPreferences by lazy(LazyThreadSafetyMode.NONE) {
         getApplication<Application>().getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    // Simple JSON persistence for RecordedClip list
+    private fun persistRecordingsToPrefs() {
+        try {
+            val list = _recordings.value
+            val arr = org.json.JSONArray()
+            for (c in list) {
+                val o = org.json.JSONObject()
+                o.put("id", c.id)
+                o.put("date", c.date)
+                o.put("duration", c.duration)
+                o.put("fileURL", c.fileURL)
+                if (c.customName != null) o.put("customName", c.customName)
+                arr.put(o)
+            }
+            settingsPrefs.edit().putString(KEY_PERSISTED_RECORDINGS_JSON, arr.toString()).apply()
+        } catch (_: Throwable) {}
+    }
+
+    private fun restorePersistedRecordings() {
+        try {
+            val txt = settingsPrefs.getString(KEY_PERSISTED_RECORDINGS_JSON, null) ?: return
+            val arr = org.json.JSONArray(txt)
+            val list = ArrayList<RecordedClip>(arr.length())
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val id = o.optString("id", java.util.UUID.randomUUID().toString())
+                val date = o.optLong("date", System.currentTimeMillis())
+                val duration = o.optDouble("duration", 0.0)
+                val fileURL = o.optString("fileURL", "")
+                val customName = if (o.has("customName")) o.optString("customName", null) else null
+                if (fileURL.isNotBlank()) {
+                    list.add(RecordedClip(id = id, date = date, duration = duration, fileURL = fileURL, customName = customName))
+                }
+            }
+            if (list.isNotEmpty()) _recordings.value = list
+        } catch (_: Throwable) {}
     }
 
     private val _publishRateOption = MutableStateFlow(PublishRateOption.HZ_20)
@@ -236,6 +277,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     // 沉浸模式专用：保相位的均匀重采样波形，用于 Trigger 和全屏显示
     private val _immersiveFilteredWaveform = MutableStateFlow(floatArrayOf())
     val immersiveFilteredWaveform: StateFlow<FloatArray> = _immersiveFilteredWaveform.asStateFlow()
+
+    // Trigger result/state published by the engine (processed independently from UI publish rate)
+    private val captureTriggerEngine = NewTriggerEngine(nominalWindowSize = 512)
+    // NewTriggerEngine.Result is internal to the package, but UI in this module can consume it
+    // directly. Expose a typed StateFlow so callers can access fields like confidence/freqHz.
+    private val _triggerResult = MutableStateFlow<NewTriggerEngine.Result?>(null)
+    internal val triggerResult: StateFlow<NewTriggerEngine.Result?> = _triggerResult.asStateFlow()
+    private val _triggeredWindow = MutableStateFlow(floatArrayOf())
+    val triggeredWindow: StateFlow<FloatArray> = _triggeredWindow.asStateFlow()
 
     private val _publishedWaveformSpanMs = MutableStateFlow(20f)
     val publishedWaveformSpanMs: StateFlow<Float> = _publishedWaveformSpanMs.asStateFlow()
@@ -826,6 +876,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 var lastPublishedAlive = false
                 var lastLogAt = 0L
                 var lastUiUpdateAt = 0L
+                // Trigger processing cadence for capture path
+                var lastTriggerProcessAt = 0L
+                val triggerProcessIntervalMs = 30L // run trigger processing at ~33Hz independent of UI publish rate
 
                 fun publishCaptureDiagnostics(readSamples: Int, maxAbs: Int, alive: Boolean, force: Boolean = false) {
                     val now = SystemClock.elapsedRealtime()
@@ -1126,6 +1179,60 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         markWaveformPublished()
                     }
 
+                    // Trigger processing: run at its own cadence so trigger detection is stable even if UI publish rate changes
+                    try {
+                        val nowTrig = SystemClock.elapsedRealtime()
+                        if (nowTrig - lastTriggerProcessAt >= triggerProcessIntervalMs) {
+                            lastTriggerProcessAt = nowTrig
+                            val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
+                                .coerceAtMost(ring.size)
+                            val monitorOn = _isMonitoring.value
+                            val triggerArmed = _triggerEnabled
+                            val extraSamplesRatio = when {
+                                monitorOn && triggerArmed -> 0.20f
+                                monitorOn -> 0.20f
+                                busyRealtimePath -> 0.20f
+                                else -> 0.45f
+                            }
+                            val extraSamples = (windowSamples * extraSamplesRatio).toInt()
+                            val minTriggerSamples = if (triggerArmed) 640 else 0
+                            val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
+                            if (fetchSamples > 0) {
+                                val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
+                                // prepare source into uiSlice (already allocated)
+                                for (i in 0 until fetchSamples) {
+                                    uiSlice[i] = ring[(fetchStart + i) % ring.size]
+                                }
+
+                                val publishedSpanMs = if (windowSamples > 0) {
+                                    _windowMs.value * (fetchSamples.toFloat() / windowSamples.toFloat())
+                                } else _windowMs.value
+
+                                val cfg = NewTriggerEngine.Config(
+                                    mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
+                                    sampleRateHz = sampleRate.toFloat(),
+                                    strongLowPassHz = if (triggerArmed) 240f else 160f,
+                                    fMaxHz = if (triggerArmed) 280f else 2000f,
+                                    useAutocorrelation = triggerArmed,
+                                    autocorrRefreshFrames = 8,
+                                    autocorrMaxSamples = 512,
+                                    preTriggerRatio = 0.16f,
+                                    hysteresisRatio = 0.16f,
+                                    holdoffRatio = 0.60f,
+                                )
+
+                                // process trigger on uiSlice[0..fetchSamples)
+                                val trigSource = uiSlice // reuse buffer
+                                val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
+                                if (res != null) {
+                                    val win = try { captureTriggerEngine.extractTriggeredWindow(trigSource, res) } catch (_: Throwable) { trigSource.copyOfRange(0, min(trigSource.size, 512)) }
+                                    _triggerResult.value = res
+                                    _triggeredWindow.value = win
+                                }
+                            }
+                        }
+                    } catch (_: Throwable) {}
+
                     // ===== 写入“滤波后音频”到录音文件（实时跟随参数变化） =====
                     // NOTE: recording uses filteredOutShort computed from the current block before the next read() overwrites shortBuf
                     if (_isRecording.value && (recordingCodec != null || wavOut != null)) {
@@ -1313,6 +1420,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 var ringWrite = 0
                 var ringSize = 0
                 var lastUiUpdateAt = 0L
+                // Trigger processing cadence for imported signal path (mirror capture path variables)
+                var lastTriggerProcessAt = 0L
+                val triggerProcessIntervalMs = 30L // run trigger processing at ~33Hz independent of UI publish rate
 
                 val chunkSize = inBlock.size
                 val chunkDurationMs = (chunkSize * 1000L / sampleRate).coerceAtLeast(8L)
@@ -1512,6 +1622,38 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             _publishedWaveformSpanMs.value = publishedSpanMs.coerceAtLeast(_windowMs.value)
                             markWaveformPublished()
                         }
+
+                        // Trigger processing for imported signal path (run at fixed cadence)
+                        try {
+                            val nowTrig = SystemClock.elapsedRealtime()
+                            if (nowTrig - lastTriggerProcessAt >= triggerProcessIntervalMs) {
+                                lastTriggerProcessAt = nowTrig
+                                val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
+                                    .coerceAtMost(ring.size)
+                                val monitorOn = _isMonitoring.value
+                                val triggerArmed = _triggerEnabled
+                                val extraSamples = (windowSamples * 0.45f).toInt()
+                                val minTriggerSamples = if (triggerArmed) 640 else 0
+                                val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
+                                if (fetchSamples > 0) {
+                                    val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
+                                    for (i in 0 until fetchSamples) {
+                                        uiSlice[i] = ring[(fetchStart + i) % ring.size]
+                                    }
+                                    val cfg = NewTriggerEngine.Config(
+                                        mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
+                                        sampleRateHz = sampleRate.toFloat(),
+                                        useAutocorrelation = triggerArmed,
+                                    )
+                                    val res = try { captureTriggerEngine.process(uiSlice, cfg) } catch (_: Throwable) { null }
+                                    if (res != null) {
+                                        val win = try { captureTriggerEngine.extractTriggeredWindow(uiSlice, res) } catch (_: Throwable) { uiSlice.copyOfRange(0, min(uiSlice.size, 512)) }
+                                        _triggerResult.value = res
+                                        _triggeredWindow.value = win
+                                    }
+                                }
+                            }
+                        } catch (_: Throwable) {}
                     }
 
                     if (_isRecording.value && (recordingCodec != null || wavOut != null)) {
@@ -1814,6 +1956,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         _globalHighPassEnabled.value = globalHpEnabled
         val globalHpCut = settingsPrefs.getFloat(KEY_GLOBAL_HP_CUTOFF_HZ, 1f)
         _globalHighPassCutoff.value = globalHpCut.coerceAtLeast(0.1f)
+        // restore recordings list
+        restorePersistedRecordings()
     }
 
     private fun persistAppSettings() {
@@ -1897,7 +2041,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         if (_isRecording.value) return
 
         try {
-            val dir = File(context.externalCacheDir, "recordings").apply { mkdirs() }
+            val customPath = settingsPrefs.getString(KEY_CUSTOM_RECORDING_PATH, null)
+            val dir = if (!customPath.isNullOrBlank()) {
+                try {
+                    val d = File(customPath)
+                    d.mkdirs()
+                    d
+                } catch (_: Throwable) {
+                    File(context.externalCacheDir, "recordings").apply { mkdirs() }
+                }
+            } else {
+                File(context.externalCacheDir, "recordings").apply { mkdirs() }
+            }
             val fmt = _recordingFormat.value
             val outFile = File(dir, "rec_${System.currentTimeMillis()}.${fmt.extension}")
             currentRecordingPath = outFile.absolutePath
@@ -1932,16 +2087,54 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             currentRecordingPath?.let { path ->
                 val f = try { File(path) } catch (_: Throwable) { null }
                 if (f != null && f.exists() && f.isFile) {
-                    _recordings.update { list ->
-                        val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
-                        list + RecordedClip(
-                            id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
-                            date = System.currentTimeMillis(),
-                            duration = durSec,
-                            fileURL = f.absolutePath,
-                            customName = null
-                        )
-                    }
+                            _recordings.update { list ->
+                                val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
+                                val newList = list + RecordedClip(
+                                    id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
+                                    date = System.currentTimeMillis(),
+                                    duration = durSec,
+                                    fileURL = f.absolutePath,
+                                    customName = null
+                                )
+                                // persist
+                                try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+                                newList
+                            }
+                                    // If user selected a SAF tree, try to copy the file into that tree and update the stored URL to the content URI.
+                                    try {
+                                        val treeUriStr = settingsPrefs.getString(KEY_CUSTOM_RECORDING_TREE_URI, null)
+                                        if (!treeUriStr.isNullOrBlank()) {
+                                            val app = getApplication<Application>()
+                                            val treeUri = android.net.Uri.parse(treeUriStr)
+                                                    try {
+                                                        // Ensure we have permission
+                                                        try {
+                                                            app.contentResolver.takePersistableUriPermission(
+                                                                treeUri,
+                                                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                                            )
+                                                        } catch (_: Throwable) {}
+
+                                                // Try to create a file in the picked SAF tree using DocumentsContract.createDocument
+                                                try {
+                                                    val mime = if (f.name.endsWith(".wav", ignoreCase = true)) "audio/wav" else "audio/m4a"
+                                                    val createdUri = try {
+                                                        android.provider.DocumentsContract.createDocument(app.contentResolver, treeUri, mime, f.name)
+                                                    } catch (_: Throwable) { null }
+                                                    if (createdUri != null) {
+                                                        app.contentResolver.openOutputStream(createdUri)?.use { out ->
+                                                            app.contentResolver.openInputStream(android.net.Uri.fromFile(f))?.use { input ->
+                                                                input.copyTo(out)
+                                                            }
+                                                        }
+                                                        val newUriStr = createdUri.toString()
+                                                        _recordings.update { list -> list.map { if (it.fileURL == f.absolutePath) it.copy(fileURL = newUriStr) else it } }
+                                                        try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+                                                    }
+                                                } catch (_: Throwable) {}
+                                            } catch (_: Throwable) {}
+                                        }
+                                    } catch (_: Throwable) {}
                 }
             }
             return
@@ -1998,16 +2191,51 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         currentRecordingPath?.let { path ->
             val f = try { File(path) } catch (_: Throwable) { null }
             if (f != null && f.exists() && f.isFile) {
-                _recordings.update { list ->
-                    val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
-                    list + RecordedClip(
-                        id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
-                        date = System.currentTimeMillis(),
-                        duration = durSec,
-                        fileURL = f.absolutePath,
-                        customName = null
-                    )
-                }
+                            _recordings.update { list ->
+                                val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
+                                val newList = list + RecordedClip(
+                                    id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
+                                    date = System.currentTimeMillis(),
+                                    duration = durSec,
+                                    fileURL = f.absolutePath,
+                                    customName = null
+                                )
+                                try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+                                newList
+                            }
+                            // try copy to SAF tree if present
+                            try {
+                                val treeUriStr = settingsPrefs.getString(KEY_CUSTOM_RECORDING_TREE_URI, null)
+                                if (!treeUriStr.isNullOrBlank()) {
+                                    val app = getApplication<Application>()
+                                    val treeUri = android.net.Uri.parse(treeUriStr)
+                                    try {
+                                        try {
+                                            app.contentResolver.takePersistableUriPermission(
+                                                treeUri,
+                                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                            )
+                                        } catch (_: Throwable) {}
+                                        // Use DocumentsContract.createDocument to create a file under the picked tree URI
+                                        try {
+                                            val mime = if (f.name.endsWith(".wav", ignoreCase = true)) "audio/wav" else "audio/m4a"
+                                            val createdUri = try {
+                                                android.provider.DocumentsContract.createDocument(app.contentResolver, treeUri, mime, f.name)
+                                            } catch (_: Throwable) { null }
+                                            if (createdUri != null) {
+                                                app.contentResolver.openOutputStream(createdUri)?.use { out ->
+                                                    app.contentResolver.openInputStream(android.net.Uri.fromFile(f))?.use { input ->
+                                                        input.copyTo(out)
+                                                    }
+                                                }
+                                                val newUriStr = createdUri.toString()
+                                                _recordings.update { list -> list.map { if (it.fileURL == f.absolutePath) it.copy(fileURL = newUriStr) else it } }
+                                                try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+                                            }
+                                        } catch (_: Throwable) {}
+                                    } catch (_: Throwable) {}
+                                }
+                            } catch (_: Throwable) {}
             }
         }
     }
@@ -2528,6 +2756,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 if (clip.id != clipId) clip else clip.copy(customName = trimmed)
             }
         }
+        try { persistRecordingsToPrefs() } catch (_: Throwable) {}
     }
 
 
@@ -2536,11 +2765,19 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         if (clip != null) {
             if (_playingId.value == clipId) stopPlayback()
             try {
-                val f = File(clip.fileURL)
-                if (f.exists()) f.delete()
+                if (clip.fileURL.startsWith("content://")) {
+                    try {
+                        val app = getApplication<Application>()
+                        app.contentResolver.delete(android.net.Uri.parse(clip.fileURL), null, null)
+                    } catch (_: Throwable) {}
+                } else {
+                    val f = File(clip.fileURL)
+                    if (f.exists()) f.delete()
+                }
             } catch (_: Throwable) {}
         }
         _recordings.update { list -> list.filterNot { it.id == clipId } }
+        try { persistRecordingsToPrefs() } catch (_: Throwable) {}
     }
 
     // NOTE: The public controls/playback stubs are defined at the top of this file.

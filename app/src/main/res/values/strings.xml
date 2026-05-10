@@ -147,6 +147,12 @@
 
     <string name="settings_language_label">界面语言</string>
     <string name="settings_language_hint">切换后会立即生效</string>
+    <string name="settings_custom_storage_label">自定义存储路径</string>
+    <string name="settings_custom_storage_hint">输入绝对路径（保留）</string>
+    <string name="settings_choose_directory">从文件管理选择目录</string>
+    <string name="settings_save_path">保存路径</string>
+    <string name="settings_choose_dir_success_message">已保存所选目录（若需要请在系统权限设置中授予写入权限）</string>
+    <string name="settings_invalid_path_message">路径无效或无法访问</string>
     <string name="settings_scroll_top">回到顶部</string>
     <string name="preset_help_text">预设是 .json 文件。先点“导出”保存到手机；如果要发给别人，也可以不导出直接点“分享”。对方收到后点“导入”选择该文件即可。</string>
 

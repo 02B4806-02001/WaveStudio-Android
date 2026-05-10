@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -169,8 +170,8 @@ fun RecordingsListView(
 
                         if (expandedId == recording.id) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = { onRenameClick(recording) }) { Text("重命名") }
-                                TextButton(onClick = { onDeleteClick(recording) }) { Text("删除") }
+                                TextButton(onClick = { onRenameClick(recording) }) { Text(stringResource(R.string.rename_title)) }
+                                TextButton(onClick = { onDeleteClick(recording) }) { Text(stringResource(R.string.action_delete)) }
                             }
                         }
                     }
@@ -180,7 +181,7 @@ fun RecordingsListView(
                         IconButton(onClick = { onShareClick(recording) }, modifier = Modifier.size(36.dp)) {
                             Icon(
                                 painter = rememberVectorPainter(ShareIconFallback),
-                                contentDescription = "分享录音"
+                                contentDescription = stringResource(R.string.share_title_recording)
                             )
                         }
                         IconButton(onClick = { onPlayClick(recording) }, modifier = Modifier.size(36.dp)) {
@@ -188,7 +189,7 @@ fun RecordingsListView(
                                 painter = rememberVectorPainter(
                                     if (playingId == recording.id) StopIcon else PlayIcon
                                 ),
-                                contentDescription = if (playingId == recording.id) "停止播放" else "播放录音"
+                                contentDescription = if (playingId == recording.id) stringResource(R.string.action_stop) else stringResource(R.string.action_record)
                             )
                         }
                     }
