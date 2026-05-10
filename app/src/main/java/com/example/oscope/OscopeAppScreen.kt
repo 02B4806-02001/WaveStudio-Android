@@ -145,6 +145,14 @@ fun OscopeApp(
     val startupNoteText = stringResource(R.string.startup_note_text)
     val shareTitleGeneric = stringResource(R.string.share_title_generic)
     val shareTitleRecording = stringResource(R.string.share_title_recording)
+    // Pre-read some strings that may be used inside try/catch blocks to avoid
+    // calling @Composable APIs from inside try/catch (not allowed).
+    val settingsChooseDirSuccessMessage = stringResource(R.string.settings_choose_dir_success_message)
+    val settingsInvalidPathMessage = stringResource(R.string.settings_invalid_path_message)
+    val settingsSavePathMessage = stringResource(R.string.settings_save_path)
+    val settingsChooseDirectoryLabel = stringResource(R.string.settings_choose_directory)
+    val commonResetMessage = stringResource(R.string.common_reset)
+    val commonCancelMessage = stringResource(R.string.common_cancel)
     val startupPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
     }
@@ -219,6 +227,8 @@ fun OscopeApp(
 
     // 预设“默认”：误触保护二次确认
     var presetResetConfirmDialog by remember { mutableStateOf(false) }
+    // Compact custom storage dialog (opened from settings dropdown)
+    var showCustomStorageDialog by remember { mutableStateOf(false) }
 
     fun exportCurrentPresetToCache(nameNoExt: String): File? {
         return try {
@@ -316,6 +326,26 @@ fun OscopeApp(
         }
     }
 
+    // SAF directory picker for compact settings dialog
+    val chooseDirLauncherForSettings = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: Throwable) {}
+            startupPrefs.edit { putString("custom_recording_tree_uri", uri.toString()) }
+            // use pre-read string
+            showCenterToast(settingsChooseDirSuccessMessage)
+        } catch (t: Throwable) {
+            showCenterToast(settingsInvalidPathMessage)
+        }
+    }
+
     fun formatHz(hz: Float): String {
         val v = hz.coerceAtLeast(0f)
         return if (v < 10f) String.format(Locale.US, "%.1f", v) else v.toInt().toString()
@@ -386,21 +416,31 @@ fun OscopeApp(
 
     fun shareRecording(clip: RecordedClip) {
         try {
-            val file = File(clip.fileURL)
-            if (!file.exists()) return
+            if (clip.fileURL.startsWith("content://")) {
+                val uri = Uri.parse(clip.fileURL)
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = mimeForRecording(clip.fileName)
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, shareTitleRecording))
+            } else {
+                val file = File(clip.fileURL)
+                if (!file.exists()) return
 
-            val uri: Uri = FileProvider.getUriForFile(
-                context,
-                context.packageName + ".fileprovider",
-                file
-            )
+                val uri: Uri = FileProvider.getUriForFile(
+                    context,
+                    context.packageName + ".fileprovider",
+                    file
+                )
 
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = mimeForRecording(file.name)
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = mimeForRecording(file.name)
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, shareTitleRecording))
             }
-            context.startActivity(Intent.createChooser(intent, shareTitleRecording))
         } catch (_: Throwable) {
             // ignore
         }
@@ -742,6 +782,7 @@ fun OscopeApp(
         key(isLandscape) {
             ImmersiveScreen(
                 modifier = modifier,
+                audioViewModel = audioViewModel,
                 setLandscape = ::setLandscape,
                 landscapeLocked = landscapeLocked,
                 onToggleLock = { landscapeLocked = !landscapeLocked },
@@ -1005,40 +1046,57 @@ fun OscopeApp(
                                 audioViewModel.setRecordingSampleRate(nextRecordingSampleRate(recordingSampleRate))
                             }
                         )
+                        // Compact entry to open custom storage dialog (absolute path input + SAF picker)
+                        DropdownMenuItem(
+                            text = {
+                                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(stringResource(R.string.settings_custom_storage_label))
+                                    Spacer(Modifier.weight(1f))
+                                    // show indicator if any path/tree saved
+                                    val p = startupPrefs.getString("custom_recording_path", "") ?: ""
+                                    val t = startupPrefs.getString("custom_recording_tree_uri", "") ?: ""
+                                    if (p.isNotBlank() || t.isNotBlank()) Text("✓", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            },
+                            onClick = {
+                                settingsMenuExpanded = false
+                                showCustomStorageDialog = true
+                            }
+                        )
                         val publishRateOptions = AudioEngineViewModel.PublishRateOption.entries
                         val publishRateIdx = publishRateOptions.indexOf(publishRateOption).coerceAtLeast(0)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(stringResource(R.string.waveform_refresh_rate_label))
-                            Spacer(Modifier.weight(1f))
-                            TextButton(
-                                enabled = publishRateIdx > 0,
-                                onClick = {
-                                    audioViewModel.setPublishRateOption(prevPublishRateOption(publishRateOption))
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text("-")
-                            }
-                            Text(
-                                text = "${publishRateOption.hz}Hz",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            )
-                            TextButton(
-                                enabled = publishRateIdx < publishRateOptions.lastIndex,
-                                onClick = {
-                                    audioViewModel.setPublishRateOption(nextPublishRateOption(publishRateOption))
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text("+")
-                            }
-                        }
+                        // Use DropdownMenuItem so the font/spacing matches other menu entries
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.waveform_refresh_rate_label))
+                                    Spacer(Modifier.weight(1f))
+                                    TextButton(
+                                        enabled = publishRateIdx > 0,
+                                        onClick = {
+                                            audioViewModel.setPublishRateOption(prevPublishRateOption(publishRateOption))
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) { Text("-") }
+                                    Text(
+                                        text = "${publishRateOption.hz}Hz",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.padding(horizontal = 4.dp)
+                                    )
+                                    TextButton(
+                                        enabled = publishRateIdx < publishRateOptions.lastIndex,
+                                        onClick = {
+                                            audioViewModel.setPublishRateOption(nextPublishRateOption(publishRateOption))
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) { Text("+") }
+                                }
+                            },
+                            onClick = { /* no-op: actions handled by inner buttons */ }
+                        )
                         HorizontalDivider()
                         DropdownMenuItem(
                             text = {
@@ -1454,6 +1512,52 @@ fun OscopeApp(
         onDismiss = { showAboutDialog = false },
         onShowStartupNote = { openStartupNoteDialog() }
     )
+
+    if (showCustomStorageDialog) {
+        // Dialog-local state
+        var dialogPath by rememberSaveable { mutableStateOf(startupPrefs.getString("custom_recording_path", "") ?: "") }
+        val savedTree = startupPrefs.getString("custom_recording_tree_uri", "") ?: ""
+
+        AlertDialog(
+            onDismissRequest = { showCustomStorageDialog = false },
+            title = { Text(stringResource(R.string.settings_custom_storage_label)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = dialogPath,
+                        onValueChange = { dialogPath = it },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.settings_custom_storage_hint)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { chooseDirLauncherForSettings.launch(null) }) { Text(stringResource(R.string.settings_choose_directory)) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    try {
+                        startupPrefs.edit { putString("custom_recording_path", dialogPath.trim()) }
+                        showCenterToast(settingsSavePathMessage)
+                    } catch (_: Throwable) {
+                        showCenterToast(settingsInvalidPathMessage)
+                    }
+                    showCustomStorageDialog = false
+                }) { Text(settingsSavePathMessage) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        startupPrefs.edit { remove("custom_recording_path"); remove("custom_recording_tree_uri") }
+                        showCenterToast(commonResetMessage)
+                        showCustomStorageDialog = false
+                    }) { Text(commonResetMessage) }
+                    TextButton(onClick = { showCustomStorageDialog = false }) { Text(commonCancelMessage) }
+                }
+            }
+        )
+    }
 
     if (showExitConfirmDialog) {
         AlertDialog(

@@ -43,12 +43,16 @@ import androidx.core.content.edit
 // Note: Shared utility functions (toEnglishOrdinal, rememberDisplayLowPass, computeEqResponse)
 // are now in OscopeUIUtils.kt to avoid duplication
 
+// Local trigger engine instance for UI-only triggered-window preview
+private val triggerEngine = NewTriggerEngine(nominalWindowSize = 512)
+
 @Composable
 fun ImmersiveScreen(
     modifier: Modifier,
     setLandscape: (Boolean) -> Unit,
     landscapeLocked: Boolean,
     onToggleLock: () -> Unit,
+    audioViewModel: AudioEngineViewModel,
     filteredWaveform: StateFlow<FloatArray>,
     useTestSignal: Boolean,
     filteredDisplayScale: Float,
@@ -115,8 +119,8 @@ fun ImmersiveScreen(
         }
     }
     val triggerMode = parseTriggerMode(triggerModeName)
-    val triggerEngine = remember(triggerMode) { NewTriggerEngine(nominalWindowSize = 512) }
 
+    // Inform view model about trigger enabled state when UI mode changes.
     LaunchedEffect(triggerMode) {
         onTriggerEnabled(triggerMode != NewTriggerEngine.Mode.OFF)
     }
@@ -230,9 +234,20 @@ fun ImmersiveScreen(
                 .padding(bottom = 12.dp, start = 12.dp, end = 12.dp)
         ) {
             val immersiveRef = filteredDisplayScale.coerceAtLeast(1e-4f)
-            val triggeredWindowAndResult = buildTriggeredWindow(filteredSamples, triggerMode, waveformSpanMs)
-            val displaySamples = triggeredWindowAndResult.first
-            val triggerResult = triggeredWindowAndResult.second
+            val vmTriggeredWindow by audioViewModel.triggeredWindow.collectAsStateWithLifecycle()
+            val vmTriggerResult by audioViewModel.triggerResult.collectAsStateWithLifecycle()
+
+            val displaySamples: FloatArray = if (triggerMode == NewTriggerEngine.Mode.OFF) {
+                // Fallback: show right-aligned nominal window
+                if (filteredSamples.isEmpty()) floatArrayOf()
+                else {
+                    val nominalWindowSize = 512
+                    if (filteredSamples.size <= nominalWindowSize) filteredSamples else filteredSamples.copyOfRange(filteredSamples.size - nominalWindowSize, filteredSamples.size)
+                }
+            } else {
+                vmTriggeredWindow
+            }
+            val triggerResult = vmTriggerResult
 
             WaveformView(
                 samples = displaySamples,
