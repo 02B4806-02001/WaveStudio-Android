@@ -1,6 +1,7 @@
 package org.mhrri.wavestudio
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
@@ -2071,6 +2072,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    @SuppressLint("SuspiciousIndentation")
     private fun stopRecordingInternalBlocking() {
         // WAV path: finalize header and close.
         val wav = wavOut
@@ -2106,14 +2108,14 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                         if (!treeUriStr.isNullOrBlank()) {
                                             val app = getApplication<Application>()
                                             val treeUri = android.net.Uri.parse(treeUriStr)
-                                                    try {
-                                                        // Ensure we have permission
-                                                        try {
-                                                            app.contentResolver.takePersistableUriPermission(
-                                                                treeUri,
-                                                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                                                            )
-                                                        } catch (_: Throwable) {}
+                                            try {
+                                                // Ensure we have permission
+                                                try {
+                                                    app.contentResolver.takePersistableUriPermission(
+                                                        treeUri,
+                                                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                                    )
+                                                } catch (_: Throwable) {}
 
                                                 // Try to create a file in the picked SAF tree using DocumentsContract.createDocument
                                                 try {
