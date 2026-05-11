@@ -5,25 +5,19 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.widget.Toast
 import android.view.Gravity
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.edit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,24 +25,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -62,21 +46,13 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Locale
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.exp
 import kotlin.math.ln
-import kotlin.math.pow
 import kotlin.math.round
-import kotlin.math.roundToInt
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
-import kotlin.math.log10
-import kotlin.math.PI
-
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -1334,11 +1310,20 @@ fun OscopeApp(
                         )
                     }
             ) {
-                val displayFilteredSamples = buildNormalTriggeredWindow(
-                    source = filteredWaveSamples,
-                    // use the actual published span (may be larger than the current visible window)
-                    waveformSpanMs = immersiveWaveformSpanMs,
-                )
+                val displayFilteredSamples by produceState(
+                    initialValue = filteredWaveSamples,
+                    filteredWaveSamples,
+                    immersiveWaveformSpanMs,
+                    normalTriggerEnabled,
+                ) {
+                    value = withContext(Dispatchers.Default) {
+                        buildNormalTriggeredWindow(
+                            source = filteredWaveSamples,
+                            // use the actual published span (may be larger than the current visible window)
+                            waveformSpanMs = immersiveWaveformSpanMs,
+                        )
+                    }
+                }
                 WaveformView(
                     samples = displayFilteredSamples,
                     ampScale = filteredDisplayScale,

@@ -32,6 +32,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.nio.ByteOrder
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -44,9 +45,7 @@ import kotlin.math.sqrt
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.AudioTrack
-import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.common.Player
 import android.media.MediaCodec
 import android.media.MediaMuxer
 
@@ -2033,6 +2032,86 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         return bytes to byteCount
     }
 
+    private fun defaultRecordingDir(context: Context): File {
+        val base = context.externalCacheDir ?: context.cacheDir
+        return File(base, "recordings").apply { mkdirs() }
+    }
+
+    private fun isUsableDirectory(dir: File): Boolean {
+        return try {
+            (dir.exists() || dir.mkdirs()) && dir.isDirectory && dir.canWrite()
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun resolveRecordingDir(context: Context): File {
+        val treeUriStr = settingsPrefs.getString(KEY_CUSTOM_RECORDING_TREE_URI, null)
+        if (!treeUriStr.isNullOrBlank()) {
+            return defaultRecordingDir(context)
+        }
+
+        val customPath = settingsPrefs.getString(KEY_CUSTOM_RECORDING_PATH, null)
+        if (!customPath.isNullOrBlank()) {
+            val dir = try { File(customPath) } catch (_: Throwable) { null }
+            if (dir != null && isUsableDirectory(dir)) {
+                return dir
+            }
+        }
+
+        return defaultRecordingDir(context)
+    }
+
+    private fun recordingMimeType(fileName: String): String {
+        val lower = fileName.lowercase(Locale.getDefault())
+        return when {
+            lower.endsWith(".wav") -> "audio/wav"
+            lower.endsWith(".m4a") || lower.endsWith(".mp4") -> "audio/mp4"
+            lower.endsWith(".aac") -> "audio/aac"
+            else -> "application/octet-stream"
+        }
+    }
+
+    private fun copyRecordingToSelectedTree(sourceFile: File) {
+        try {
+            if (!sourceFile.exists() || !sourceFile.isFile) return
+            val treeUriStr = settingsPrefs.getString(KEY_CUSTOM_RECORDING_TREE_URI, null)
+            if (treeUriStr.isNullOrBlank()) return
+
+            val app = getApplication<Application>()
+            val treeUri = android.net.Uri.parse(treeUriStr)
+            try {
+                app.contentResolver.takePersistableUriPermission(
+                    treeUri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: Throwable) {}
+
+            val createdUri = try {
+                android.provider.DocumentsContract.createDocument(
+                    app.contentResolver,
+                    treeUri,
+                    recordingMimeType(sourceFile.name),
+                    sourceFile.name,
+                )
+            } catch (_: Throwable) { null } ?: return
+
+            var copied = false
+            app.contentResolver.openOutputStream(createdUri)?.use { out ->
+                app.contentResolver.openInputStream(android.net.Uri.fromFile(sourceFile))?.use { input ->
+                    input.copyTo(out)
+                    copied = true
+                }
+            }
+
+            if (copied) {
+                val newUriStr = createdUri.toString()
+                _recordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newUriStr) else it } }
+                try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+            }
+        } catch (_: Throwable) {}
+    }
+
     fun startRecording(context: Context) {
         if (!_isRunning.value && !_useImportedSignal.value) return
         if (_useTestSignal.value) {
@@ -2042,18 +2121,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         if (_isRecording.value) return
 
         try {
-            val customPath = settingsPrefs.getString(KEY_CUSTOM_RECORDING_PATH, null)
-            val dir = if (!customPath.isNullOrBlank()) {
-                try {
-                    val d = File(customPath)
-                    d.mkdirs()
-                    d
-                } catch (_: Throwable) {
-                    File(context.externalCacheDir, "recordings").apply { mkdirs() }
-                }
-            } else {
-                File(context.externalCacheDir, "recordings").apply { mkdirs() }
-            }
+            val dir = resolveRecordingDir(context)
             val fmt = _recordingFormat.value
             val outFile = File(dir, "rec_${System.currentTimeMillis()}.${fmt.extension}")
             currentRecordingPath = outFile.absolutePath
@@ -2089,54 +2157,19 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             currentRecordingPath?.let { path ->
                 val f = try { File(path) } catch (_: Throwable) { null }
                 if (f != null && f.exists() && f.isFile) {
-                            _recordings.update { list ->
-                                val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
-                                val newList = list + RecordedClip(
-                                    id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
-                                    date = System.currentTimeMillis(),
-                                    duration = durSec,
-                                    fileURL = f.absolutePath,
-                                    customName = null
-                                )
-                                // persist
-                                try { persistRecordingsToPrefs() } catch (_: Throwable) {}
-                                newList
-                            }
-                                    // If user selected a SAF tree, try to copy the file into that tree and update the stored URL to the content URI.
-                                    try {
-                                        val treeUriStr = settingsPrefs.getString(KEY_CUSTOM_RECORDING_TREE_URI, null)
-                                        if (!treeUriStr.isNullOrBlank()) {
-                                            val app = getApplication<Application>()
-                                            val treeUri = android.net.Uri.parse(treeUriStr)
-                                            try {
-                                                // Ensure we have permission
-                                                try {
-                                                    app.contentResolver.takePersistableUriPermission(
-                                                        treeUri,
-                                                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                                                    )
-                                                } catch (_: Throwable) {}
-
-                                                // Try to create a file in the picked SAF tree using DocumentsContract.createDocument
-                                                try {
-                                                    val mime = if (f.name.endsWith(".wav", ignoreCase = true)) "audio/wav" else "audio/m4a"
-                                                    val createdUri = try {
-                                                        android.provider.DocumentsContract.createDocument(app.contentResolver, treeUri, mime, f.name)
-                                                    } catch (_: Throwable) { null }
-                                                    if (createdUri != null) {
-                                                        app.contentResolver.openOutputStream(createdUri)?.use { out ->
-                                                            app.contentResolver.openInputStream(android.net.Uri.fromFile(f))?.use { input ->
-                                                                input.copyTo(out)
-                                                            }
-                                                        }
-                                                        val newUriStr = createdUri.toString()
-                                                        _recordings.update { list -> list.map { if (it.fileURL == f.absolutePath) it.copy(fileURL = newUriStr) else it } }
-                                                        try { persistRecordingsToPrefs() } catch (_: Throwable) {}
-                                                    }
-                                                } catch (_: Throwable) {}
-                                            } catch (_: Throwable) {}
-                                        }
-                                    } catch (_: Throwable) {}
+                    _recordings.update { list ->
+                        val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
+                        val newList = list + RecordedClip(
+                            id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
+                            date = System.currentTimeMillis(),
+                            duration = durSec,
+                            fileURL = f.absolutePath,
+                            customName = null
+                        )
+                        try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+                        newList
+                    }
+                    copyRecordingToSelectedTree(f)
                 }
             }
             return
@@ -2193,51 +2226,19 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         currentRecordingPath?.let { path ->
             val f = try { File(path) } catch (_: Throwable) { null }
             if (f != null && f.exists() && f.isFile) {
-                            _recordings.update { list ->
-                                val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
-                                val newList = list + RecordedClip(
-                                    id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
-                                    date = System.currentTimeMillis(),
-                                    duration = durSec,
-                                    fileURL = f.absolutePath,
-                                    customName = null
-                                )
-                                try { persistRecordingsToPrefs() } catch (_: Throwable) {}
-                                newList
-                            }
-                            // try copy to SAF tree if present
-                            try {
-                                val treeUriStr = settingsPrefs.getString(KEY_CUSTOM_RECORDING_TREE_URI, null)
-                                if (!treeUriStr.isNullOrBlank()) {
-                                    val app = getApplication<Application>()
-                                    val treeUri = android.net.Uri.parse(treeUriStr)
-                                    try {
-                                        try {
-                                            app.contentResolver.takePersistableUriPermission(
-                                                treeUri,
-                                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                                            )
-                                        } catch (_: Throwable) {}
-                                        // Use DocumentsContract.createDocument to create a file under the picked tree URI
-                                        try {
-                                            val mime = if (f.name.endsWith(".wav", ignoreCase = true)) "audio/wav" else "audio/m4a"
-                                            val createdUri = try {
-                                                android.provider.DocumentsContract.createDocument(app.contentResolver, treeUri, mime, f.name)
-                                            } catch (_: Throwable) { null }
-                                            if (createdUri != null) {
-                                                app.contentResolver.openOutputStream(createdUri)?.use { out ->
-                                                    app.contentResolver.openInputStream(android.net.Uri.fromFile(f))?.use { input ->
-                                                        input.copyTo(out)
-                                                    }
-                                                }
-                                                val newUriStr = createdUri.toString()
-                                                _recordings.update { list -> list.map { if (it.fileURL == f.absolutePath) it.copy(fileURL = newUriStr) else it } }
-                                                try { persistRecordingsToPrefs() } catch (_: Throwable) {}
-                                            }
-                                        } catch (_: Throwable) {}
-                                    } catch (_: Throwable) {}
-                                }
-                            } catch (_: Throwable) {}
+                _recordings.update { list ->
+                    val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
+                    val newList = list + RecordedClip(
+                        id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
+                        date = System.currentTimeMillis(),
+                        duration = durSec,
+                        fileURL = f.absolutePath,
+                        customName = null
+                    )
+                    try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+                    newList
+                }
+                copyRecordingToSelectedTree(f)
             }
         }
     }
