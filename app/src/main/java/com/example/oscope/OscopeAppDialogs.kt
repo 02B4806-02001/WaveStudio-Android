@@ -329,8 +329,12 @@ internal fun AboutDialog(
 
     val aboutMainLines = if (isZhAbout) {
         listOf(
-            "Wave Studio v0.14.0 by 磁拾音器研究所",
+            "Wave Studio v0.14.1 by 磁拾音器研究所",
             "提示：使用前请授予麦克风权限。",
+            "",
+            "0.14.1版本主要更新内容如下：",
+            "- 修复了自定义路径的 bug",
+            "- 优化了 Trigger 功能",
             "",
             "0.14.0版本主要更新内容如下：",
             "- 可使用自定义录音存储路径",
@@ -365,8 +369,12 @@ internal fun AboutDialog(
         )
     } else {
         listOf(
-            "Wave Studio v0.14.0 by MoHa-Radio Institute",
+            "Wave Studio v0.14.1 by MoHa-Radio Institute",
             "Note: Please grant microphone permission before use.",
+            "",
+            "Key updates in version 0.14.1:",
+            "- Fixed a bug with the custom path",
+            "- Optimized the Trigger function",
             "",
             "Key updates in version 0.14.0:",
             "- Custom recording storage path is now available",
