@@ -129,13 +129,13 @@ fun OscopeApp(
     val settingsChooseDirectoryLabel = stringResource(R.string.settings_choose_directory)
     val commonResetMessage = stringResource(R.string.common_reset)
     val commonCancelMessage = stringResource(R.string.common_cancel)
+    val uiScope = rememberCoroutineScope()
     val startupPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
     }
     val triggerPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
     }
-
     val hideStartupNoteInitially = remember(startupPrefs) {
         startupPrefs.getBoolean(KEY_HIDE_STARTUP_NOTE, false)
     }
@@ -303,22 +303,70 @@ fun OscopeApp(
     }
 
     // SAF directory picker for compact settings dialog
+    fun validateWritableTreeUri(treeUri: Uri): Boolean {
+        val appContext = context.applicationContext
+        return try {
+            val testName = ".oscope_write_test_${System.currentTimeMillis()}.tmp"
+            val testMime = "application/octet-stream"
+            val testUri = try {
+                androidx.documentfile.provider.DocumentFile.fromTreeUri(appContext, treeUri)
+                    ?.createFile(testMime, testName)
+                    ?.uri
+            } catch (_: Throwable) {
+                null
+            } ?: try {
+                android.provider.DocumentsContract.createDocument(
+                    appContext.contentResolver,
+                    treeUri,
+                    testMime,
+                    testName,
+                )
+            } catch (_: Throwable) {
+                null
+            } ?: return false
+
+            var wrote = false
+            appContext.contentResolver.openOutputStream(testUri)?.use { out ->
+                out.write(0)
+                out.flush()
+                wrote = true
+            }
+            if (!wrote) {
+                try { appContext.contentResolver.delete(testUri, null, null) } catch (_: Throwable) {}
+                return false
+            }
+
+            try { appContext.contentResolver.delete(testUri, null, null) } catch (_: Throwable) {}
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     val chooseDirLauncherForSettings = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
-        try {
+        uiScope.launch {
             try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            } catch (_: Throwable) {}
-            startupPrefs.edit { putString("custom_recording_tree_uri", uri.toString()) }
-            // use pre-read string
-            showCenterToast(settingsChooseDirSuccessMessage)
-        } catch (t: Throwable) {
-            showCenterToast(settingsInvalidPathMessage)
+                val writable = withContext(Dispatchers.IO) { validateWritableTreeUri(uri) }
+                if (!writable) {
+                    showCenterToast(settingsInvalidPathMessage)
+                    return@launch
+                }
+
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                } catch (_: Throwable) {}
+                startupPrefs.edit { putString("custom_recording_tree_uri", uri.toString()) }
+                // use pre-read string
+                showCenterToast(settingsChooseDirSuccessMessage)
+            } catch (_: Throwable) {
+                showCenterToast(settingsInvalidPathMessage)
+            }
         }
     }
 
@@ -700,7 +748,6 @@ fun OscopeApp(
     val orderOptions = (1..8).toList()
 
     val settingsScroll = rememberScrollState()
-    val uiScope = rememberCoroutineScope()
     val eqDraggableInitial = remember(triggerPrefs) {
         triggerPrefs.getBoolean(KEY_EQ_DRAGGABLE, false)
     }
