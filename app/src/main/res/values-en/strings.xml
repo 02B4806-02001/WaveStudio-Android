@@ -160,7 +160,7 @@
     <string name="settings_language_label">Language</string>
     <string name="settings_language_hint">Takes effect immediately after switching</string>
     <string name="settings_custom_storage_label">Custom storage path</string>
-    <string name="settings_custom_storage_hint">Enter absolute path (kept)</string>
+    <string name="settings_custom_storage_hint">Enter an absolute or relative path (relative paths are saved under Downloads/Oscope)</string>
     <string name="settings_choose_directory">Choose directory from Files</string>
     <string name="settings_save_path">Save path</string>
     <string name="settings_choose_dir_success_message">Selected directory saved (grant write permission in system settings if needed)</string>

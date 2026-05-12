@@ -8,10 +8,8 @@ schema: v1
 # Define which models can be used
 # https://docs.continue.dev/customization/models
 models:
-  - name: Qwen3 Coder
+  - name: DeepSeek V4 Pro
     provider: openai
-    apiBase: https://integrate.api.nvidia.com/v1
-    model: qwen/qwen3-coder-480b-a35b-instruct
-    apiKey: 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
-    requestOptions:
-      timeout: 50000
+    apiBase: https://api.deepseek.com/
+    model: deepseek-v4-pro
+    apiKey: sk-8b1bee1b040d4f22a890d25538927af3

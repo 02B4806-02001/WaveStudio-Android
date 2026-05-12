@@ -148,7 +148,7 @@
     <string name="settings_language_label">界面语言</string>
     <string name="settings_language_hint">切换后会立即生效</string>
     <string name="settings_custom_storage_label">自定义存储路径</string>
-    <string name="settings_custom_storage_hint">输入绝对路径（保留）</string>
+    <string name="settings_custom_storage_hint">输入绝对路径或相对路径（相对路径会保存到 Download/Oscope 下）</string>
     <string name="settings_choose_directory">从文件管理选择目录</string>
     <string name="settings_save_path">保存路径</string>
     <string name="settings_choose_dir_success_message">已保存所选目录（若需要请在系统权限设置中授予写入权限）</string>

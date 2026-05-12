@@ -33,9 +33,9 @@ android {
             if (!storeFilePath.isNullOrBlank()) {
                 storeFile = file(storeFilePath)
             }
-            if (!storePassword.isNullOrBlank()) storePassword?.let { this.storePassword = it }
-            if (!keyAlias.isNullOrBlank()) keyAlias?.let { this.keyAlias = it }
-            if (!keyPassword.isNullOrBlank()) keyPassword?.let { this.keyPassword = it }
+            if (!storePassword.isNullOrBlank()) this.storePassword = storePassword
+            if (!keyAlias.isNullOrBlank()) this.keyAlias = keyAlias
+            if (!keyPassword.isNullOrBlank()) this.keyPassword = keyPassword
         }
     }
 
@@ -98,17 +98,18 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     // ViewModel + Compose 集成（直接写死版本号）
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.documentfile)
 
     // 音频播放（Media3）
-    implementation("androidx.media3:media3-exoplayer:1.9.0")
+    implementation(libs.androidx.media3.exoplayer)
 
     // 权限请求（Accompanist）
-    implementation("com.google.accompanist:accompanist-permissions:0.37.3")
+    implementation(libs.accompanist.permissions)
 
     // Lifecycle ViewModel
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 

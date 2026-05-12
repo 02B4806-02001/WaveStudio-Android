@@ -3,6 +3,7 @@ package org.mhrri.wavestudio
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.SharedPreferences
@@ -12,11 +13,15 @@ import android.media.AudioRecord
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Process
 import android.os.SystemClock
+import android.os.Environment
 import android.provider.OpenableColumns
+import android.provider.MediaStore
 import android.util.Log
 import androidx.core.content.ContextCompat
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +34,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.nio.ByteOrder
@@ -533,6 +539,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private var recordingActiveFormat: RecordingFormat? = null
     private var recordingDownsampleBuffer = ShortArray(0)
     private var recordingPcmBytesBuffer = ByteArray(0)
+    private var pendingRelativeRecordingPath: String? = null
+    private var lastRecordingUsedAbsoluteCustomPath: Boolean = false
 
     // stopRecording 时的后台收尾任务，避免 UI 卡死
     private var recordingStopJob: Job? = null
@@ -2046,6 +2054,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun resolveRecordingDir(context: Context): File {
+        pendingRelativeRecordingPath = null
+        lastRecordingUsedAbsoluteCustomPath = false
+
         val treeUriStr = settingsPrefs.getString(KEY_CUSTOM_RECORDING_TREE_URI, null)
         if (!treeUriStr.isNullOrBlank()) {
             return defaultRecordingDir(context)
@@ -2053,13 +2064,52 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
         val customPath = settingsPrefs.getString(KEY_CUSTOM_RECORDING_PATH, null)
         if (!customPath.isNullOrBlank()) {
-            val dir = try { File(customPath) } catch (_: Throwable) { null }
-            if (dir != null && isUsableDirectory(dir)) {
-                return dir
+            val normalized = customPath.trim()
+            val candidate = try { File(normalized) } catch (_: Throwable) { null }
+            if (candidate != null) {
+                if (candidate.isAbsolute) {
+                    val dir = if (
+                        normalized.endsWith(".wav", ignoreCase = true) ||
+                        normalized.endsWith(".m4a", ignoreCase = true) ||
+                        normalized.endsWith(".mp4", ignoreCase = true) ||
+                        normalized.endsWith(".aac", ignoreCase = true)
+                    ) {
+                        candidate.parentFile ?: candidate
+                    } else {
+                        candidate
+                    }
+                    if (isUsableDirectory(dir)) {
+                        lastRecordingUsedAbsoluteCustomPath = true
+                        return dir
+                    }
+                } else {
+                    pendingRelativeRecordingPath = normalized
+                    return defaultRecordingDir(context)
+                }
             }
         }
 
         return defaultRecordingDir(context)
+    }
+
+    private fun normalizeRelativeRecordingPath(rawPath: String?): String {
+        val clean = rawPath?.trim().orEmpty()
+        if (clean.isBlank()) return ""
+        return clean
+            .replace('\\', '/')
+            .split('/')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it != "." && it != ".." }
+            .joinToString("/")
+    }
+
+    private fun publicDownloadsTargetPath(relativePath: String? = null): String {
+        val rel = normalizeRelativeRecordingPath(relativePath)
+        return if (rel.isBlank()) {
+            "Oscope"
+        } else {
+            "Oscope/$rel"
+        }
     }
 
     private fun recordingMimeType(fileName: String): String {
@@ -2072,11 +2122,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    private fun copyRecordingToSelectedTree(sourceFile: File) {
+    private fun copyRecordingToSelectedTree(sourceFile: File): String? {
         try {
-            if (!sourceFile.exists() || !sourceFile.isFile) return
+            if (!sourceFile.exists() || !sourceFile.isFile) return null
             val treeUriStr = settingsPrefs.getString(KEY_CUSTOM_RECORDING_TREE_URI, null)
-            if (treeUriStr.isNullOrBlank()) return
+            if (treeUriStr.isNullOrBlank()) return null
 
             val app = getApplication<Application>()
             val treeUri = android.net.Uri.parse(treeUriStr)
@@ -2088,28 +2138,103 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             } catch (_: Throwable) {}
 
             val createdUri = try {
-                android.provider.DocumentsContract.createDocument(
-                    app.contentResolver,
-                    treeUri,
-                    recordingMimeType(sourceFile.name),
-                    sourceFile.name,
-                )
-            } catch (_: Throwable) { null } ?: return
+                DocumentFile.fromTreeUri(app, treeUri)?.createFile(recordingMimeType(sourceFile.name), sourceFile.name)?.uri
+            } catch (_: Throwable) { null }
+                ?: try {
+                    android.provider.DocumentsContract.createDocument(
+                        app.contentResolver,
+                        treeUri,
+                        recordingMimeType(sourceFile.name),
+                        sourceFile.name,
+                    )
+                } catch (_: Throwable) { null }
+                ?: return null
 
             var copied = false
             app.contentResolver.openOutputStream(createdUri)?.use { out ->
-                app.contentResolver.openInputStream(android.net.Uri.fromFile(sourceFile))?.use { input ->
+                FileInputStream(sourceFile).use { input ->
                     input.copyTo(out)
                     copied = true
                 }
             }
 
             if (copied) {
+                val sourceSize = try { sourceFile.length() } catch (_: Throwable) { -1L }
+                val copiedOk = if (sourceSize > 0L) {
+                    try {
+                        app.contentResolver.openFileDescriptor(createdUri, "r")?.use { fd ->
+                            fd.statSize < 0L || fd.statSize == sourceSize
+                        } ?: false
+                    } catch (_: Throwable) {
+                        false
+                    }
+                } else {
+                    true
+                }
+
+                if (!copiedOk) {
+                    try {
+                        app.contentResolver.delete(createdUri, null, null)
+                    } catch (_: Throwable) {}
+                    return null
+                }
+
                 val newUriStr = createdUri.toString()
                 _recordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newUriStr) else it } }
                 try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+                return newUriStr
             }
         } catch (_: Throwable) {}
+        return null
+    }
+
+    private fun copyRecordingToPublicDownloads(sourceFile: File, relativePath: String? = null): String? {
+        return try {
+            if (!sourceFile.exists() || !sourceFile.isFile) return null
+            val app = getApplication<Application>()
+            val mime = recordingMimeType(sourceFile.name)
+            val displayName = sourceFile.name
+            val targetRelativePath = publicDownloadsTargetPath(relativePath)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$targetRelativePath")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val uri = app.contentResolver.insert(collection, values) ?: return null
+                app.contentResolver.openOutputStream(uri)?.use { out ->
+                    sourceFile.inputStream().use { input -> input.copyTo(out) }
+                } ?: return null
+                try {
+                    app.contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+                } catch (_: Throwable) {}
+                val newUriStr = uri.toString()
+                _recordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newUriStr) else it } }
+                try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+                newUriStr
+            } else {
+                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), targetRelativePath).apply { mkdirs() }
+                val outFile = File(dir, displayName)
+                sourceFile.copyTo(outFile, overwrite = true)
+                val newPath = outFile.absolutePath
+                _recordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newPath) else it } }
+                try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+                newPath
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun publishRecordingForVisibility(sourceFile: File): String? {
+        val treeUriStr = settingsPrefs.getString(KEY_CUSTOM_RECORDING_TREE_URI, null)
+        if (!treeUriStr.isNullOrBlank()) return copyRecordingToSelectedTree(sourceFile) ?: copyRecordingToPublicDownloads(sourceFile, null)
+        if (!pendingRelativeRecordingPath.isNullOrBlank()) return copyRecordingToPublicDownloads(sourceFile, pendingRelativeRecordingPath)
+        if (!lastRecordingUsedAbsoluteCustomPath) return copyRecordingToPublicDownloads(sourceFile, null)
+        return null
     }
 
     fun startRecording(context: Context) {
@@ -2169,7 +2294,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         try { persistRecordingsToPrefs() } catch (_: Throwable) {}
                         newList
                     }
-                    copyRecordingToSelectedTree(f)
+                    publishRecordingForVisibility(f)
                 }
             }
             return
@@ -2238,7 +2363,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     try { persistRecordingsToPrefs() } catch (_: Throwable) {}
                     newList
                 }
-                copyRecordingToSelectedTree(f)
+                publishRecordingForVisibility(f)
             }
         }
     }
