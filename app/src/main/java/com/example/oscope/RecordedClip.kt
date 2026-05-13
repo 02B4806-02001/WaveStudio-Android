@@ -1,6 +1,5 @@
 package org.mhrri.wavestudio
 
-import android.net.Uri
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -32,7 +31,7 @@ data class RecordedClip(
 
     // 格式化时长显示（保留2位小数）
     val durationText: String
-        get() = String.format("%.2f", duration)
+        get() = String.format(Locale.getDefault(), "%.2f", duration)
 
     // 格式化日期显示
     val dateText: String
