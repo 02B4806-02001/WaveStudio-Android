@@ -305,11 +305,46 @@ internal fun PortraitSettingsSection(
     var lpDragging by remember { mutableStateOf(false) }
     var hpDragging by remember { mutableStateOf(false) }
 
+    // 拖动时标题显示值：做轻微低通平滑；实际参数仍实时生效
+    val lowPassDisplayHzTarget = if (lpDragging)
+        sliderToHzBlend(lpFreq01, 800f, 30001f, linearWeight = 0.5f)
+    else state.lowPassCutoff
+    val lowPassDisplayHz = rememberDisplayLowPass(
+        target = lowPassDisplayHzTarget,
+        resetKey = "lowPassHz",
+        alpha = 0.44f,
+        snapThreshold = 1f,
+    )
+
+    val highPassDisplayHzTarget = if (hpDragging)
+        sliderToHz(hpFreq01, 30f, 8001f)
+    else state.highPassCutoff
+    val highPassDisplayHz = rememberDisplayLowPass(
+        target = highPassDisplayHzTarget,
+        resetKey = "highPassHz",
+        alpha = 0.44f,
+        snapThreshold = 0.25f,
+    )
+
     LaunchedEffect(state.lowPassCutoff) {
         if (!lpDragging) lpFreq01 = hzToSliderBlend(state.lowPassCutoff, 800f, 30001f, linearWeight = 0.5f)
     }
     LaunchedEffect(state.highPassCutoff) {
         if (!hpDragging) hpFreq01 = hzToSlider(state.highPassCutoff, 30f, 8001f)
+    }
+
+    // 拖动时实时影响滤波，效果会立即体现在波形上，而不是等松手。
+    LaunchedEffect(lpDragging, lpFreq01) {
+        if (!lpDragging) return@LaunchedEffect
+        kotlinx.coroutines.delay(8)
+        audioViewModel.updateLowPassSlider(
+            snapLowPassHz(sliderToHzBlend(lpFreq01, 800f, 30001f, linearWeight = 0.5f))
+        )
+    }
+    LaunchedEffect(hpDragging, hpFreq01) {
+        if (!hpDragging) return@LaunchedEffect
+        kotlinx.coroutines.delay(8)
+        audioViewModel.updateHighPassSlider(snapHighPassHz(sliderToHz(hpFreq01, 30f, 8001f)))
     }
 
     val importPresetLauncher = rememberLauncherForActivityResult(
@@ -541,7 +576,7 @@ internal fun PortraitSettingsSection(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 ClickToEditNumberText(
-                    text = stringResource(R.string.low_pass_value_hz, formatLowPassHz(state.lowPassCutoff)),
+                    text = stringResource(R.string.low_pass_value_hz, formatLowPassHz(lowPassDisplayHz)),
                     initialText = formatLowPassHz(state.lowPassCutoff),
                     title = stringResource(R.string.low_pass_set_title),
                     unit = "Hz",
@@ -597,7 +632,7 @@ internal fun PortraitSettingsSection(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 ClickToEditNumberText(
-                    text = stringResource(R.string.high_pass_value_hz, formatHighPassHz(state.highPassCutoff)),
+                    text = stringResource(R.string.high_pass_value_hz, formatHighPassHz(highPassDisplayHz)),
                     initialText = formatHighPassHz(state.highPassCutoff),
                     title = stringResource(R.string.high_pass_set_title),
                     unit = "Hz",
