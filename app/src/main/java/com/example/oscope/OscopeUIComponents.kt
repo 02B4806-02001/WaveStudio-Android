@@ -675,14 +675,14 @@ fun EqPanel(
         }
         val sel = bands.firstOrNull { it.id == selectedId } ?: return
         val qMax = 6f
-        val effectiveSelQ = when (sel.type) {
-            AudioEngineViewModel.EqBandType.PEAK -> sel.q
-            AudioEngineViewModel.EqBandType.LOW_SHELF,
-            AudioEngineViewModel.EqBandType.HIGH_SHELF -> sel.q.coerceAtMost(AudioEngineViewModel.maxEqQForGainDb(sel.gainDb))
-        }
         val displaySelFreq = rememberDisplayLowPass(sel.freqHz, resetKey = "eq-freq-${sel.id}", alpha = 0.44f, snapThreshold = 0.2f)
         val displaySelGainDb = rememberDisplayLowPass(sel.gainDb, resetKey = "eq-gain-${sel.id}", alpha = 0.44f, snapThreshold = 0.03f)
-        val displaySelQ = rememberDisplayLowPass(effectiveSelQ, resetKey = "eq-q-${sel.id}", alpha = 0.44f, snapThreshold = 0.01f)
+        val displaySelQ = rememberDisplayLowPass(
+            AudioEngineViewModel.clampEqQForBand(sel.type, sel.gainDb, sel.q),
+            resetKey = "eq-q-${sel.id}",
+            alpha = 0.44f,
+            snapThreshold = 0.01f
+        )
 
         EqResponseGraph(
             modifier = Modifier
@@ -899,7 +899,7 @@ fun EqPanel(
                 ) {
                     ClickToEditNumberText(
                         text = "Q ${String.format(Locale.US, "%.2f", displaySelQ)}",
-                        initialText = String.format(Locale.US, "%.2f", effectiveSelQ),
+                        initialText = String.format(Locale.US, "%.2f", sel.q),
                         title = stringResource(R.string.eq_band_q_title, sel.label),
                         unit = "Q",
                         parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(qMin, qMax) },

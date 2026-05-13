@@ -75,7 +75,16 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             val a40 = 10f.pow(a / 40f)
             val denom = (a40 - 1f).let { it * it }
             if (denom <= 1e-6f) return 100f
-            return (((a20 + 1f) / denom) - 0.03f).coerceAtLeast(0.2f)
+            return (((a20 + 1f) / denom) - 0.07f).coerceAtLeast(0.2f)
+        }
+
+        fun clampEqQForBand(type: EqBandType, gainDb: Float, q: Float): Float {
+            val qClamped = q.coerceIn(0.2f, 6f)
+            return when (type) {
+                EqBandType.PEAK -> qClamped
+                EqBandType.LOW_SHELF,
+                EqBandType.HIGH_SHELF -> qClamped.coerceAtMost(maxEqQForGainDb(gainDb))
+            }
         }
     }
 
@@ -507,7 +516,13 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun setEqBandType(id: Int, type: EqBandType) {
-        _eqBands.update { list -> list.map { if (it.id == id) it.copy(type = type) else it } }
+        _eqBands.update { list ->
+            list.map { band ->
+                if (band.id == id) {
+                    band.copy(type = type)
+                } else band
+            }
+        }
     }
 
     fun resetEq() {
@@ -2671,7 +2686,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 if (!b.enabled) continue
                 val fc = b.freqHz.coerceIn(5f, nyquist)
                 val g = b.gainDb.coerceIn(-40f, 40f)
-                val qOrSlope = b.q.coerceIn(0.1f, 18f)
+                val qOrSlope = clampEqQForBand(b.type, g, b.q)
                 out = when (b.type) {
                     EqBandType.PEAK -> biquadProcess(out, designPeakingEq(sampleRate, fc, qOrSlope, g))
                     EqBandType.LOW_SHELF -> biquadProcess(out, designLowShelf(sampleRate, fc, qOrSlope, g))
@@ -3271,7 +3286,7 @@ private class RtBiquadCascade(private var sampleRate: Int) {
                 eqCoefs = active.map { b ->
                     val fc = b.freqHz.coerceIn(5f, sampleRate / 2f - 1f)
                     val g = b.gainDb
-                    val qOrSlope = b.q
+                    val qOrSlope = AudioEngineViewModel.clampEqQForBand(b.type, g, b.q)
                     when (b.type) {
                         AudioEngineViewModel.EqBandType.PEAK -> rtDesignPeakingEq(sampleRate, fc, qOrSlope, g)
                         AudioEngineViewModel.EqBandType.LOW_SHELF -> rtDesignLowShelf(sampleRate, fc, qOrSlope, g)

@@ -1,5 +1,6 @@
 package org.mhrri.wavestudio
 
+import android.net.Uri
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -24,8 +25,9 @@ data class RecordedClip(
             if (!name.isNullOrEmpty()) {
                 return if (name.lowercase(Locale.getDefault()).endsWith(".m4a")) name else "$name.m4a"
             }
+            // 统一显示格式 wave_yyyyMMdd_HHmmss
             val formatter = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-            return "录音_${formatter.format(Date(date))}.m4a"
+            return "wave_${formatter.format(Date(date))}.m4a"
         }
 
     // 格式化时长显示（保留2位小数）

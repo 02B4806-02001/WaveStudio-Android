@@ -112,11 +112,7 @@ fun computeEqResponse(bands: List<AudioEngineViewModel.EqBand>, freqs: FloatArra
         .map { b ->
             val centerHz = b.freqHz.coerceAtLeast(1f)
             val gainDb = b.gainDb.coerceIn(-60f, 60f) // clamp wide just for computation
-            val qOrSlope = when (b.type) {
-                AudioEngineViewModel.EqBandType.PEAK -> b.q.coerceIn(0.01f, 6f)
-                AudioEngineViewModel.EqBandType.LOW_SHELF,
-                AudioEngineViewModel.EqBandType.HIGH_SHELF -> b.q.coerceIn(0.01f, 6f).coerceAtMost(AudioEngineViewModel.maxEqQForGainDb(gainDb))
-            }
+            val qOrSlope = AudioEngineViewModel.clampEqQForBand(b.type, gainDb, b.q)
 
             val w0 = (2f * PI.toFloat() * centerHz) / sampleRate.toFloat()
             val cosW0 = cos(w0)
