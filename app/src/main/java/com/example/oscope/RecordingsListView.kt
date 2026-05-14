@@ -149,7 +149,7 @@ fun RecordingsListView(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 4.dp),
                 contentPadding = PaddingValues(bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -302,14 +302,16 @@ private fun RecordingCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
                             text = recording.fileName,
+                            modifier = Modifier.weight(1f, fill = false),
                             style = MaterialTheme.typography.titleSmall,
                             color = headlineColor,
-                            maxLines = 1,
+                            maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
                         )
                         if (isPlaying) {
