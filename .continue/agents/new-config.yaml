@@ -1,0 +1,15 @@
+# This is an example configuration file
+# To learn more, see the full config.yaml reference: https://docs.continue.dev/reference
+
+name: Example Config
+version: 1.0.0
+schema: v1
+
+# Define which models can be used
+# https://docs.continue.dev/customization/models
+models:
+  - name: DeepSeek V4 Pro
+    provider: openai
+    apiBase: https://api.deepseek.com/
+    model: deepseek-v4-pro
+    apiKey: sk-8b1bee1b040d4f22a890d25538927af3
