@@ -314,13 +314,6 @@ private fun RecordingCard(
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        if (isPlaying) {
-                            Text(
-                                text = if (zh) "播放中" else "Playing",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
                     }
 
                     Text(

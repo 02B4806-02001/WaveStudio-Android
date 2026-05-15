@@ -85,7 +85,6 @@ import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.round
-// duplicate imports removed
 
 internal data class PortraitSettingsState(
     val isRunning: Boolean,

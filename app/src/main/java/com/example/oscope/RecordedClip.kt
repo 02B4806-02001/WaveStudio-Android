@@ -24,9 +24,8 @@ data class RecordedClip(
             if (!name.isNullOrEmpty()) {
                 return if (name.lowercase(Locale.getDefault()).endsWith(".m4a")) name else "$name.m4a"
             }
-            // 统一显示格式 wave_yyyyMMdd_HHmmss
-            val formatter = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-            return "wave_${formatter.format(Date(date))}.m4a"
+            // 旧录音统一显示为"录音"（无自定义名称时）
+            return "录音.m4a"
         }
 
     // 格式化时长显示（保留2位小数）

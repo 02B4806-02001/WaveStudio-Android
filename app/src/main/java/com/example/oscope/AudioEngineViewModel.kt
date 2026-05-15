@@ -220,7 +220,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
             // Progress tracking
             playbackProgressJob?.cancel()
-            playbackProgressJob = viewModelScope.launch(Dispatchers.Default) {
+            playbackProgressJob = viewModelScope.launch(Dispatchers.Main) {
                 while (isActive) {
                     val p = player
                     if (p != null) {
@@ -2299,6 +2299,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         return null
     }
 
+    /** 计算下一个录音显示名称（格式："录音 n"） */
+    private fun nextRecordingDisplayName(): String {
+        val maxNum = _recordings.value.maxOfOrNull { clip ->
+            val name = clip.customName?.takeIf { it.isNotBlank() } ?: clip.fileName.removeSuffix(".m4a")
+            Regex("""录音\D*(\d+)""").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        } ?: 0
+        return "录音 ${maxNum + 1}"
+    }
+
     fun startRecording(context: Context) {
         if (!_isRunning.value && !_useImportedSignal.value) return
         if (_useTestSignal.value) {
@@ -2344,6 +2353,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             currentRecordingPath?.let { path ->
                 val f = try { File(path) } catch (_: Throwable) { null }
                 if (f != null && f.exists() && f.isFile) {
+                    val displayName = nextRecordingDisplayName()
                     _recordings.update { list ->
                         val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
                         val newList = list + RecordedClip(
@@ -2351,7 +2361,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             date = System.currentTimeMillis(),
                             duration = durSec,
                             fileURL = f.absolutePath,
-                            customName = null
+                            customName = displayName
                         )
                         try { persistRecordingsToPrefs() } catch (_: Throwable) {}
                         newList
@@ -2413,6 +2423,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         currentRecordingPath?.let { path ->
             val f = try { File(path) } catch (_: Throwable) { null }
             if (f != null && f.exists() && f.isFile) {
+                val displayName = nextRecordingDisplayName()
                 _recordings.update { list ->
                     val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
                     val newList = list + RecordedClip(
@@ -2420,7 +2431,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         date = System.currentTimeMillis(),
                         duration = durSec,
                         fileURL = f.absolutePath,
-                        customName = null
+                        customName = displayName
                     )
                     try { persistRecordingsToPrefs() } catch (_: Throwable) {}
                     newList
