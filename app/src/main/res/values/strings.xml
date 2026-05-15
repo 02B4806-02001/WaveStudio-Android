@@ -8,6 +8,7 @@
     <string name="common_expand">展开</string>
     <string name="common_collapse">折叠</string>
     <string name="common_enabled">启用</string>
+    <string name="common_done">完成</string>
 
     <string name="action_import">导入</string>
     <string name="action_export">导出</string>
@@ -22,6 +23,9 @@
     <string name="action_controller">控制器</string>
     <string name="action_record">录音</string>
     <string name="action_restore_default">恢复默认</string>
+    <string name="action_edit">编辑</string>
+    <string name="action_select_all">全选</string>
+    <string name="action_deselect_all">取消全选</string>
 
     <string name="mode_immersive">全屏模式</string>
     <string name="mode_normal">普通模式</string>

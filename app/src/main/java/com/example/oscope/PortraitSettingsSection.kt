@@ -863,6 +863,7 @@ internal fun PortraitSettingsSection(
                 renameText = it.fileName.substringBeforeLast('.')
             },
             onDeleteClick = { deleteTarget = it },
+            onBatchDelete = { list -> list.forEach { audioViewModel.deleteRecording(it.id) } },
         )
 
         RenameRecordingDialog(

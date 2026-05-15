@@ -11,6 +11,7 @@
     <string name="common_expand">Expand</string>
     <string name="common_collapse">Collapse</string>
     <string name="common_enabled">Enabled</string>
+    <string name="common_done">Done</string>
 
     <!-- Actions -->
     <string name="action_import">Import</string>
@@ -26,6 +27,9 @@
     <string name="action_controller">Controller</string>
     <string name="action_record">Record</string>
     <string name="action_restore_default">Restore Defaults</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_select_all">Select All</string>
+    <string name="action_deselect_all">Deselect All</string>
 
     <!-- Modes / UI -->
     <string name="mode_immersive">FullScreen</string>

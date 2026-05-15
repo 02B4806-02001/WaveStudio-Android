@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -118,6 +119,9 @@ private val ShareIconFallback: ImageVector
  * @param playingDurationMs 当前音频总时长（毫秒）
  * @param onSeek 在进度条上拖动时回调
  * @param playingId 当前正在播放的录音ID
+ * @param isEditMode 是否为编辑模式（批量选择）
+ * @param selectedIds 当前选中的录音ID集合
+ * @param onToggleSelect 切换录音选中状态的回调
  */
 @Composable
 fun RecordingsListView(
@@ -130,13 +134,17 @@ fun RecordingsListView(
     playingPositionMs: Long,
     playingDurationMs: Long,
     onSeek: (Long) -> Unit,
-    playingId: String?
+    playingId: String?,
+    modifier: Modifier = Modifier,
+    isEditMode: Boolean = false,
+    selectedIds: Set<String> = emptySet(),
+    onToggleSelect: (String) -> Unit = {},
 ) {
     var expandedId by remember { mutableStateOf<String?>(null) }
     val sortedRecordings = recordings.sortedByDescending { it.date }
     val totalDurationSec = sortedRecordings.sumOf { it.duration }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize()) {
         if (sortedRecordings.isEmpty()) {
             EmptyRecordingsState(
                 modifier = Modifier
@@ -149,7 +157,7 @@ fun RecordingsListView(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
+                    .padding(horizontal = 8.dp),
                 contentPadding = PaddingValues(bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -170,6 +178,9 @@ fun RecordingsListView(
                         onRenameClick = onRenameClick,
                         onDeleteClick = onDeleteClick,
                         onSeek = onSeek,
+                        isEditMode = isEditMode,
+                        selectedIds = selectedIds,
+                        onToggleSelect = onToggleSelect,
                     )
                 }
             }
@@ -276,6 +287,9 @@ private fun RecordingCard(
     onRenameClick: (RecordedClip) -> Unit,
     onDeleteClick: (RecordedClip) -> Unit,
     onSeek: (Long) -> Unit,
+    isEditMode: Boolean = false,
+    selectedIds: Set<String> = emptySet(),
+    onToggleSelect: (String) -> Unit = {},
 ) {
     val headlineColor = if (isPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
     val containerColor = if (isPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
@@ -284,7 +298,13 @@ private fun RecordingCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onToggleExpanded() },
+            .clickable {
+                if (isEditMode) {
+                    onToggleSelect(recording.id)
+                } else {
+                    onToggleExpanded()
+                }
+            },
         shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
@@ -294,9 +314,15 @@ private fun RecordingCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (isEditMode) {
+                    Checkbox(
+                        checked = recording.id in selectedIds,
+                        onCheckedChange = { onToggleSelect(recording.id) },
+                    )
+                }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -323,24 +349,26 @@ private fun RecordingCard(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    IconButton(onClick = { onShareClick(recording) }, modifier = Modifier.size(34.dp)) {
-                        Icon(
-                            painter = rememberVectorPainter(ShareIconFallback),
-                            contentDescription = stringResource(R.string.share_title_recording),
-                        )
-                    }
-                    IconButton(onClick = { onPlayClick(recording) }, modifier = Modifier.size(34.dp)) {
-                        Icon(
-                            painter = rememberVectorPainter(if (isPlaying) StopIcon else PlayIcon),
-                            contentDescription = if (isPlaying) stringResource(R.string.action_stop) else stringResource(R.string.action_record),
-                        )
-                    }
-                    IconButton(onClick = onToggleExpanded, modifier = Modifier.size(34.dp)) {
-                        Icon(
-                            painter = painterResource(if (expanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more),
-                            contentDescription = if (expanded) stringResource(R.string.common_collapse) else stringResource(R.string.common_expand),
-                        )
+                if (!isEditMode) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        IconButton(onClick = { onShareClick(recording) }, modifier = Modifier.size(34.dp)) {
+                            Icon(
+                                painter = rememberVectorPainter(ShareIconFallback),
+                                contentDescription = stringResource(R.string.share_title_recording),
+                            )
+                        }
+                        IconButton(onClick = { onPlayClick(recording) }, modifier = Modifier.size(34.dp)) {
+                            Icon(
+                                painter = rememberVectorPainter(if (isPlaying) StopIcon else PlayIcon),
+                                contentDescription = if (isPlaying) stringResource(R.string.action_stop) else stringResource(R.string.action_record),
+                            )
+                        }
+                        IconButton(onClick = onToggleExpanded, modifier = Modifier.size(34.dp)) {
+                            Icon(
+                                painter = painterResource(if (expanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more),
+                                contentDescription = if (expanded) stringResource(R.string.common_collapse) else stringResource(R.string.common_expand),
+                            )
+                        }
                     }
                 }
             }

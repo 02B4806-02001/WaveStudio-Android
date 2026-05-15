@@ -1,14 +1,21 @@
 package org.mhrri.wavestudio
 
 import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -42,6 +51,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
@@ -192,36 +203,169 @@ internal fun RecordingsListDialog(
     onShareClick: (RecordedClip) -> Unit,
     onRenameClick: (RecordedClip) -> Unit,
     onDeleteClick: (RecordedClip) -> Unit,
+    onBatchShare: (List<RecordedClip>) -> Unit = { list -> list.forEach(onShareClick) },
+    onBatchDelete: (List<RecordedClip>) -> Unit = { list -> list.forEach(onDeleteClick) },
 ) {
     if (!visible) return
 
-    AlertDialog(
+    var isEditMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.recordings_list_title)) },
-        text = {
-            Box(
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        // 全屏 scrim，顶部区域可点击关闭
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.40f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+        ) {
+            // 底部近全屏面板（~85% 高度）
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 220.dp, max = 520.dp),
+                    .fillMaxHeight(0.85f)
+                    .align(Alignment.BottomCenter),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp,
+                shadowElevation = 8.dp,
             ) {
-                RecordingsListView(
-                    recordings = recordings.sortedByDescending { it.date },
-                    onItemClick = { },
-                    onPlayClick = onPlayClick,
-                    onShareClick = onShareClick,
-                    onRenameClick = onRenameClick,
-                    onDeleteClick = onDeleteClick,
-                    playingPositionMs = playbackPositionMs,
-                    playingDurationMs = playbackDurationMs,
-                    onSeek = onSeek,
-                    playingId = playingId,
-                )
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    // 顶部把手 + 标题 + 编辑/关闭按钮
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.recordings_list_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // 编辑 / 完成按钮
+                            TextButton(onClick = {
+                                if (isEditMode) {
+                                    selectedIds = emptySet()
+                                }
+                                isEditMode = !isEditMode
+                            }) {
+                                Text(
+                                    text = stringResource(
+                                        if (isEditMode) R.string.common_done else R.string.action_edit
+                                    ),
+                                )
+                            }
+
+                            IconButton(onClick = onDismiss) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_expand_less),
+                                    contentDescription = stringResource(R.string.common_close),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+
+                    // 编辑模式下的操作栏
+                    if (isEditMode) {
+                        val sortedRecordings = recordings.sortedByDescending { it.date }
+                        val allSelected = sortedRecordings.isNotEmpty() &&
+                                sortedRecordings.all { it.id in selectedIds }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextButton(onClick = {
+                                selectedIds = if (allSelected) emptySet()
+                                else sortedRecordings.map { it.id }.toSet()
+                            }) {
+                                Text(
+                                    text = stringResource(
+                                        if (allSelected) R.string.action_deselect_all
+                                        else R.string.action_select_all
+                                    ),
+                                )
+                            }
+
+                            Spacer(Modifier.weight(1f))
+
+                            TextButton(
+                                enabled = selectedIds.isNotEmpty(),
+                                onClick = {
+                                    val selected = sortedRecordings.filter { it.id in selectedIds }
+                                    onBatchShare(selected)
+                                },
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.action_share),
+                                    color = if (selectedIds.isNotEmpty())
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                )
+                            }
+
+                            TextButton(
+                                enabled = selectedIds.isNotEmpty(),
+                                onClick = {
+                                    val selected = sortedRecordings.filter { it.id in selectedIds }
+                                    onBatchDelete(selected)
+                                },
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.action_delete),
+                                    color = if (selectedIds.isNotEmpty())
+                                        MaterialTheme.colorScheme.error
+                                    else
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                )
+                            }
+                        }
+                    }
+
+                    // 列表内容
+                    RecordingsListView(
+                        recordings = recordings.sortedByDescending { it.date },
+                        onItemClick = { },
+                        onPlayClick = onPlayClick,
+                        onShareClick = onShareClick,
+                        onRenameClick = onRenameClick,
+                        onDeleteClick = onDeleteClick,
+                        playingPositionMs = playbackPositionMs,
+                        playingDurationMs = playbackDurationMs,
+                        onSeek = onSeek,
+                        playingId = playingId,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        isEditMode = isEditMode,
+                        selectedIds = selectedIds,
+                        onToggleSelect = { id ->
+                            selectedIds = if (id in selectedIds)
+                                selectedIds - id
+                            else
+                                selectedIds + id
+                        },
+                    )
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) }
-        },
-    )
+        }
+    }
 }
 
 @Composable
