@@ -1442,6 +1442,8 @@ fun OscopeApp(
                 globalHighPassEnabled = globalHighPassEnabled,
                 globalHighPassCutoff = globalHighPassCutoff,
                 playingId = playingId,
+                playbackPositionMs = playbackPositionMs,
+                playbackDurationMs = playbackDurationMs,
             ),
             actions = PortraitSettingsActions(
                 onStartStopAction = {

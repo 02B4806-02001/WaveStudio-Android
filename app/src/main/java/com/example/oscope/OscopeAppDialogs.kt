@@ -186,7 +186,9 @@ internal fun RecordingsListDialog(
     playbackPositionMs: Long,
     playbackDurationMs: Long,
     playingId: String?,
+    onSeek: (Long) -> Unit = {},
     onDismiss: () -> Unit,
+    onPlayClick: (RecordedClip) -> Unit,
     onShareClick: (RecordedClip) -> Unit,
     onRenameClick: (RecordedClip) -> Unit,
     onDeleteClick: (RecordedClip) -> Unit,
@@ -205,13 +207,13 @@ internal fun RecordingsListDialog(
                 RecordingsListView(
                     recordings = recordings.sortedByDescending { it.date },
                     onItemClick = { },
-                    onPlayClick = { },
+                    onPlayClick = onPlayClick,
                     onShareClick = onShareClick,
                     onRenameClick = onRenameClick,
                     onDeleteClick = onDeleteClick,
                     playingPositionMs = playbackPositionMs,
                     playingDurationMs = playbackDurationMs,
-                    onSeek = { },
+                    onSeek = onSeek,
                     playingId = playingId,
                 )
             }

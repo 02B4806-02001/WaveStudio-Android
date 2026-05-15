@@ -165,8 +165,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     // ===== Playback API (used by MainActivity) =====
     fun stopPlayback() {
-        // Playback implementation lives elsewhere in this file in older versions.
-        // If removed, keep a safe no-op so UI compiles.
+        playbackProgressJob?.cancel()
+        playbackProgressJob = null
         try {
             player?.stop()
         } catch (_: Throwable) {
@@ -177,16 +177,62 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         }
         player = null
         _playingId.value = null
+        _playbackPositionMs.value = 0L
+        _playbackDurationMs.value = 0L
+        _isSeeking.value = false
     }
 
     fun playRecording(context: Context, clip: RecordedClip) {
-        // Keep behavior: stop existing playback if same id.
+        // Stop existing playback if same id.
         if (_isRecording.value) {
             _engineError.value = "录音中无法播放"
             return
         }
-        // If full playback pipeline isn't available right now, fail gracefully.
-        _engineError.value = "播放功能暂不可用（录音文件已保存）"
+        // If already playing this clip, stop instead (toggle)
+        if (_playingId.value == clip.id) {
+            stopPlayback()
+            return
+        }
+        stopPlayback()
+        _playbackPositionMs.value = 0L
+        try {
+            val uri = if (clip.fileURL.startsWith("content://")) {
+                android.net.Uri.parse(clip.fileURL)
+            } else {
+                android.net.Uri.fromFile(java.io.File(clip.fileURL))
+            }
+            val exoPlayer = ExoPlayer.Builder(context).build()
+            val mediaItem = androidx.media3.common.MediaItem.fromUri(uri)
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true
+            exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                        stopPlayback()
+                    }
+                }
+            })
+            player = exoPlayer
+            _playingId.value = clip.id
+            _playbackDurationMs.value = exoPlayer.duration.coerceAtLeast(0L)
+            _engineError.value = null
+
+            // Progress tracking
+            playbackProgressJob?.cancel()
+            playbackProgressJob = viewModelScope.launch(Dispatchers.Default) {
+                while (isActive) {
+                    val p = player
+                    if (p != null) {
+                        _playbackPositionMs.value = p.currentPosition
+                    }
+                    delay(50)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("AudioEngineVM", "playRecording failed", e)
+            _engineError.value = "播放失败：${e.localizedMessage}"
+        }
     }
 
     fun seekPlaybackTo(positionMs: Long) {
@@ -562,6 +608,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     private var monitorTrack: AudioTrack? = null
 
+    @Volatile
     private var player: ExoPlayer? = null
     private val _playingId = MutableStateFlow<String?>(null)
     val playingId: StateFlow<String?> = _playingId.asStateFlow()

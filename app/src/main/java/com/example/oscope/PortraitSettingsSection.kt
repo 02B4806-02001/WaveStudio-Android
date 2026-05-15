@@ -111,6 +111,8 @@ internal data class PortraitSettingsState(
     val globalHighPassEnabled: Boolean,
     val globalHighPassCutoff: Float,
     val playingId: String?,
+    val playbackPositionMs: Long,
+    val playbackDurationMs: Long,
 )
 
 internal data class PortraitSettingsActions(
@@ -844,10 +846,18 @@ internal fun PortraitSettingsSection(
         RecordingsListDialog(
             visible = showRecordList,
             recordings = state.recordings,
-            playbackPositionMs = 0L,
-            playbackDurationMs = 0L,
+            playbackPositionMs = state.playbackPositionMs,
+            playbackDurationMs = state.playbackDurationMs,
             playingId = state.playingId,
+            onSeek = { pos -> audioViewModel.seekPlaybackTo(pos) },
             onDismiss = { showRecordList = false },
+            onPlayClick = { clip ->
+                if (clip.id == state.playingId) {
+                    audioViewModel.stopPlayback()
+                } else {
+                    audioViewModel.playRecording(context, clip)
+                }
+            },
             onShareClick = { shareRecording(it) },
             onRenameClick = {
                 renameTarget = it
