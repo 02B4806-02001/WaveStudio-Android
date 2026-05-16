@@ -146,6 +146,8 @@
     <string name="trigger_autocorr_assist_info">When enabled, Trigger estimates base frequency from autocorrelation before edge locking, useful for slowly varying VVVF waveforms.</string>
     <string name="hide_reference_line">Hide Reference</string>
     <string name="show_reference_line">Show Reference</string>
+    <string name="hide_debug_info">Hide Debug Info</string>
+    <string name="show_debug_info">Show Debug Info</string>
     <string name="lock">Lock</string>
     <string name="unlock">Unlock</string>
     <string name="amp_scale_overlay">Amplitude x %1$s</string>

@@ -135,6 +135,8 @@
     <string name="trigger_autocorr_assist_info">启用时，Trigger 会先用自相关估计基频周期，再辅助升沿触发，适用于基频缓慢变化的 VVVF 波形。</string>
     <string name="hide_reference_line">隐藏参考线</string>
     <string name="show_reference_line">显示参考线</string>
+    <string name="hide_debug_info">隐藏调试信息</string>
+    <string name="show_debug_info">显示调试信息</string>
     <string name="lock">锁定</string>
     <string name="unlock">解锁</string>
     <string name="amp_scale_overlay">幅度 x %1$s</string>

@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln
@@ -58,6 +60,8 @@ fun ImmersiveScreen(
     filteredDisplayScale: Float,
     showRefWaveforms: Boolean,
     onToggleShowRef: () -> Unit,
+    showDebugInfo: Boolean,
+    onToggleShowDebugInfo: () -> Unit,
     ampMin: Float,
     ampMax: Float,
     windowMinMs: Float,
@@ -89,6 +93,7 @@ fun ImmersiveScreen(
         return (round(clamped / step) * step).coerceIn(ampMin, ampMax)
     }
 
+    var settingsMenuExpanded by remember { mutableStateOf(false) }
     val currentFilteredDisplayScale by rememberUpdatedState(filteredDisplayScale)
     val currentGestureWindow by rememberUpdatedState(gestureWindow)
     val currentGestureMode by rememberUpdatedState(gestureMode)
@@ -234,20 +239,19 @@ fun ImmersiveScreen(
                 .padding(bottom = 12.dp, start = 12.dp, end = 12.dp)
         ) {
             val immersiveRef = filteredDisplayScale.coerceAtLeast(1e-4f)
-            val vmTriggeredWindow by audioViewModel.triggeredWindow.collectAsStateWithLifecycle()
-            val vmTriggerResult by audioViewModel.triggerResult.collectAsStateWithLifecycle()
 
-            val displaySamples: FloatArray = if (triggerMode == NewTriggerEngine.Mode.OFF) {
-                // Fallback: show right-aligned nominal window
-                if (filteredSamples.isEmpty()) floatArrayOf()
-                else {
-                    val nominalWindowSize = 512
-                    if (filteredSamples.size <= nominalWindowSize) filteredSamples else filteredSamples.copyOfRange(filteredSamples.size - nominalWindowSize, filteredSamples.size)
+            val triggeredState by produceState<Pair<FloatArray, NewTriggerEngine.Result?>>(
+                initialValue = filteredSamples to null,
+                filteredSamples,
+                waveformSpanMs,
+                triggerMode,
+            ) {
+                value = withContext(Dispatchers.Default) {
+                    buildTriggeredWindow(filteredSamples, triggerMode, waveformSpanMs)
                 }
-            } else {
-                vmTriggeredWindow
             }
-            val triggerResult = vmTriggerResult
+            val displaySamples = triggeredState.first
+            val triggerResult = triggeredState.second
 
             WaveformView(
                 samples = displaySamples,
@@ -261,7 +265,7 @@ fun ImmersiveScreen(
                 lineWidthDp = 2f,
             )
 
-            if (triggerMode != NewTriggerEngine.Mode.OFF && triggerResult != null) {
+            if (triggerMode != NewTriggerEngine.Mode.OFF && triggerResult != null && showDebugInfo) {
                 val conf = String.format(Locale.US, "%.2f", triggerResult.confidence)
                 val hz = String.format(Locale.US, "%.1f", triggerResult.freqHz)
                 Text(
@@ -269,7 +273,7 @@ fun ImmersiveScreen(
                     color = Color.White,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier
-                        .align(Alignment.TopStart)
+                        .align(Alignment.BottomStart)
                         .padding(10.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(0x66000000))
@@ -294,34 +298,69 @@ fun ImmersiveScreen(
 
                 Spacer(Modifier.width(10.dp))
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0x44000000))
-                ) {
-                    TextButton(
-                        onClick = { triggerModeName = nextTriggerModeName(triggerModeName) },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                Box {
+                    OutlinedIconButton(
+                        onClick = { settingsMenuExpanded = true },
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            val label = when (triggerMode) {
-                                NewTriggerEngine.Mode.OFF -> stringResource(R.string.trigger_off)
-                                NewTriggerEngine.Mode.RISING,
-                                NewTriggerEngine.Mode.FALLING -> stringResource(R.string.trigger_on)
-                            }
-                            Text(label, color = Color.White)
-                            InfoIconButton(stringResource(R.string.trigger_switch_info_title), stringResource(R.string.trigger_switch_info_message))
-                        }
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_settings_custom),
+                            contentDescription = "Settings"
+                        )
                     }
-                }
 
-                Spacer(Modifier.width(8.dp))
-
-                OutlinedButton(
-                    onClick = onToggleShowRef,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
-                ) {
-                    Text(if (showRefWaveforms) stringResource(R.string.hide_reference_line) else stringResource(R.string.show_reference_line), color = Color.White)
+                    DropdownMenu(
+                        expanded = settingsMenuExpanded,
+                        onDismissRequest = { settingsMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.trigger_label), color = Color.White)
+                                    Spacer(Modifier.weight(1f))
+                                    Switch(
+                                        checked = triggerMode != NewTriggerEngine.Mode.OFF,
+                                        onCheckedChange = { on -> triggerModeName = if (on) "ON" else NewTriggerEngine.Mode.OFF.name }
+                                    )
+                                }
+                            },
+                            onClick = { triggerModeName = nextTriggerModeName(triggerModeName) }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.waveform_ref_line_label), color = Color.White)
+                                    Spacer(Modifier.weight(1f))
+                                    Switch(
+                                        checked = showRefWaveforms,
+                                        onCheckedChange = null
+                                    )
+                                }
+                            },
+                            onClick = onToggleShowRef
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.show_debug_info), color = Color.White)
+                                    Spacer(Modifier.weight(1f))
+                                    Switch(
+                                        checked = showDebugInfo,
+                                        onCheckedChange = null
+                                    )
+                                }
+                            },
+                            onClick = onToggleShowDebugInfo
+                        )
+                    }
                 }
             }
         } else {

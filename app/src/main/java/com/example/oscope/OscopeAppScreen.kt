@@ -418,6 +418,8 @@ fun OscopeApp(
 
     // ===== 0dB 参考线显示开关（竖屏默认开启） =====
     var showRefWaveforms by rememberSaveable { mutableStateOf(true) }
+    // ===== 调试信息显示开关 =====
+    var showDebugInfo by rememberSaveable { mutableStateOf(true) }
     val normalTriggerEnabledInitial = remember(triggerPrefs) {
         triggerPrefs.getBoolean(KEY_TRIGGER_NORMAL_ENABLED, false)
     }
@@ -815,6 +817,8 @@ fun OscopeApp(
                 filteredDisplayScale = filteredDisplayScale,
                 showRefWaveforms = showRefWaveforms,
                 onToggleShowRef = { showRefWaveforms = !showRefWaveforms },
+                showDebugInfo = showDebugInfo,
+                onToggleShowDebugInfo = { showDebugInfo = !showDebugInfo },
                 ampMin = ampMin,
                 ampMax = ampMax,
                 windowMinMs = windowMinMs,
