@@ -929,33 +929,28 @@ internal fun AboutDialog(
                             )
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "$aboutWebsiteLabel：",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                val linkText = buildAnnotatedString {
+                                val annotatedLabel = buildAnnotatedString {
+                                    pushStringAnnotation(tag = "URL", annotation = aboutWebsiteUrl)
                                     withStyle(
                                         SpanStyle(
                                             color = MaterialTheme.colorScheme.primary,
                                             textDecoration = TextDecoration.Underline,
-                                        ),
+                                        )
                                     ) {
-                                        append(aboutWebsiteUrl)
+                                        append(aboutWebsiteLabel)
                                     }
+                                    pop()
                                 }
                                 Text(
-                                    text = linkText,
+                                    text = annotatedLabel,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier
-                                        .padding(start = 2.dp)
-                                        .clickable {
-                                            try {
-                                                val intent = Intent(Intent.ACTION_VIEW, aboutWebsiteUrl.toUri())
-                                                context.startActivity(intent)
-                                            } catch (_: Throwable) {
-                                            }
-                                        },
+                                    modifier = Modifier.clickable {
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW, aboutWebsiteUrl.toUri())
+                                            context.startActivity(intent)
+                                        } catch (_: Throwable) {
+                                        }
+                                    },
                                 )
                             }
 
