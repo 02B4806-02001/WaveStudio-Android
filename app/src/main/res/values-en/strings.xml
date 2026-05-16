@@ -31,6 +31,9 @@
     <string name="action_select_all">Select All</string>
     <string name="action_deselect_all">Deselect All</string>
 
+    <string name="action_restore">Restore</string>
+    <string name="action_permanently_delete">Delete Forever</string>
+
     <!-- Modes / UI -->
     <string name="mode_immersive">FullScreen</string>
     <string name="mode_normal">Normal</string>
@@ -219,4 +222,9 @@
     <string name="language_option_zh">简体中文</string>
     <string name="language_option_en">English</string>
 
+    <string name="recordings_recently_deleted_title">Recently Deleted</string>
+    <string name="recently_deleted_empty_hint">No recently deleted recordings</string>
+    <string name="permanently_delete_confirm">Permanently delete "%1$s"? This cannot be undone.</string>
+    <string name="permanently_delete_all">Permanently Delete All</string>
+    <string name="recordings_recently_deleted_button">Recently Deleted (%1$d)</string>
 </resources>

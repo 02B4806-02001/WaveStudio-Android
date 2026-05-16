@@ -509,6 +509,7 @@ fun OscopeApp(
     val isRecording by audioViewModel.isRecording.collectAsStateWithLifecycle()
     val isMonitoring by audioViewModel.isMonitoring.collectAsStateWithLifecycle()
     val recordings by audioViewModel.recordings.collectAsStateWithLifecycle()
+    val recentlyDeletedRecordings by audioViewModel.recentlyDeletedRecordings.collectAsStateWithLifecycle()
 
     val lowPassEnabled by audioViewModel.lowPassEnabled.collectAsStateWithLifecycle()
     val lowPassCutoff by audioViewModel.lowPassCutoff.collectAsStateWithLifecycle()
@@ -1429,6 +1430,7 @@ fun OscopeApp(
                 isMonitoring = isMonitoring,
                 engineError = engineError,
                 recordings = recordings,
+                recentlyDeletedRecordings = recentlyDeletedRecordings,
                 lowPassEnabled = lowPassEnabled,
                 lowPassCutoff = lowPassCutoff,
                 highPassEnabled = highPassEnabled,

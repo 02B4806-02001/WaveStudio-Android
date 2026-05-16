@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -57,6 +58,10 @@ import androidx.core.net.toUri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.RestoreFromTrash
 
 @Composable
 internal fun PresetShareDialog(
@@ -205,17 +210,25 @@ internal fun RecordingsListDialog(
     onDeleteClick: (RecordedClip) -> Unit,
     onBatchShare: (List<RecordedClip>) -> Unit = { list -> list.forEach(onShareClick) },
     onBatchDelete: (List<RecordedClip>) -> Unit = { list -> list.forEach(onDeleteClick) },
+    recentlyDeletedClips: List<RecordedClip> = emptyList(),
+    onRestore: (RecordedClip) -> Unit = {},
+    onPermanentDelete: (RecordedClip) -> Unit = {},
+    onEmptyTrash: () -> Unit = {},
 ) {
     if (!visible) return
 
     var isEditMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var currentTab by remember { mutableStateOf(0) } // 0 = Recordings, 1 = Recently Deleted
+
+    var showPermanentDeleteConfirm by remember { mutableStateOf(false) }
+    var pendingPermanentDeletes by remember { mutableStateOf<List<RecordedClip>>(emptyList()) }
+    var isClearingAllTrash by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        // 全屏 scrim，顶部区域可点击关闭
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -226,7 +239,6 @@ internal fun RecordingsListDialog(
                     onClick = onDismiss,
                 ),
         ) {
-            // 底部近全屏面板（~85% 高度）
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -255,7 +267,7 @@ internal fun RecordingsListDialog(
                         )
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // 编辑 / 完成按钮
+                            // 编辑按钮（两个标签共用）
                             TextButton(onClick = {
                                 if (isEditMode) {
                                     selectedIds = emptySet()
@@ -269,6 +281,36 @@ internal fun RecordingsListDialog(
                                 )
                             }
 
+                            // 最近删除 / 返回录音列表 切换按钮
+                            if (currentTab == 0 && recentlyDeletedClips.isNotEmpty()) {
+                                TextButton(onClick = {
+                                    isEditMode = false
+                                    selectedIds = emptySet()
+                                    currentTab = 1
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.RestoreFromTrash,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.recordings_recently_deleted_button, recentlyDeletedClips.size),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                            }
+
+                            if (currentTab == 1) {
+                                TextButton(onClick = {
+                                    isEditMode = false
+                                    selectedIds = emptySet()
+                                    currentTab = 0
+                                }) {
+                                    Text(text = stringResource(R.string.recordings_list_title))
+                                }
+                            }
+
                             IconButton(onClick = onDismiss) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_expand_less),
@@ -279,92 +321,312 @@ internal fun RecordingsListDialog(
                         }
                     }
 
-                    // 编辑模式下的操作栏
-                    if (isEditMode) {
-                        val sortedRecordings = recordings.sortedByDescending { it.date }
-                        val allSelected = sortedRecordings.isNotEmpty() &&
-                                sortedRecordings.all { it.id in selectedIds }
+                    if (currentTab == 0) {
+                        // ===== 录音列表标签 =====
+                        // 编辑模式下的操作栏
+                        if (isEditMode) {
+                            val sortedRecordings = recordings.sortedByDescending { it.date }
+                            val allSelected = sortedRecordings.isNotEmpty() &&
+                                    sortedRecordings.all { it.id in selectedIds }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TextButton(onClick = {
-                                selectedIds = if (allSelected) emptySet()
-                                else sortedRecordings.map { it.id }.toSet()
-                            }) {
-                                Text(
-                                    text = stringResource(
-                                        if (allSelected) R.string.action_deselect_all
-                                        else R.string.action_select_all
-                                    ),
-                                )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TextButton(onClick = {
+                                    selectedIds = if (allSelected) emptySet()
+                                    else sortedRecordings.map { it.id }.toSet()
+                                }) {
+                                    Text(
+                                        text = stringResource(
+                                            if (allSelected) R.string.action_deselect_all
+                                            else R.string.action_select_all
+                                        ),
+                                    )
+                                }
+
+                                Spacer(Modifier.weight(1f))
+
+                                TextButton(
+                                    enabled = selectedIds.isNotEmpty(),
+                                    onClick = {
+                                        val selected = sortedRecordings.filter { it.id in selectedIds }
+                                        onBatchShare(selected)
+                                    },
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.action_share),
+                                        color = if (selectedIds.isNotEmpty())
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                    )
+                                }
+
+                                TextButton(
+                                    enabled = selectedIds.isNotEmpty(),
+                                    onClick = {
+                                        val selected = sortedRecordings.filter { it.id in selectedIds }
+                                        onBatchDelete(selected)
+                                    },
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.action_delete),
+                                        color = if (selectedIds.isNotEmpty())
+                                            MaterialTheme.colorScheme.error
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                    )
+                                }
                             }
+                        }
 
-                            Spacer(Modifier.weight(1f))
+                        // 录音列表内容
+                        RecordingsListView(
+                            recordings = recordings.sortedByDescending { it.date },
+                            onItemClick = { },
+                            onPlayClick = onPlayClick,
+                            onShareClick = onShareClick,
+                            onRenameClick = onRenameClick,
+                            onDeleteClick = onDeleteClick,
+                            playingPositionMs = playbackPositionMs,
+                            playingDurationMs = playbackDurationMs,
+                            onSeek = onSeek,
+                            playingId = playingId,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            isEditMode = isEditMode,
+                            selectedIds = selectedIds,
+                            onToggleSelect = { id ->
+                                selectedIds = if (id in selectedIds)
+                                    selectedIds - id
+                                else
+                                    selectedIds + id
+                            },
+                        )
+                    } else {
+                        // ===== 最近删除标签 =====
+                        // 编辑模式下的操作栏
+                        if (isEditMode) {
+                            val sortedDeleted = recentlyDeletedClips.sortedByDescending { it.date }
+                            val allSelected = sortedDeleted.isNotEmpty() &&
+                                    sortedDeleted.all { it.id in selectedIds }
 
-                            TextButton(
-                                enabled = selectedIds.isNotEmpty(),
-                                onClick = {
-                                    val selected = sortedRecordings.filter { it.id in selectedIds }
-                                    onBatchShare(selected)
-                                },
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TextButton(onClick = {
+                                    selectedIds = if (allSelected) emptySet()
+                                    else sortedDeleted.map { it.id }.toSet()
+                                }) {
+                                    Text(
+                                        text = stringResource(
+                                            if (allSelected) R.string.action_deselect_all
+                                            else R.string.action_select_all
+                                        ),
+                                    )
+                                }
+
+                                Spacer(Modifier.weight(1f))
+
+                                TextButton(
+                                    enabled = selectedIds.isNotEmpty(),
+                                    onClick = {
+                                        val selected = sortedDeleted.filter { it.id in selectedIds }
+                                        selected.forEach(onRestore)
+                                        selectedIds = emptySet()
+                                    },
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.action_restore),
+                                        color = if (selectedIds.isNotEmpty())
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                    )
+                                }
+
+                                TextButton(
+                                    enabled = selectedIds.isNotEmpty(),
+                                    onClick = {
+                                        val selected = sortedDeleted.filter { it.id in selectedIds }
+                                        pendingPermanentDeletes = selected
+                                        isClearingAllTrash = false
+                                        showPermanentDeleteConfirm = true
+                                    },
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.action_permanently_delete),
+                                        color = if (selectedIds.isNotEmpty())
+                                            MaterialTheme.colorScheme.error
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                    )
+                                }
+                            }
+                        }
+
+                        if (recentlyDeletedClips.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
-                                    text = stringResource(R.string.action_share),
-                                    color = if (selectedIds.isNotEmpty())
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                    text = stringResource(R.string.recently_deleted_empty_hint),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-
-                            TextButton(
-                                enabled = selectedIds.isNotEmpty(),
-                                onClick = {
-                                    val selected = sortedRecordings.filter { it.id in selectedIds }
-                                    onBatchDelete(selected)
-                                },
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 16.dp),
                             ) {
-                                Text(
-                                    text = stringResource(R.string.action_delete),
-                                    color = if (selectedIds.isNotEmpty())
-                                        MaterialTheme.colorScheme.error
-                                    else
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                                )
+                                items(recentlyDeletedClips, key = { it.id }) { clip ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 6.dp)
+                                            .clickable(enabled = isEditMode) {
+                                                selectedIds = if (clip.id in selectedIds)
+                                                    selectedIds - clip.id
+                                                else
+                                                    selectedIds + clip.id
+                                            },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        if (isEditMode) {
+                                            Checkbox(
+                                                checked = clip.id in selectedIds,
+                                                onCheckedChange = {
+                                                    selectedIds = if (clip.id in selectedIds)
+                                                        selectedIds - clip.id
+                                                    else
+                                                        selectedIds + clip.id
+                                                },
+                                                modifier = Modifier.padding(end = 8.dp),
+                                            )
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = clip.fileName,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                            )
+                                            Text(
+                                                text = clip.dateText,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        if (!isEditMode) {
+                                            IconButton(onClick = { onRestore(clip) }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.RestoreFromTrash,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                )
+                                            }
+                                            IconButton(onClick = {
+                                                pendingPermanentDeletes = listOf(clip)
+                                                isClearingAllTrash = false
+                                                showPermanentDeleteConfirm = true
+                                            }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (!isEditMode) {
+                                TextButton(
+                                    onClick = {
+                                        isClearingAllTrash = true
+                                        showPermanentDeleteConfirm = true
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.End)
+                                        .padding(end = 8.dp, bottom = 8.dp),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.permanently_delete_all),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
                             }
                         }
                     }
-
-                    // 列表内容
-                    RecordingsListView(
-                        recordings = recordings.sortedByDescending { it.date },
-                        onItemClick = { },
-                        onPlayClick = onPlayClick,
-                        onShareClick = onShareClick,
-                        onRenameClick = onRenameClick,
-                        onDeleteClick = onDeleteClick,
-                        playingPositionMs = playbackPositionMs,
-                        playingDurationMs = playbackDurationMs,
-                        onSeek = onSeek,
-                        playingId = playingId,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                        isEditMode = isEditMode,
-                        selectedIds = selectedIds,
-                        onToggleSelect = { id ->
-                            selectedIds = if (id in selectedIds)
-                                selectedIds - id
-                            else
-                                selectedIds + id
-                        },
-                    )
                 }
             }
         }
+
+    if (showPermanentDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                showPermanentDeleteConfirm = false
+                pendingPermanentDeletes = emptyList()
+                isClearingAllTrash = false
+            },
+            title = {
+                Text(
+                    text = if (isClearingAllTrash)
+                        stringResource(R.string.permanently_delete_all)
+                    else
+                        stringResource(R.string.action_permanently_delete)
+                )
+            },
+            text = {
+                Text(
+                    text = if (isClearingAllTrash)
+                        stringResource(R.string.permanently_delete_all_confirm)
+                    else if (pendingPermanentDeletes.size == 1)
+                        stringResource(R.string.permanently_delete_confirm, pendingPermanentDeletes.first().fileName)
+                    else
+                        stringResource(R.string.permanently_delete_batch_confirm, pendingPermanentDeletes.size)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (isClearingAllTrash) {
+                            onEmptyTrash()
+                        } else {
+                            pendingPermanentDeletes.forEach(onPermanentDelete)
+                        }
+                        showPermanentDeleteConfirm = false
+                        pendingPermanentDeletes = emptyList()
+                        isClearingAllTrash = false
+                    },
+                ) {
+                    Text(stringResource(R.string.action_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPermanentDeleteConfirm = false
+                        pendingPermanentDeletes = emptyList()
+                        isClearingAllTrash = false
+                    },
+                ) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
     }
 }
 
@@ -488,7 +750,7 @@ internal fun AboutDialog(
     data class AboutSection(val title: String, val bullets: List<String>)
 
     val appTitle = "Wave Studio"
-    val appVersion = "v0.14.1"
+    val appVersion = "v0.15.0"
     val aboutByline = if (isZhAbout) "by 磁拾音器研究所" else "by MoHa-Radio Institute"
     val aboutHint = if (isZhAbout) "提示：使用前请授予麦克风权限。" else "Please grant microphone permission before use."
     val changelogTitle = if (isZhAbout) "更新日志" else "Changelog"
@@ -498,6 +760,13 @@ internal fun AboutDialog(
 
     val aboutSections = if (isZhAbout) {
         listOf(
+            AboutSection(
+                title = "0.15.0 版本主要更新内容",
+                bullets = listOf(
+                    "重构了关于界面和录音列表界面",
+                    "优化了自定义存储功能",
+                ),
+            ),
             AboutSection(
                 title = "0.14.1 版本主要更新内容",
                 bullets = listOf(
@@ -522,31 +791,16 @@ internal fun AboutDialog(
                     "竖屏模式下的最大波形高度提升至 200dp",
                 ),
             ),
-            AboutSection(
-                title = "0.12.1 版本主要更新内容",
-                bullets = listOf(
-                    "均衡器折叠后持久化保存",
-                    "构建与稳定性修复",
-                    "修复了一些其他 bug",
-                ),
-            ),
-            AboutSection(
-                title = "0.12.0 版本主要更新内容",
-                bullets = listOf(
-                    "全局资源化，适配中英双语",
-                    "处理后增益滑块显示逻辑更改",
-                    "处理后增益和 EQ 增益滑块手感调整",
-                    "滑块交互更跟手",
-                    "顶部 UI 部分按钮改成图标",
-                    "波形高度值持久化",
-                    "优化了 Trigger 功能",
-                    "构建与稳定性修复",
-                    "修复了一些其他 bug",
-                ),
-            ),
         )
     } else {
         listOf(
+            AboutSection(
+                title = "Key updates in version 0.15.0",
+                bullets = listOf(
+                    "Refactored the About screen and the recording list screen",
+                    "Optimized the custom storage feature",
+                ),
+            ),
             AboutSection(
                 title = "Key updates in version 0.14.1",
                 bullets = listOf(
@@ -569,28 +823,6 @@ internal fun AboutDialog(
                     "EQ frequency response graph now supports drag adjustment",
                     "Added an imported audio controller",
                     "Increased the maximum waveform height to 200dp",
-                ),
-            ),
-            AboutSection(
-                title = "Key updates in version 0.12.1",
-                bullets = listOf(
-                    "Persist equalizer collapsed state",
-                    "Build and stability fixes",
-                    "Fixed several other bugs",
-                ),
-            ),
-            AboutSection(
-                title = "Key updates in version 0.12.0",
-                bullets = listOf(
-                    "Support for both Chinese and English",
-                    "Changed display logic for Processing Gain slider",
-                    "Adjusted slider feel for Processing gain and EQ gain",
-                    "Smoother and more responsive slider interaction",
-                    "Changed some buttons in the top UI to icons",
-                    "Persisted waveform height value",
-                    "Optimized the Trigger function",
-                    "Build and stability fixes",
-                    "Fixed several other bugs",
                 ),
             ),
         )
@@ -792,6 +1024,139 @@ internal fun ExitConfirmDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
         },
     )
+}
+
+@Composable
+internal fun RecentlyDeletedDialog(
+    visible: Boolean,
+    recentlyDeletedClips: List<RecordedClip>,
+    onDismiss: () -> Unit,
+    onRestore: (RecordedClip) -> Unit,
+    onPermanentDelete: (RecordedClip) -> Unit,
+    onEmptyTrash: () -> Unit,
+) {
+    if (!visible) return
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.40f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.85f)
+                    .align(Alignment.BottomCenter),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp,
+                shadowElevation = 8.dp,
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    // 顶部标题行
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.recordings_recently_deleted_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_expand_more),
+                                contentDescription = stringResource(R.string.common_close),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    if (recentlyDeletedClips.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.recently_deleted_empty_hint),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 16.dp),
+                        ) {
+                            items(recentlyDeletedClips, key = { it.id }) { clip ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = clip.fileName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                        Text(
+                                            text = clip.dateText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    IconButton(onClick = { onRestore(clip) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.RestoreFromTrash,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                    IconButton(onClick = { onPermanentDelete(clip) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        TextButton(
+                            onClick = onEmptyTrash,
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(end = 8.dp, bottom = 8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.permanently_delete_all),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 

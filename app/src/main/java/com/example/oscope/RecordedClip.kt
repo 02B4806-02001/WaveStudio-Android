@@ -15,7 +15,9 @@ data class RecordedClip(
     val date: Long = System.currentTimeMillis(),
     val duration: Double,
     val fileURL: String,
-    val customName: String? = null
+    val customName: String? = null,
+    /** 删除时间戳。null 表示未删除，非 null 表示已移入最近删除 */
+    val deletedAt: Long? = null,
 ) {
     // 格式化文件名（按时间戳生成）
     val fileName: String

@@ -97,6 +97,7 @@ internal data class PortraitSettingsState(
     val isMonitoring: Boolean,
     val engineError: String?,
     val recordings: List<RecordedClip>,
+    val recentlyDeletedRecordings: List<RecordedClip>,
     val lowPassEnabled: Boolean,
     val lowPassCutoff: Float,
     val highPassEnabled: Boolean,
@@ -864,6 +865,18 @@ internal fun PortraitSettingsSection(
             },
             onDeleteClick = { deleteTarget = it },
             onBatchDelete = { list -> list.forEach { audioViewModel.deleteRecording(it.id) } },
+            recentlyDeletedClips = state.recentlyDeletedRecordings,
+            onRestore = { clip ->
+                audioViewModel.restoreRecording(clip.id)
+            },
+            onPermanentDelete = { clip ->
+                audioViewModel.permanentlyDeleteRecording(clip.id)
+            },
+            onEmptyTrash = {
+                state.recentlyDeletedRecordings.forEach { clip ->
+                    audioViewModel.permanentlyDeleteRecording(clip.id)
+                }
+            },
         )
 
         RenameRecordingDialog(
@@ -888,6 +901,7 @@ internal fun PortraitSettingsSection(
                 deleteTarget = null
             },
         )
+
 
         run {
             Row(

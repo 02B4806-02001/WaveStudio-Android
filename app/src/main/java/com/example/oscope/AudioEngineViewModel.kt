@@ -30,6 +30,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -112,7 +115,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     // Simple JSON persistence for RecordedClip list
     private fun persistRecordingsToPrefs() {
         try {
-            val list = _recordings.value
+            val list = _allRecordings.value
             val arr = org.json.JSONArray()
             for (c in list) {
                 val o = org.json.JSONObject()
@@ -121,6 +124,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 o.put("duration", c.duration)
                 o.put("fileURL", c.fileURL)
                 if (c.customName != null) o.put("customName", c.customName)
+                if (c.deletedAt != null) o.put("deletedAt", c.deletedAt)
                 arr.put(o)
             }
             settingsPrefs.edit().putString(KEY_PERSISTED_RECORDINGS_JSON, arr.toString()).apply()
@@ -132,6 +136,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             val txt = settingsPrefs.getString(KEY_PERSISTED_RECORDINGS_JSON, null) ?: return
             val arr = org.json.JSONArray(txt)
             val list = ArrayList<RecordedClip>(arr.length())
+            val now = System.currentTimeMillis()
+            val thirtyDaysMs = 30L * 24 * 60 * 60 * 1000
             for (i in 0 until arr.length()) {
                 val o = arr.optJSONObject(i) ?: continue
                 val id = o.optString("id", java.util.UUID.randomUUID().toString())
@@ -139,11 +145,30 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 val duration = o.optDouble("duration", 0.0)
                 val fileURL = o.optString("fileURL", "")
                 val customName = if (o.has("customName")) o.optString("customName", null) else null
+                val deletedAt = if (o.has("deletedAt")) o.optLong("deletedAt", -1L).let { if (it < 0L) null else it } else null
                 if (fileURL.isNotBlank()) {
-                    list.add(RecordedClip(id = id, date = date, duration = duration, fileURL = fileURL, customName = customName))
+                    // 自动清除已删除超过30天的录音
+                    if (deletedAt != null && (now - deletedAt) > thirtyDaysMs) {
+                        deleteRecordingFile(fileURL)
+                        continue
+                    }
+                    list.add(RecordedClip(id = id, date = date, duration = duration, fileURL = fileURL, customName = customName, deletedAt = deletedAt))
                 }
             }
-            if (list.isNotEmpty()) _recordings.value = list
+            if (list.isNotEmpty()) _allRecordings.value = list
+        } catch (_: Throwable) {}
+    }
+
+    /** 删除录音文件（如果存在） */
+    private fun deleteRecordingFile(fileURL: String) {
+        try {
+            if (fileURL.startsWith("content://")) {
+                val app = getApplication<Application>()
+                app.contentResolver.delete(android.net.Uri.parse(fileURL), null, null)
+            } else {
+                val f = File(fileURL)
+                if (f.exists()) f.delete()
+            }
         } catch (_: Throwable) {}
     }
 
@@ -300,8 +325,27 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private val _isMonitoring = MutableStateFlow(false)
     val isMonitoring: StateFlow<Boolean> = _isMonitoring.asStateFlow()
 
-    private val _recordings = MutableStateFlow(emptyList<RecordedClip>())
-    val recordings: StateFlow<List<RecordedClip>> = _recordings.asStateFlow()
+    /** 全部录音（含已删除），内部状态 */
+    private val _allRecordings = MutableStateFlow(emptyList<RecordedClip>())
+    /** 活跃录音列表（排除已删除的） */
+    val recordings: StateFlow<List<RecordedClip>> = _allRecordings
+        .map { list -> list.filter { it.deletedAt == null } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
+    /** 最近删除的录音列表 */
+    val recentlyDeletedRecordings: StateFlow<List<RecordedClip>> = _allRecordings
+        .map { list ->
+            list.filter { it.deletedAt != null }
+                .sortedByDescending { it.deletedAt }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
 
     // 低通/高通：统一从 EQ bands(L/H) 派生（仍保留这四个 StateFlow 以兼容 MainActivity 现有 UI）
     private val _lowPassEnabled = MutableStateFlow(false)
@@ -2242,7 +2286,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 }
 
                 val newUriStr = createdUri.toString()
-                _recordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newUriStr) else it } }
+                _allRecordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newUriStr) else it } }
                 try { persistRecordingsToPrefs() } catch (_: Throwable) {}
                 return newUriStr
             }
@@ -2274,7 +2318,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     app.contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
                 } catch (_: Throwable) {}
                 val newUriStr = uri.toString()
-                _recordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newUriStr) else it } }
+                _allRecordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newUriStr) else it } }
                 try { persistRecordingsToPrefs() } catch (_: Throwable) {}
                 newUriStr
             } else {
@@ -2282,7 +2326,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 val outFile = File(dir, displayName)
                 sourceFile.copyTo(outFile, overwrite = true)
                 val newPath = outFile.absolutePath
-                _recordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newPath) else it } }
+                _allRecordings.update { list -> list.map { if (it.fileURL == sourceFile.absolutePath) it.copy(fileURL = newPath) else it } }
                 try { persistRecordingsToPrefs() } catch (_: Throwable) {}
                 newPath
             }
@@ -2301,7 +2345,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 计算下一个录音显示名称（格式："录音 n"） */
     private fun nextRecordingDisplayName(): String {
-        val maxNum = _recordings.value.maxOfOrNull { clip ->
+        val maxNum = _allRecordings.value.maxOfOrNull { clip ->
             val name = clip.customName?.takeIf { it.isNotBlank() } ?: clip.fileName.removeSuffix(".m4a")
             Regex("""录音\D*(\d+)""").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         } ?: 0
@@ -2354,7 +2398,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 val f = try { File(path) } catch (_: Throwable) { null }
                 if (f != null && f.exists() && f.isFile) {
                     val displayName = nextRecordingDisplayName()
-                    _recordings.update { list ->
+                    _allRecordings.update { list ->
                         val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
                         val newList = list + RecordedClip(
                             id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
@@ -2424,7 +2468,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             val f = try { File(path) } catch (_: Throwable) { null }
             if (f != null && f.exists() && f.isFile) {
                 val displayName = nextRecordingDisplayName()
-                _recordings.update { list ->
+                _allRecordings.update { list ->
                     val durSec = ((SystemClock.elapsedRealtime() - recordingStartMs).coerceAtLeast(0L)) / 1000.0
                     val newList = list + RecordedClip(
                         id = f.nameWithoutExtension + "_" + f.lastModified().toString(),
@@ -2952,7 +2996,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         val trimmed = newBaseName.trim()
         if (trimmed.isEmpty()) return
 
-        _recordings.update { list ->
+        _allRecordings.update { list ->
             list.map { clip ->
                 if (clip.id != clipId) clip else clip.copy(customName = trimmed)
             }
@@ -2962,7 +3006,28 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
 
     fun deleteRecording(clipId: String) {
-        val clip = _recordings.value.firstOrNull { it.id == clipId }
+        val clip = _allRecordings.value.firstOrNull { it.id == clipId }
+        if (clip != null) {
+            if (_playingId.value == clipId) stopPlayback()
+            // 不再删除文件，仅标记删除时间
+        }
+        _allRecordings.update { list ->
+            list.map { if (it.id == clipId) it.copy(deletedAt = System.currentTimeMillis()) else it }
+        }
+        try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+    }
+
+    /** 恢复最近删除的录音 */
+    fun restoreRecording(clipId: String) {
+        _allRecordings.update { list ->
+            list.map { if (it.id == clipId) it.copy(deletedAt = null) else it }
+        }
+        try { persistRecordingsToPrefs() } catch (_: Throwable) {}
+    }
+
+    /** 永久删除录音文件并从列表中移除 */
+    fun permanentlyDeleteRecording(clipId: String) {
+        val clip = _allRecordings.value.firstOrNull { it.id == clipId }
         if (clip != null) {
             if (_playingId.value == clipId) stopPlayback()
             try {
@@ -2977,7 +3042,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 }
             } catch (_: Throwable) {}
         }
-        _recordings.update { list -> list.filterNot { it.id == clipId } }
+        _allRecordings.update { list -> list.filterNot { it.id == clipId } }
         try { persistRecordingsToPrefs() } catch (_: Throwable) {}
     }
 
