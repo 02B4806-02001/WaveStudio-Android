@@ -1595,6 +1595,37 @@ fun OscopeApp(
         )
     }
 
+    if (presetShareDialog) {
+        PresetShareDialog(
+            visible = true,
+            presetShareName = presetShareName,
+            onPresetShareNameChange = { presetShareName = it },
+            onDismiss = { presetShareDialog = false },
+            onShare = {
+                val file = exportCurrentPresetToCache(presetShareName)
+                if (file != null) {
+                    showCenterToast(resources.getString(R.string.preset_share_success_named, file.name))
+                    shareAnyFile(file, "application/json")
+                } else {
+                    showCenterToast(resources.getString(R.string.preset_share_failed))
+                }
+                presetShareDialog = false
+            },
+        )
+    }
+
+    if (presetResetConfirmDialog) {
+        PresetResetConfirmDialog(
+            visible = true,
+            onDismiss = { presetResetConfirmDialog = false },
+            onConfirm = {
+                audioViewModel.resetFilterPresetToDefault()
+                showCenterToast(resources.getString(R.string.preset_restore_default_done))
+                presetResetConfirmDialog = false
+            },
+        )
+    }
+
     if (showExitConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showExitConfirmDialog = false },
