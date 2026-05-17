@@ -76,7 +76,7 @@
 
     <string name="monitor_on">Monitor</string>
     <string name="monitor_off">Monitor Off</string>
-    <string name="load_audio">Load Audio</string>
+    <string name="load_audio">Load Aud.</string>
     <string name="importing">Importing</string>
     <string name="audio_input_mode">Audio Input</string>
     <string name="audio_input_controller_title">Imported Audio Controller</string>
@@ -115,7 +115,7 @@
     <string name="recording_format_label">Recording Format</string>
     <string name="sample_rate_label">Sample Rate</string>
     <string name="recording_locked_format_hint">Format &amp; sample rate cannot be changed while recording</string>
-    <string name="waveform_refresh_rate_label">Waveform Refresh Rate</string>
+    <string name="waveform_refresh_rate_label">Waveform FPS</string>
     <string name="waveform_refresh_rate_hint">Higher is smoother, but reduces performance</string>
     <string name="waveform_ref_line_label">Waveform 0dB Reference Line</string>
 
@@ -229,4 +229,6 @@
     <string name="permanently_delete_confirm">Permanently delete "%1$s"? This cannot be undone.</string>
     <string name="permanently_delete_all">Permanently Delete All</string>
     <string name="recordings_recently_deleted_button">Recently Deleted (%1$d)</string>
+    <string name="permanently_delete_all_confirm">Are you sure you want to permanently delete all recordings? This cannot be undone.</string>
+    <string name="permanently_delete_batch_confirm">Are you sure you want to permanently delete the selected %1$d recordings? This cannot be undone.</string>
 </resources>

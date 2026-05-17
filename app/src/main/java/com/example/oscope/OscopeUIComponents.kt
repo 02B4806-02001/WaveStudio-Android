@@ -99,6 +99,7 @@ fun ImmersiveScreen(
     val currentGestureMode by rememberUpdatedState(gestureMode)
     val currentAmpScale by rememberUpdatedState(ampScale)
     val filteredSamples by filteredWaveform.collectAsStateWithLifecycle()
+    val vmTriggerResultValue by audioViewModel.triggerResult.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val triggerPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -251,7 +252,6 @@ fun ImmersiveScreen(
                 }
             }
             val displaySamples = triggeredState.first
-            val triggerResult = triggeredState.second
 
             WaveformView(
                 samples = displaySamples,
@@ -265,11 +265,12 @@ fun ImmersiveScreen(
                 lineWidthDp = 2f,
             )
 
-            if (triggerMode != NewTriggerEngine.Mode.OFF && triggerResult != null && showDebugInfo) {
-                val conf = String.format(Locale.US, "%.2f", triggerResult.confidence)
-                val hz = String.format(Locale.US, "%.1f", triggerResult.freqHz)
+            val latestTriggerResult = vmTriggerResultValue
+            if (triggerMode != NewTriggerEngine.Mode.OFF && latestTriggerResult != null && showDebugInfo) {
+                val conf = String.format(Locale.US, "%.2f", latestTriggerResult.confidence)
+                val hz = String.format(Locale.US, "%.1f", latestTriggerResult.freqHz)
                 Text(
-                    text = "TRG ON  f=${hz}Hz  per=${triggerResult.periodSamples}  s=${triggerResult.startIndex}  a=${triggerResult.anchorIndex}  lock=${triggerResult.locked}  c=$conf",
+                    text = "TRG ON  f=${hz}Hz  per=${latestTriggerResult.periodSamples}  s=${latestTriggerResult.startIndex}  a=${latestTriggerResult.anchorIndex}  lock=${latestTriggerResult.locked}  c=$conf",
                     color = Color.White,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier
@@ -304,7 +305,8 @@ fun ImmersiveScreen(
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_settings_custom),
-                            contentDescription = "Settings"
+                            contentDescription = "Settings",
+                            tint = Color.White
                         )
                     }
 
@@ -318,7 +320,7 @@ fun ImmersiveScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(stringResource(R.string.trigger_label), color = Color.White)
+                                    Text(stringResource(R.string.trigger_label))
                                     Spacer(Modifier.weight(1f))
                                     Switch(
                                         checked = triggerMode != NewTriggerEngine.Mode.OFF,
@@ -334,7 +336,7 @@ fun ImmersiveScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(stringResource(R.string.waveform_ref_line_label), color = Color.White)
+                                    Text(stringResource(R.string.waveform_ref_line_label))
                                     Spacer(Modifier.weight(1f))
                                     Switch(
                                         checked = showRefWaveforms,
@@ -350,7 +352,7 @@ fun ImmersiveScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(stringResource(R.string.show_debug_info), color = Color.White)
+                                    Text(stringResource(R.string.show_debug_info))
                                     Spacer(Modifier.weight(1f))
                                     Switch(
                                         checked = showDebugInfo,
