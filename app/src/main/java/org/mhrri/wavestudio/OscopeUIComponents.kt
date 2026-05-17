@@ -270,12 +270,12 @@ fun ImmersiveScreen(
                 val conf = String.format(Locale.US, "%.2f", latestTriggerResult.confidence)
                 val hz = String.format(Locale.US, "%.1f", latestTriggerResult.freqHz)
                 Text(
-                    text = "TRG ON  f=${hz}Hz  per=${latestTriggerResult.periodSamples}  s=${latestTriggerResult.startIndex}  a=${latestTriggerResult.anchorIndex}  lock=${latestTriggerResult.locked}  c=$conf",
+                    text = "TRG=ON, f=${hz}Hz, per=${latestTriggerResult.periodSamples}, s=${latestTriggerResult.startIndex}, a=${latestTriggerResult.anchorIndex}, lock=${latestTriggerResult.locked}, c=$conf",
                     color = Color.White,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(10.dp)
+                        .padding(8.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(0x66000000))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -394,7 +394,7 @@ fun ImmersiveScreen(
         if (gestureOverlayVisible && !landscapeLocked) {
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
+                    .align(Alignment.BottomEnd)
                     .padding(12.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(Color(0xAA000000))
