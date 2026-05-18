@@ -231,4 +231,10 @@
     <string name="recordings_recently_deleted_button">Recently Deleted (%1$d)</string>
     <string name="permanently_delete_all_confirm">Are you sure you want to permanently delete all recordings? This cannot be undone.</string>
     <string name="permanently_delete_batch_confirm">Are you sure you want to permanently delete the selected %1$d recordings? This cannot be undone.</string>
+
+    <!-- Language switch -->
+    <string name="language_switch_confirm_title">Switch Language</string>
+    <string name="language_switch_confirm_message">Switch to %1$s?</string>
+    <string name="language_switch_success">Language switched to %1$s</string>
+    <string name="language_switch_cancel">Keep Current</string>
 </resources>

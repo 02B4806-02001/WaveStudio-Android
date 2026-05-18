@@ -136,6 +136,22 @@ fun OscopeApp(
     val triggerPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
     }
+
+    // 语言切换后显示成功 Toast（通过 SharedPreferences 标记传递，跨越 recreate）
+    LaunchedEffect(Unit) {
+        val pendingToast = startupPrefs.getString("pending_language_toast", null)
+        if (pendingToast != null) {
+            startupPrefs.edit { remove("pending_language_toast") }
+            val langName = if (pendingToast == LANG_ZH)
+                resources.getString(R.string.language_option_zh)
+            else
+                resources.getString(R.string.language_option_en)
+            showCenterToast(
+                resources.getString(R.string.language_switch_success, langName)
+            )
+        }
+    }
+
     val hideStartupNoteInitially = remember(startupPrefs) {
         startupPrefs.getBoolean(KEY_HIDE_STARTUP_NOTE, false)
     }
@@ -155,12 +171,25 @@ fun OscopeApp(
     var showAboutDialog by remember { mutableStateOf(false) }
     // 退出确认
     var showExitConfirmDialog by remember { mutableStateOf(false) }
+    // 语言切换确认弹窗
+    var showLanguageSwitchDialog by remember { mutableStateOf(false) }
+    var pendingLanguage by remember { mutableStateOf("") }
 
     fun switchAppLanguage(lang: String) {
         if (selectedLanguage == lang) return
         selectedLanguage = lang
-        startupPrefs.edit { putString(KEY_APP_LANGUAGE, lang) }
+        startupPrefs.edit {
+            putString(KEY_APP_LANGUAGE, lang)
+            // 标记待显示的 Toast，recreate 后由 LaunchedEffect 读取并显示
+            putString("pending_language_toast", lang)
+        }
         activity?.recreate()
+    }
+
+    fun requestLanguageSwitch(lang: String) {
+        if (selectedLanguage == lang) return
+        pendingLanguage = lang
+        showLanguageSwitchDialog = true
     }
 
     fun openStartupNoteDialog() {
@@ -1134,7 +1163,7 @@ fun OscopeApp(
                             },
                             onClick = {
                                 settingsMenuExpanded = false
-                                switchAppLanguage(LANG_ZH)
+                                requestLanguageSwitch(LANG_ZH)
                             }
                         )
                         DropdownMenuItem(
@@ -1145,7 +1174,7 @@ fun OscopeApp(
                             },
                             onClick = {
                                 settingsMenuExpanded = false
-                                switchAppLanguage(LANG_EN)
+                                requestLanguageSwitch(LANG_EN)
                             }
                         )
                         HorizontalDivider()
@@ -1647,6 +1676,31 @@ fun OscopeApp(
             },
             dismissButton = {
                 TextButton(onClick = { showExitConfirmDialog = false }) { Text(stringResource(R.string.common_cancel)) }
+            }
+        )
+    }
+
+    // 语言切换确认弹窗
+    if (showLanguageSwitchDialog) {
+        val langName = if (pendingLanguage == LANG_ZH)
+            stringResource(R.string.language_option_zh)
+        else
+            stringResource(R.string.language_option_en)
+
+        AlertDialog(
+            onDismissRequest = { showLanguageSwitchDialog = false },
+            title = { Text(stringResource(R.string.language_switch_confirm_title)) },
+            text = { Text(stringResource(R.string.language_switch_confirm_message, langName)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLanguageSwitchDialog = false
+                    switchAppLanguage(pendingLanguage)
+                }) { Text(stringResource(R.string.common_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLanguageSwitchDialog = false }) {
+                    Text(stringResource(R.string.language_switch_cancel))
+                }
             }
         )
     }

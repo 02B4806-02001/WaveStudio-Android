@@ -750,7 +750,7 @@ internal fun AboutDialog(
     data class AboutSection(val title: String, val bullets: List<String>)
 
     val appTitle = "Wave Studio"
-    val appVersion = "v0.15.1"
+    val appVersion = "v0.15.3"
     val aboutByline = if (isZhAbout) "by 磁拾音器研究所" else "by MoHa-Radio Institute"
     val aboutHint = if (isZhAbout) "提示：使用前请授予麦克风权限。" else "Please grant microphone permission before use."
     val changelogTitle = if (isZhAbout) "更新日志" else "Changelog"
@@ -760,6 +760,12 @@ internal fun AboutDialog(
 
     val aboutSections = if (isZhAbout) {
         listOf(
+            AboutSection(
+                title = "0.15.3 版本主要更新内容",
+                bullets = listOf(
+                    "优化语言切换功能",
+                ),
+            ),
             AboutSection(
                 title = "0.15.1 版本主要更新内容",
                 bullets = listOf(
@@ -800,6 +806,12 @@ internal fun AboutDialog(
         )
     } else {
         listOf(
+            AboutSection(
+                title = "Key updates in version 0.15.3",
+                bullets = listOf(
+                    "Optimize language switching functionality"
+                ),
+            ),
             AboutSection(
                 title = "Key updates in version 0.15.1",
                 bullets = listOf(

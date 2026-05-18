@@ -5,6 +5,9 @@
         <!-- Avoid white borders when drawing edge-to-edge / immersive -->
         <item name="android:statusBarColor">@android:color/black</item>
         <item name="android:navigationBarColor">@android:color/black</item>
-        <item name="android:windowBackground">@android:color/black</item>
+        <!-- 使用深灰而非纯黑，消除语言切换 recreate 时的黑屏感知 -->
+        <item name="android:windowBackground">@color/window_background</item>
+        <!-- 禁用 Activity 过渡动画，使 recreate 切换更平滑 -->
+        <item name="android:windowAnimationStyle">@null</item>
     </style>
 </resources>

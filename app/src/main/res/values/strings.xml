@@ -218,4 +218,10 @@
     <string name="recordings_recently_deleted_button">最近删除 (%1$d)</string>
     <string name="permanently_delete_all_confirm">确定要永久删除所有录音吗？此操作不可恢复。</string>
     <string name="permanently_delete_batch_confirm">确定要永久删除选中的 %1$d 条录音吗？此操作不可恢复。</string>
+
+    <!-- 语言切换 -->
+    <string name="language_switch_confirm_title">切换语言</string>
+    <string name="language_switch_confirm_message">确定要切换为 %1$s 吗？</string>
+    <string name="language_switch_success">语言已切换为 %1$s</string>
+    <string name="language_switch_cancel">保持当前</string>
 </resources>
