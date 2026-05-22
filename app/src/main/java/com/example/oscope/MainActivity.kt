@@ -6,9 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
+import org.mhrri.wavestudio.ui.theme.OscopeTheme
 import androidx.core.view.WindowCompat
 import java.util.Locale
 
@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
+            OscopeTheme {
                 // IMPORTANT: In edge-to-edge mode, don't let Scaffold auto-apply system bar paddings,
                 // otherwise you'll see a top bar (often white) around the cutout area.
                 Scaffold(

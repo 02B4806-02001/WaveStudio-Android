@@ -589,7 +589,7 @@ internal fun PortraitSettingsSection(
                         audioViewModel.updateLowPassSlider(snapped)
                         lpFreq01 = hzToSliderBlend(snapped, 800f, 30001f, linearWeight = 0.5f)
                     },
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
                     trailingIcon = {
@@ -645,7 +645,7 @@ internal fun PortraitSettingsSection(
                         audioViewModel.updateHighPassSlider(snapped)
                         hpFreq01 = hzToSlider(snapped, 30f, 8001f)
                     },
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
                     trailingIcon = {
@@ -703,6 +703,8 @@ internal fun PortraitSettingsSection(
             sampleRate = 44100,
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
         run {
             val gainDb = gainToDb(state.filterGain)
             val displayGainDb = rememberDisplayLowPass(gainDb, resetKey = "filterGainDb", alpha = 0.44f, snapThreshold = 0.03f)
@@ -721,7 +723,7 @@ internal fun PortraitSettingsSection(
                     unit = "dB",
                     parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(-20f, 40f) },
                     onValue = { db -> actions.onUpdateFilterGain(dbToGain(db).coerceIn(0.1f, 100f)) },
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
                     trailingIcon = {
@@ -786,7 +788,7 @@ internal fun PortraitSettingsSection(
                     unit = "ms",
                     parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(5f, 300f) },
                     onValue = actions.onUpdateTimeSlider,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
                     trailingIcon = {
@@ -902,6 +904,7 @@ internal fun PortraitSettingsSection(
             },
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
         run {
             Row(
@@ -911,7 +914,7 @@ internal fun PortraitSettingsSection(
             ) {
                 Text(
                     text = stringResource(R.string.test_mode_label),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.widthIn(min = 64.dp),
                 )
                 Box {
@@ -922,13 +925,12 @@ internal fun PortraitSettingsSection(
                         Text(if (state.useTestSignal) stringResource(R.string.test_mode_running) else stringResource(R.string.test_mode_start))
                     }
                 }
-
-                Text(
-                    text = stringResource(R.string.test_mode_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    modifier = Modifier.weight(1f),
-                )
+                Box(modifier = Modifier.weight(1f)) {
+                    InfoIconButton(
+                        stringResource(R.string.test_mode_info_title),
+                        stringResource(R.string.test_mode_info_message),
+                    )
+                }
             }
 
             Row(
@@ -938,7 +940,7 @@ internal fun PortraitSettingsSection(
             ) {
                 Text(
                     text = stringResource(R.string.test_waveform_label),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.widthIn(min = 64.dp),
                 )
                 Box {
@@ -946,7 +948,7 @@ internal fun PortraitSettingsSection(
                         onClick = { testSignalMenu = true },
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     ) {
-                        Text(state.testSignalPreset.label)
+                        Text(stringResource(state.testSignalPreset.labelResId))
                     }
                     DropdownMenu(
                         expanded = testSignalMenu,
@@ -954,7 +956,7 @@ internal fun PortraitSettingsSection(
                     ) {
                         AudioEngineViewModel.TestSignalPreset.entries.forEach { option ->
                             DropdownMenuItem(
-                                text = { Text(option.label) },
+                                text = { Text(stringResource(option.labelResId)) },
                                 onClick = {
                                     testSignalMenu = false
                                     actions.onSetTestSignalPreset(option)
@@ -963,13 +965,6 @@ internal fun PortraitSettingsSection(
                         }
                     }
                 }
-
-                Text(
-                    text = stringResource(R.string.test_waveform_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    modifier = Modifier.weight(1f),
-                )
             }
         }
         // custom recording storage moved to the compact settings menu (see OscopeApp)

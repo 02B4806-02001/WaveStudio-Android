@@ -552,15 +552,9 @@ fun OscopeApp(
         val cfg = NewTriggerEngine.Config(
             mode = NewTriggerEngine.Mode.RISING,
             sampleRateHz = sampleRate.coerceAtLeast(1000f),
-            strongLowPassHz = 220f,
             fMinHz = 5f,
             fMaxHz = 1200f,
-            useAutocorrelation = true,
-            autocorrRefreshFrames = 8,
-            autocorrMaxSamples = 512,
             preTriggerRatio = 0.16f,
-            hysteresisRatio = 0.16f,
-            holdoffRatio = 0.60f,
         )
         val result = normalTriggerEngine.process(refWave, cfg)
         val triggered = normalTriggerEngine.extractTriggeredWindow(refWave, result)
@@ -768,9 +762,9 @@ fun OscopeApp(
     fun logToSlider(v: Float, min: Float, max: Float): Float = hzToSlider(v, min, max)
     fun sliderToLog(v01: Float, min: Float, max: Float): Float = sliderToHz(v01, min, max)
 
-    // 时间窗（ms）范围：5..300
+    // 时间窗（ms）范围：5..120
     val windowMinMs = 5f
-    val windowMaxMs = 300f
+    val windowMaxMs = 120f
 
     // 滤波后增益（线性）范围：-20dB..40dB (~0.1..100)
     val gainMin = 0.1f
