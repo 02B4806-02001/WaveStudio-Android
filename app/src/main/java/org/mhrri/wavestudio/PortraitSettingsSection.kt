@@ -93,6 +93,8 @@ internal data class PortraitSettingsState(
     val useImportedSignal: Boolean,
     val importedAudioLabel: String?,
     val isImportingAudio: Boolean,
+    val importProgress: Float,
+    val importResultMessage: String?,
     val isRecording: Boolean,
     val isMonitoring: Boolean,
     val engineError: String?,
@@ -416,12 +418,6 @@ internal fun PortraitSettingsSection(
     val importedPlaybackDurationMs by audioViewModel.importedPlaybackDurationMs.collectAsStateWithLifecycle()
     val importedSignalPaused by audioViewModel.importedSignalPaused.collectAsStateWithLifecycle()
 
-    var showImportedAudioControllerDialog by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(state.useImportedSignal) {
-        if (!state.useImportedSignal) showImportedAudioControllerDialog = false
-    }
-
     fun openPresetShareDialog() {
         presetShareName = "oscope_preset"
         presetShareDialog = true
@@ -514,57 +510,15 @@ internal fun PortraitSettingsSection(
         }
 
         if (state.useImportedSignal) {
-            Text(
-                text = stringResource(R.string.input_source_imported_audio, state.importedAudioLabel?.let { " ($it)" } ?: ""),
-                style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFF1565C0),
-                modifier = Modifier.fillMaxWidth(),
+            ImportedAudioProgressBar(
+                positionMs = importedPlaybackPositionMs,
+                durationMs = importedPlaybackDurationMs,
+                isPaused = importedSignalPaused,
+                audioLabel = state.importedAudioLabel,
+                onSeek = { audioViewModel.seekImportedSignalTo(it) },
+                onTogglePause = { audioViewModel.toggleImportedSignalPause() },
+                onStop = { audioViewModel.stopImportedSignalInput() },
             )
-
-            val progress = if (importedPlaybackDurationMs > 0L) {
-                (importedPlaybackPositionMs.toFloat() / importedPlaybackDurationMs.toFloat()).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(
-                    onClick = { audioViewModel.toggleImportedSignalPause() },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = if (importedSignalPaused) androidx.compose.material.icons.Icons.Filled.PlayArrow else androidx.compose.material.icons.Icons.Filled.Pause,
-                        contentDescription = if (importedSignalPaused) stringResource(R.string.action_resume) else stringResource(R.string.action_pause),
-                    )
-                }
-
-                Slider(
-                    value = progress,
-                    onValueChange = { frac -> 
-                        audioViewModel.seekImportedSignalTo((frac * importedPlaybackDurationMs).toLong())
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-
-                IconButton(
-                    onClick = { audioViewModel.stopImportedSignalInput() },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Filled.Stop,
-                        contentDescription = stringResource(R.string.action_stop),
-                        tint = Color(0xFFC62828)
-                    )
-                }
-            }
         }
 
         Row(
@@ -902,6 +856,20 @@ internal fun PortraitSettingsSection(
             },
         )
 
+        // ---- 导入进度弹窗 ----
+        ImportProgressDialog(
+            visible = state.isImportingAudio,
+            progress = state.importProgress,
+            importedAudioLabel = state.importedAudioLabel,
+            onCancel = { audioViewModel.cancelImport() },
+        )
+
+        // ---- 导入结果提示 ----
+        LaunchedEffect(state.importResultMessage) {
+            val msg = state.importResultMessage ?: return@LaunchedEffect
+            showCenterToast(context, msg)
+            audioViewModel.clearImportResultMessage()
+        }
 
         run {
             Row(

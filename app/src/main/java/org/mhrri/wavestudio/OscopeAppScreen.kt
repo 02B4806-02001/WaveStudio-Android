@@ -537,6 +537,8 @@ fun OscopeApp(
     val useImportedSignal by audioViewModel.useImportedSignal.collectAsStateWithLifecycle()
     val importedAudioLabel by audioViewModel.importedAudioLabel.collectAsStateWithLifecycle()
     val isImportingAudio by audioViewModel.isImportingAudio.collectAsStateWithLifecycle()
+    val importProgress by audioViewModel.importProgress.collectAsStateWithLifecycle()
+    val importResultMessage by audioViewModel.importResultMessage.collectAsStateWithLifecycle()
     val isRecording by audioViewModel.isRecording.collectAsStateWithLifecycle()
     val isMonitoring by audioViewModel.isMonitoring.collectAsStateWithLifecycle()
     val recordings by audioViewModel.recordings.collectAsStateWithLifecycle()
@@ -1459,6 +1461,8 @@ fun OscopeApp(
                 useImportedSignal = useImportedSignal,
                 importedAudioLabel = importedAudioLabel,
                 isImportingAudio = isImportingAudio,
+                importProgress = importProgress,
+                importResultMessage = importResultMessage,
                 isRecording = isRecording,
                 isMonitoring = isMonitoring,
                 engineError = engineError,

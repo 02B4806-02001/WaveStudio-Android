@@ -529,6 +529,12 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private val _isImportingAudio = MutableStateFlow(false)
     val isImportingAudio: StateFlow<Boolean> = _isImportingAudio.asStateFlow()
 
+    private val _importProgress = MutableStateFlow(0f)
+    val importProgress: StateFlow<Float> = _importProgress.asStateFlow()
+
+    private val _importResultMessage = MutableStateFlow<String?>(null)
+    val importResultMessage: StateFlow<String?> = _importResultMessage.asStateFlow()
+
     private val _importedSignalPaused = MutableStateFlow(false)
     val importedSignalPaused: StateFlow<Boolean> = _importedSignalPaused.asStateFlow()
 
@@ -732,11 +738,21 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     fun importAudioAsInput(context: Context, uri: Uri) {
         if (_isImportingAudio.value) return
         _isImportingAudio.value = true
-        viewModelScope.launch(Dispatchers.Default) {
+        _importProgress.value = 0f
+        _importResultMessage.value = null
+        // 使用传入的 context（已被 attachBaseContext 包装语言），不能用 applicationContext
+        val ctx = context
+        importJob = viewModelScope.launch(Dispatchers.Default) {
             try {
-                val decoded = decodeAudioToMonoTempPcm(context, uri)
+                val decoded = decodeAudioToMonoTempPcm(context, uri,
+                    onProgress = { progress -> _importProgress.value = progress },
+                    shouldCancel = { !isActive }
+                )
+                _importProgress.value = 1f
                 if (!decoded.pcmFile.exists() || decoded.pcmFile.length() < 2L) {
-                    _engineError.value = "导入失败：音频解码后为空"
+                    val failMsg = ctx.getString(R.string.import_audio_failed_prefix) + ctx.getString(R.string.preset_import_failed_empty)
+                    _engineError.value = failMsg
+                    _importResultMessage.value = failMsg
                     clearImportedSignalData(decoded)
                     return@launch
                 }
@@ -746,7 +762,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 if (_isRecording.value) stopRecording()
                 stopVvvfTestJob()
                 _useTestSignal.value = false
-                // 支持“导入中替换导入”：先显式停掉旧的导入协程，避免 startImportedSignalJob 被 guard 掉。
+                // 支持"导入中替换导入"：先显式停掉旧的导入协程，避免 startImportedSignalJob 被 guard 掉。
                 stopImportedSignalInput()
                 stopEngine()
 
@@ -760,12 +776,31 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 _useImportedSignal.value = true
                 _isRunning.value = true
                 startImportedSignalJob()
+                _importResultMessage.value = ctx.getString(R.string.import_audio_success_prefix) + (decoded.label ?: "")
             } catch (t: Throwable) {
-                _engineError.value = "导入失败：${t.message ?: t.javaClass.simpleName}"
+                if (t is kotlinx.coroutines.CancellationException) {
+                    // 用户主动取消：显示取消提示，不报错
+                    _engineError.value = null
+                    _importResultMessage.value = ctx.getString(R.string.import_audio_cancelled)
+                } else {
+                    val failMsg = ctx.getString(R.string.import_audio_failed_prefix) + (t.message ?: t.javaClass.simpleName)
+                    _engineError.value = failMsg
+                    _importResultMessage.value = failMsg
+                }
             } finally {
                 _isImportingAudio.value = false
+                importJob = null
             }
         }
+    }
+
+    fun clearImportResultMessage() {
+        _importResultMessage.value = null
+    }
+
+    fun cancelImport() {
+        importJob?.cancel()
+        importJob = null
     }
 
     fun stopImportedSignalInput() {
@@ -1370,6 +1405,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     private var testJob: Job? = null
     private var importedSignalJob: Job? = null
+    private var importJob: Job? = null
     private var importedSignalData: ImportedAudioData? = null
     private var importedSeekRequestBytes: Long? = null
 
@@ -1793,7 +1829,12 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         importedSignalJob = null
     }
 
-    private fun decodeAudioToMonoTempPcm(context: Context, uri: Uri): ImportedAudioData {
+    private fun decodeAudioToMonoTempPcm(
+        context: Context,
+        uri: Uri,
+        onProgress: ((Float) -> Unit)? = null,
+        shouldCancel: (() -> Boolean)? = null,
+    ): ImportedAudioData {
         val extractor = MediaExtractor()
         val afd = context.contentResolver.openAssetFileDescriptor(uri, "r")
             ?: throw IllegalStateException("无法打开音频文件")
@@ -1829,6 +1870,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         var outSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceAtLeast(8000)
         var outEncoding = AudioFormat.ENCODING_PCM_16BIT
 
+        val totalBytes = afd.length
+        var bytesRead = 0L
+
         val outFile = File.createTempFile("oscope_import_", ".pcm", context.cacheDir)
         var success = false
 
@@ -1841,6 +1885,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 }
 
                 while (!sawOutputEos) {
+                    if (shouldCancel?.invoke() == true) {
+                        throw kotlinx.coroutines.CancellationException("导入已取消")
+                    }
                     if (!sawInputEos) {
                         val inIndex = codec.dequeueInputBuffer(10_000)
                         if (inIndex >= 0) {
@@ -1851,6 +1898,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                     codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                                     sawInputEos = true
                                 } else {
+                                    bytesRead += sampleSize
+                                    if (totalBytes > 0 && onProgress != null) {
+                                        onProgress((bytesRead.toFloat() / totalBytes.toFloat()).coerceIn(0f, 0.95f))
+                                    }
                                     codec.queueInputBuffer(inIndex, 0, sampleSize, extractor.sampleTime, 0)
                                     extractor.advance()
                                 }

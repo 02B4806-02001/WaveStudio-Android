@@ -588,7 +588,7 @@ fun FilterOrderSelector(
     onOrderChange: (Int) -> Unit,
 ) {
     var orderMenu by remember { mutableStateOf(false) }
-    val currentLanguage = androidx.compose.ui.platform.LocalConfiguration.current.locales.get(0)?.language ?: Locale.getDefault().language
+    val currentLanguage = androidx.compose.ui.platform.LocalConfiguration.current.locales.get(0)?.language ?: ""
     val useEnglishOrdinal = currentLanguage.startsWith("en")
     val minO = orderOptions.minOrNull() ?: 1
     val maxO = orderOptions.maxOrNull() ?: 8

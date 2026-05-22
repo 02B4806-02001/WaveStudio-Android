@@ -71,6 +71,11 @@
     <string name="monitor_off">关闭监听</string>
     <string name="load_audio">导入音频</string>
     <string name="importing">导入中</string>
+    <string name="import_audio_progress_title">导入音频</string>
+    <string name="import_audio_decoding">正在解码音频文件…</string>
+    <string name="import_audio_success_prefix">导入成功：</string>
+    <string name="import_audio_failed_prefix">导入失败：</string>
+    <string name="import_audio_cancelled">导入已取消</string>
     <string name="audio_input_mode">音频输入</string>
     <string name="audio_input_controller_title">导入音频控制器</string>
     <string name="audio_input_controller_hint">当前导入音频</string>
@@ -92,7 +97,7 @@
     <string name="processed_gain_set_title">设置处理后增益</string>
     <string name="processed_gain_info_title">处理后增益</string>
     <string name="processed_gain_info_message">调整处理后波形的整体音量。</string>
-    <string name="time_window_value_ms">时间窗口 %1$s ms</string>
+    <string name="time_window_value_ms">时间窗口：%1$s ms</string>
     <string name="time_window_set_title">设置时间窗口</string>
     <string name="time_window_info_title">时间窗口</string>
     <string name="time_window_info_message">窗口越长显示的周期越多，但更新会更慢。</string>
@@ -140,7 +145,7 @@
     <string name="lock">锁定</string>
     <string name="unlock">解锁</string>
     <string name="amp_scale_overlay">幅度 x %1$s</string>
-    <string name="time_window_overlay">时间窗 %1$s ms</string>
+    <string name="time_window_overlay">时间窗：%1$s ms</string>
     <string name="unit_x">x</string>
     <string name="unit_ms">ms</string>
 
@@ -187,6 +192,16 @@
     <string name="about_official_website_label">磁拾音器研究所官网：</string>
     <string name="about_preset_download_placeholder">预设配置下载：（暂时预留）</string>
 
+    <!-- About dialog (refactored) -->
+    <string name="about_app_title">Wave Studio</string>
+    <string name="about_byline">by 磁拾音器研究所</string>
+    <string name="about_hint">提示：使用前请授予麦克风权限。</string>
+    <string name="about_changelog_title">更新日志</string>
+    <string name="about_more_info">更多信息</string>
+    <string name="about_website_label_new">磁拾音器研究所官网</string>
+    <string name="about_website_url_new">https://www.mhrri.org/</string>
+    <string name="about_preset_placeholder">预设配置下载：（暂时预留）</string>
+
     <string name="trigger_pre_trigger_ratio_value">预触发比例: %1$s</string>
     <string name="trigger_assist_lowpass_value">辅助低通: %1$sHz</string>
     <string name="trigger_autocorr_refresh_value">自相关刷新: %1$d 帧</string>
@@ -224,4 +239,13 @@
     <string name="language_switch_confirm_message">确定要切换为 %1$s 吗？</string>
     <string name="language_switch_success">语言已切换为 %1$s</string>
     <string name="language_switch_cancel">保持当前</string>
+
+    <!-- Recordings list -->
+    <string name="recordings_count_format">共 %1$d 条录音</string>
+    <string name="recordings_total_duration_format">总时长 %1$s</string>
+    <string name="recordings_status_playing">正在播放</string>
+    <string name="recordings_status_saved">已保存</string>
+    <string name="recordings_status_waiting">等待录音</string>
+    <string name="recordings_empty_title">暂无录音</string>
+    <string name="recordings_empty_hint">录音完成后会自动出现在这里。</string>
 </resources>

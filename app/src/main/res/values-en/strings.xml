@@ -78,6 +78,11 @@
     <string name="monitor_off">Monitor Off</string>
     <string name="load_audio">Load Aud.</string>
     <string name="importing">Importing</string>
+    <string name="import_audio_progress_title">Import Audio</string>
+    <string name="import_audio_decoding">Decoding audio file…</string>
+    <string name="import_audio_success_prefix">Import successful: </string>
+    <string name="import_audio_failed_prefix">Import failed: </string>
+    <string name="import_audio_cancelled">Import cancelled</string>
     <string name="audio_input_mode">Audio Input</string>
     <string name="audio_input_controller_title">Imported Audio Controller</string>
     <string name="audio_input_controller_hint">Current imported audio</string>
@@ -100,7 +105,7 @@
     <string name="processed_gain_set_title">Set Processed Gain</string>
     <string name="processed_gain_info_title">Processed Gain</string>
     <string name="processed_gain_info_message">Adjusts overall level of the processed waveform.</string>
-    <string name="time_window_value_ms">Time Window %1$s ms</string>
+    <string name="time_window_value_ms">Time Window: %1$s ms</string>
     <string name="time_window_set_title">Set Time Window</string>
     <string name="time_window_info_title">Time Window</string>
     <string name="time_window_info_message">Longer window shows more periods but updates slower.</string>
@@ -151,7 +156,7 @@
     <string name="lock">Lock</string>
     <string name="unlock">Unlock</string>
     <string name="amp_scale_overlay">Amplitude x %1$s</string>
-    <string name="time_window_overlay">Window %1$s ms</string>
+    <string name="time_window_overlay">Window: %1$s ms</string>
     <string name="unit_x">x</string>
     <string name="unit_ms">ms</string>
 
@@ -199,6 +204,16 @@
     <string name="about_official_website_label">Official website:</string>
     <string name="about_preset_download_placeholder">Preset download: (reserved)</string>
 
+    <!-- About dialog (refactored) -->
+    <string name="about_app_title">Wave Studio</string>
+    <string name="about_byline">by MoHa-Radio Institute</string>
+    <string name="about_hint">Please grant microphone permission before use.</string>
+    <string name="about_changelog_title">Changelog</string>
+    <string name="about_more_info">More information</string>
+    <string name="about_website_label_new">Official website</string>
+    <string name="about_website_url_new">https://www.mhrri.org/</string>
+    <string name="about_preset_placeholder">Preset download: (reserved)</string>
+
     <string name="trigger_pre_trigger_ratio_value">Pre-trigger ratio: %1$s</string>
     <string name="trigger_assist_lowpass_value">Assist low-pass: %1$sHz</string>
     <string name="trigger_autocorr_refresh_value">Autocorr refresh: %1$d frames</string>
@@ -237,4 +252,13 @@
     <string name="language_switch_confirm_message">Switch to %1$s?</string>
     <string name="language_switch_success">Language switched to %1$s</string>
     <string name="language_switch_cancel">Keep Current</string>
+
+    <!-- Recordings list -->
+    <string name="recordings_count_format">%1$d recordings</string>
+    <string name="recordings_total_duration_format">Total %1$s</string>
+    <string name="recordings_status_playing">Playing</string>
+    <string name="recordings_status_saved">Saved</string>
+    <string name="recordings_status_waiting">Waiting</string>
+    <string name="recordings_empty_title">No recordings yet</string>
+    <string name="recordings_empty_hint">Finished recordings will appear here automatically.</string>
 </resources>

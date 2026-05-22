@@ -195,13 +195,12 @@ private fun RecordingSummaryCard(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val zh = Locale.getDefault().language == "zh"
-    val countText = if (zh) "共 $count 条录音" else "$count recordings"
-    val durationText = if (zh) "总时长 ${formatTotalDuration(totalDurationSec)}" else "Total ${formatTotalDuration(totalDurationSec)}"
+    val countText = stringResource(R.string.recordings_count_format, count)
+    val durationText = stringResource(R.string.recordings_total_duration_format, formatTotalDuration(totalDurationSec))
     val statusText = when {
-        isPlaying -> if (zh) "正在播放" else "Playing"
-        count > 0 -> if (zh) "已保存" else "Saved"
-        else -> if (zh) "等待录音" else "Waiting"
+        isPlaying -> stringResource(R.string.recordings_status_playing)
+        count > 0 -> stringResource(R.string.recordings_status_saved)
+        else -> stringResource(R.string.recordings_status_waiting)
     }
 
     Card(
@@ -243,8 +242,6 @@ private fun RecordingSummaryCard(
 
 @Composable
 private fun EmptyRecordingsState(modifier: Modifier = Modifier) {
-    val zh = Locale.getDefault().language == "zh"
-
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
@@ -259,12 +256,12 @@ private fun EmptyRecordingsState(modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = if (zh) "暂无录音" else "No recordings yet",
+                    text = stringResource(R.string.recordings_empty_title),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = if (zh) "录音完成后会自动出现在这里。" else "Finished recordings will appear here automatically.",
+                    text = stringResource(R.string.recordings_empty_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
                     textAlign = TextAlign.Center,
@@ -293,8 +290,6 @@ private fun RecordingCard(
 ) {
     val headlineColor = if (isPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
     val containerColor = if (isPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-    val zh = Locale.getDefault().language == "zh"
-
     Card(
         modifier = Modifier
             .fillMaxWidth()

@@ -56,8 +56,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Delete
@@ -120,77 +118,40 @@ internal fun PresetResetConfirmDialog(
 }
 
 @Composable
-internal fun ImportedAudioControllerDialog(
+internal fun ImportProgressDialog(
     visible: Boolean,
-    importedAudioLabel: String?,
     progress: Float,
-    isPaused: Boolean,
-    onDismiss: () -> Unit,
-    onTogglePause: () -> Unit,
-    onStop: () -> Unit,
+    importedAudioLabel: String?,
+    onCancel: () -> Unit,
 ) {
     if (!visible) return
 
-    val clampedProgress = progress.coerceIn(0f, 1f)
+    val percent = (progress * 100f).toInt().coerceIn(0, 100)
 
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.audio_input_controller_title)) },
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.import_audio_progress_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = importedAudioLabel?.takeIf { it.isNotBlank() }
-                        ?: stringResource(R.string.audio_input_controller_hint),
+                        ?: stringResource(R.string.import_audio_decoding),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    LinearProgressIndicator(
-                        progress = { clampedProgress },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = if (isPaused) stringResource(R.string.audio_input_controller_paused) else stringResource(R.string.audio_input_controller_playing),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    )
-                }
-
-                Row(
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = onTogglePause) {
-                            Icon(
-                                imageVector = Icons.Filled.Pause,
-                                contentDescription = if (isPaused) stringResource(R.string.action_resume) else stringResource(R.string.action_pause),
-                            )
-                        }
-                        Text(
-                            text = if (isPaused) stringResource(R.string.action_resume) else stringResource(R.string.action_pause),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = onStop) {
-                            Icon(
-                                imageVector = Icons.Filled.Stop,
-                                contentDescription = stringResource(R.string.action_stop),
-                            )
-                        }
-                        Text(
-                            text = stringResource(R.string.action_stop),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                }
+                )
+                Text(
+                    text = "$percent%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) }
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.common_cancel)) }
         },
     )
 }
@@ -744,111 +705,36 @@ internal fun AboutDialog(
     val aboutDialogScrollState = rememberScrollState()
     val windowHeightDp = with(density) { windowInfo.containerSize.height.toDp() }
     val aboutDialogMaxHeight = if (windowHeightDp > 0.dp) minOf(windowHeightDp * 0.68f, 520.dp) else 360.dp
-    val isZhAbout = selectedLanguage == LANG_ZH
     var showChangelog by remember { mutableStateOf(false) }
 
     data class AboutSection(val title: String, val bullets: List<String>)
 
-    val appTitle = "Wave Studio"
-    val appVersion = "v0.15.3"
-    val aboutByline = if (isZhAbout) "by 磁拾音器研究所" else "by MoHa-Radio Institute"
-    val aboutHint = if (isZhAbout) "提示：使用前请授予麦克风权限。" else "Please grant microphone permission before use."
-    val changelogTitle = if (isZhAbout) "更新日志" else "Changelog"
-    val aboutWebsiteLabel = if (isZhAbout) "磁拾音器研究所官网" else "Official website"
-    val aboutWebsiteUrl = "https://www.mhrri.org/"
-    val aboutPresetPlaceholder = if (isZhAbout) "预设配置下载：（暂时预留）" else "Preset download: (reserved)"
+    val appTitle = stringResource(R.string.about_app_title)
+    val appVersion = try {
+        val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        "v${pkgInfo.versionName}"
+    } catch (_: Exception) {
+        ""
+    }
+    val aboutByline = stringResource(R.string.about_byline)
+    val aboutHint = stringResource(R.string.about_hint)
+    val changelogTitle = stringResource(R.string.about_changelog_title)
+    val aboutWebsiteLabel = stringResource(R.string.about_website_label_new)
+    val aboutWebsiteUrl = stringResource(R.string.about_website_url_new)
+    val aboutPresetPlaceholder = stringResource(R.string.about_preset_placeholder)
 
-    val aboutSections = if (isZhAbout) {
-        listOf(
-            AboutSection(
-                title = "0.15.3 版本主要更新内容",
-                bullets = listOf(
-                    "优化语言切换功能",
-                ),
-            ),
-            AboutSection(
-                title = "0.15.1 版本主要更新内容",
-                bullets = listOf(
-                    "修复了配置文件“分享”和“默认”按钮无法使用的问题",
-                ),
-            ),
-            AboutSection(
-                title = "0.15.0 版本主要更新内容",
-                bullets = listOf(
-                    "重构了关于界面和录音列表界面",
-                    "优化了自定义存储功能",
-                ),
-            ),
-            AboutSection(
-                title = "0.14.1 版本主要更新内容",
-                bullets = listOf(
-                    "修复了自定义路径的 bug",
-                    "优化了 Trigger 功能",
-                ),
-            ),
-            AboutSection(
-                title = "0.14.0 版本主要更新内容",
-                bullets = listOf(
-                    "可使用自定义录音存储路径",
-                    "设置中新增全局 1Hz 高通开关",
-                    "优化了 Trigger 功能",
-                    "修复了测试信号的 bug",
-                ),
-            ),
-            AboutSection(
-                title = "0.13.0 版本主要更新内容",
-                bullets = listOf(
-                    "均衡器 EQ 频响图支持拖拽调节",
-                    "新增导入音频控制器",
-                    "竖屏模式下的最大波形高度提升至 200dp",
-                ),
-            ),
-        )
-    } else {
-        listOf(
-            AboutSection(
-                title = "Key updates in version 0.15.3",
-                bullets = listOf(
-                    "Optimize language switching functionality"
-                ),
-            ),
-            AboutSection(
-                title = "Key updates in version 0.15.1",
-                bullets = listOf(
-                    "Fixed: 'Share' and 'Default' buttons were not working."
-                ),
-            ),
-            AboutSection(
-                title = "Key updates in version 0.15.0",
-                bullets = listOf(
-                    "Refactored the About screen and the recording list screen",
-                    "Optimized the custom storage feature",
-                ),
-            ),
-            AboutSection(
-                title = "Key updates in version 0.14.1",
-                bullets = listOf(
-                    "Fixed a bug with the custom path",
-                    "Optimized the Trigger function",
-                ),
-            ),
-            AboutSection(
-                title = "Key updates in version 0.14.0",
-                bullets = listOf(
-                    "Custom recording storage path is now available",
-                    "Added a global 1Hz high-pass filter toggle in settings",
-                    "Optimized the Trigger function",
-                    "Fixed a bug with the test signal",
-                ),
-            ),
-            AboutSection(
-                title = "Key updates in version 0.13.0",
-                bullets = listOf(
-                    "EQ frequency response graph now supports drag adjustment",
-                    "Added an imported audio controller",
-                    "Increased the maximum waveform height to 200dp",
-                ),
-            ),
+    val aboutSections = listOf(
+        "0.15.3.1" to R.array.about_changelog_v01531,
+        "0.15.3" to R.array.about_changelog_v0153,
+        "0.15.1" to R.array.about_changelog_v0151,
+        "0.15.0" to R.array.about_changelog_v0150,
+        "0.14.1" to R.array.about_changelog_v0141,
+        "0.14.0" to R.array.about_changelog_v0140,
+        "0.13.0" to R.array.about_changelog_v0130,
+    ).map { (version, arrayResId) ->
+        AboutSection(
+            title = stringResource(R.string.about_changelog_version_title, version),
+            bullets = context.resources.getStringArray(arrayResId).toList()
         )
     }
 
@@ -947,7 +833,7 @@ internal fun AboutDialog(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text(
-                                text = if (isZhAbout) "更多信息" else "More information",
+                                text = stringResource(R.string.about_more_info),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
