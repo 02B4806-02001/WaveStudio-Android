@@ -514,7 +514,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     ) {
         SPWM_18(R.string.test_signal_spwm_18, 18f, 0.5f),
         SPWM_3_M2_5(R.string.test_signal_spwm_3_m2_5, 3f, 2.5f),
-            WAV_1S(R.string.test_signal_5p),
+        REC_5P(R.string.test_signal_5p),
     }
 
     private val _testSignalPreset = MutableStateFlow(TestSignalPreset.SPWM_18)
@@ -1473,7 +1473,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     val publishedSpanMs = window * 3f
 
                     val samplesNeeded = ((sampleRate * publishedSpanMs) / 1000f).roundToInt().coerceAtLeast(1)
-                    val isWav = _testSignalPreset.value == TestSignalPreset.WAV_1S
+                    val isWav = _testSignalPreset.value == TestSignalPreset.REC_5P
 
                     // (Re)load resampled WAV cache only when entering WAV mode
                     if (isWav && cachedWavResampled == null) {
