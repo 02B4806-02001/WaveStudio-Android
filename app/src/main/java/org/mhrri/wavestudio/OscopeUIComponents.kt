@@ -1,8 +1,10 @@
 package org.mhrri.wavestudio
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -25,11 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln
@@ -45,9 +46,7 @@ import androidx.core.content.edit
 // Note: Shared utility functions (toEnglishOrdinal, rememberDisplayLowPass, computeEqResponse)
 // are now in OscopeUIUtils.kt to avoid duplication
 
-// Local trigger engine instance for UI-only triggered-window preview
-private val triggerEngine = NewTriggerEngine(nominalWindowSize = 512)
-
+@SuppressLint("SuspiciousIndentation")
 @Composable
 fun ImmersiveScreen(
     modifier: Modifier,
@@ -100,6 +99,7 @@ fun ImmersiveScreen(
     val currentAmpScale by rememberUpdatedState(ampScale)
     val filteredSamples by filteredWaveform.collectAsStateWithLifecycle()
     val vmTriggerResultValue by audioViewModel.triggerResult.collectAsStateWithLifecycle()
+    val vmTriggeredWindowValue by audioViewModel.triggeredWindow.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val triggerPrefs = remember(context) {
         context.applicationContext.getSharedPreferences(SETTINGS_PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -135,40 +135,6 @@ fun ImmersiveScreen(
         NewTriggerEngine.Mode.OFF.name -> "ON"
         else -> NewTriggerEngine.Mode.OFF.name
     }
-
-    fun buildTriggeredWindow(
-        source: FloatArray,
-        mode: NewTriggerEngine.Mode,
-        waveformSpanMs: Float,
-    ): Pair<FloatArray, NewTriggerEngine.Result?> {
-        val nominalWindowSize = 512
-        if (source.isEmpty()) return source to null
-        if (source.size <= nominalWindowSize) return source to null
-
-        val preferAutocorrelation = mode != NewTriggerEngine.Mode.OFF
-
-        val cfg = NewTriggerEngine.Config(
-            mode = if (mode == NewTriggerEngine.Mode.OFF) NewTriggerEngine.Mode.OFF else NewTriggerEngine.Mode.RISING,
-            sampleRateHz = (source.size.toFloat() / (waveformSpanMs / 1000f).coerceAtLeast(1e-4f)).coerceAtLeast(1000f),
-            strongLowPassHz = if (preferAutocorrelation) 240f else 160f,
-            fMaxHz = if (preferAutocorrelation) 280f else 2000f,
-            useAutocorrelation = preferAutocorrelation,
-            autocorrRefreshFrames = 8,
-            autocorrMaxSamples = 512,
-            preTriggerRatio = 0.16f,
-            hysteresisRatio = 0.16f,
-            holdoffRatio = 0.60f,
-        )
-        val res = triggerEngine.process(source, cfg)
-        val window = if (mode == NewTriggerEngine.Mode.OFF) {
-            val maxStart = (source.size - nominalWindowSize).coerceAtLeast(0)
-            source.copyOfRange(maxStart, maxStart + nominalWindowSize)
-        } else {
-            triggerEngine.extractTriggeredWindow(source, res)
-        }
-        return window to if (mode == NewTriggerEngine.Mode.OFF) null else res
-    }
-
 
     Box(
         modifier = modifier
@@ -241,17 +207,11 @@ fun ImmersiveScreen(
         ) {
             val immersiveRef = filteredDisplayScale.coerceAtLeast(1e-4f)
 
-            val triggeredState by produceState<Pair<FloatArray, NewTriggerEngine.Result?>>(
-                initialValue = filteredSamples to null,
-                filteredSamples,
-                waveformSpanMs,
-                triggerMode,
-            ) {
-                value = withContext(Dispatchers.Default) {
-                    buildTriggeredWindow(filteredSamples, triggerMode, waveformSpanMs)
-                }
+            val displaySamples = if (triggerMode != NewTriggerEngine.Mode.OFF) {
+                 if (vmTriggeredWindowValue.isNotEmpty()) vmTriggeredWindowValue else filteredSamples
+            } else {
+                filteredSamples
             }
-            val displaySamples = triggeredState.first
 
             WaveformView(
                 samples = displaySamples,
@@ -266,6 +226,22 @@ fun ImmersiveScreen(
             )
 
             val latestTriggerResult = vmTriggerResultValue
+                // Always show trigger status when trigger is on
+                if (triggerMode != NewTriggerEngine.Mode.OFF) {
+                    val statusText = if (latestTriggerResult != null) {
+                        "${"%.1f".format(latestTriggerResult.freqHz)}Hz c=${"%.2f".format(latestTriggerResult.confidence)} ${if (latestTriggerResult.locked) "LOCK" else "..."}"
+                    } else "WAIT"
+                    Text(
+                        text = "TRG $statusText",
+                        color = Color(0xFF4FC3F7),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp)
+                            .background(Color(0x88000000), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
             if (triggerMode != NewTriggerEngine.Mode.OFF && latestTriggerResult != null && showDebugInfo) {
                 val conf = String.format(Locale.US, "%.2f", latestTriggerResult.confidence)
                 val hz = String.format(Locale.US, "%.1f", latestTriggerResult.freqHz)
@@ -315,6 +291,7 @@ fun ImmersiveScreen(
                         onDismissRequest = { settingsMenuExpanded = false }
                     ) {
                         DropdownMenuItem(
+                               onClick = {},
                             text = {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -328,7 +305,6 @@ fun ImmersiveScreen(
                                     )
                                 }
                             },
-                            onClick = { triggerModeName = nextTriggerModeName(triggerModeName) }
                         )
                         DropdownMenuItem(
                             text = {
@@ -702,8 +678,6 @@ fun EqPanel(
 
         if (!enabled || !expanded) return
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-
         val freqMin = 20f
         val freqMax = 20000f
         val gainMin = -40f
@@ -747,6 +721,7 @@ fun EqPanel(
             draggable = draggable,
             onBandFreq = onBandFreq,
             onBandGainDb = onBandGainDb,
+                onBandSelect = { selectedId = it },
             onGraphDragging = onGraphDragging,
         )
 
@@ -757,13 +732,24 @@ fun EqPanel(
         ) {
             for (b in bands) {
                 val isSel = b.id == selectedId
-                TextButton(
-                    onClick = { selectedId = b.id },
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
-                ) { Text(b.label, style = MaterialTheme.typography.bodyMedium) }
+                if (isSel) {
+                    FilledTonalButton(
+                        onClick = { selectedId = b.id },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Text(b.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { selectedId = b.id },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        )
+                    ) {
+                        Text(b.label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
 
             Spacer(Modifier.weight(1f))
@@ -989,6 +975,7 @@ fun ResetIconButton(
     }
 }
 
+@SuppressLint("SuspiciousIndentation")
 @Composable
 fun EqResponseGraph(
     modifier: Modifier,
@@ -1007,6 +994,7 @@ fun EqResponseGraph(
     draggable: Boolean = false,
     onBandFreq: (id: Int, hz: Float) -> Unit = { _, _ -> },
     onBandGainDb: (id: Int, db: Float) -> Unit = { _, _ -> },
+    onBandSelect: (Int) -> Unit = {},
     onGraphDragging: (Boolean) -> Unit = {},
 ) {
     // Theme-aware colors
@@ -1015,35 +1003,87 @@ fun EqResponseGraph(
     val dotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
     val selectedColor = MaterialTheme.colorScheme.primary
 
-    Canvas(modifier = modifier.pointerInput(draggable, selectedId) {
-        if (!draggable) return@pointerInput
-        detectDragGestures(
-            onDragStart = { onGraphDragging(true) },
-            onDragEnd = { onGraphDragging(false) },
-            onDragCancel = { onGraphDragging(false) },
-            onDrag = { change, _ ->
-                change.consume()
-                val w = size.width.toFloat()
-                val h = size.height.toFloat()
-                
-                // Use absolute position instead of delta for more stable tracking
-                val x = change.position.x.coerceIn(0f, w)
-                val y = change.position.y.coerceIn(0f, h)
-
-                // Inverse log map for freq
-                val lmin = ln(freqMin)
-                val lmax = ln(freqMax)
-                val newLf = lmin + (x / w) * (lmax - lmin)
-                val newFreq = exp(newLf).coerceIn(freqMin, freqMax)
-                onBandFreq(selectedId, newFreq)
-
-                // Inverse linear map for gain
-                val newT = 1f - (y / h)
-                val newGainDb = (gainMin + newT * (gainMax - gainMin)).coerceIn(gainMin, gainMax)
-                onBandGainDb(selectedId, newGainDb)
+        Canvas(modifier = modifier
+            .pointerInput(draggable, selectedId) {
+                if (!draggable) return@pointerInput
+                // ~24px ≈ 8–12dp gesture threshold to disambiguate scroll from EQ drag.
+                // If the drag never exceeds this distance, treat as a tap (no-op here).
+                val slopPx = 16f
+                // |dy| > 2.0 × |dx| → treat as vertical scroll intent, let parent handle.
+                val vertRatio = 2.5f
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var committed = false
+                    val startX = down.position.x
+                    val startY = down.position.y
+                    do {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) {
+                            if (committed) onGraphDragging(false)
+                            break
+                        }
+                        val dx = change.position.x - startX
+                        val dy = change.position.y - startY
+                        val dist = sqrt(dx * dx + dy * dy)
+                        if (!committed) {
+                            if (dist < slopPx) continue
+                            if (abs(dy) > abs(dx) * vertRatio) {
+                                // Vertical-dominant → treat as scroll, pass through
+                                break
+                            }
+                            committed = true
+                            onGraphDragging(true)
+                        }
+                        change.consume()
+                        val w = size.width.toFloat()
+                        val h = size.height.toFloat()
+                        val x = change.position.x.coerceIn(0f, w)
+                        val y = change.position.y.coerceIn(0f, h)
+                        val lmin = ln(freqMin)
+                        val lmax = ln(freqMax)
+                        val newLf = lmin + (x / w) * (lmax - lmin)
+                        val newFreq = exp(newLf).coerceIn(freqMin, freqMax)
+                        onBandFreq(selectedId, newFreq)
+                        val newT = 1f - (y / h)
+                        val newGainDb = (gainMin + newT * (gainMax - gainMin)).coerceIn(gainMin, gainMax)
+                        onBandGainDb(selectedId, newGainDb)
+                    } while (true)
+                }
             }
-        )
-    }) {
+            .pointerInput(draggable) {
+                if (!draggable) return@pointerInput
+                    detectTapGestures { offset ->
+                        if (bands.isEmpty()) return@detectTapGestures
+                    val w = size.width.toFloat()
+                    val h = size.height.toFloat()
+                
+                    val sorted = bands.sortedBy { it.freqHz }
+                    var nearestId = sorted.first().id
+                    var nearestDist = Float.MAX_VALUE
+                
+                    for (b in sorted) {
+                        val lf = ln(b.freqHz.coerceIn(freqMin, freqMax))
+                        val lmin_ = ln(freqMin)
+                        val lmax_ = ln(freqMax)
+                        val bx = ((lf - lmin_) / (lmax_ - lmin_)).toFloat() * w
+                        val t = ((b.gainDb - gainMin) / (gainMax - gainMin)).coerceIn(0f, 1f)
+                        val by = h * (1f - t)
+                        val dx = offset.x - bx
+                        val dy = offset.y - by
+                        val dist = sqrt(dx * dx + dy * dy)
+                        if (dist < nearestDist) {
+                            nearestDist = dist
+                            nearestId = b.id
+                        }
+                    }
+                
+                    if (nearestDist < minOf(w, h) * 0.3f) {
+                        onBandSelect(nearestId)
+                    }
+                }
+            }
+        ) {
         val w = size.width
         val h = size.height
 

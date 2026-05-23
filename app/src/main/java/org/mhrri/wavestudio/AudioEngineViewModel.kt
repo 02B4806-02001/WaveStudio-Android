@@ -20,6 +20,7 @@ import android.os.Environment
 import android.provider.OpenableColumns
 import android.provider.MediaStore
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
@@ -359,7 +360,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private val _highPassEnabled = MutableStateFlow(false)
     val highPassEnabled: StateFlow<Boolean> = _highPassEnabled.asStateFlow()
 
-    private val _highPassCutoff = MutableStateFlow(50f)
+    private val _highPassCutoff = MutableStateFlow(30f)
     val highPassCutoff: StateFlow<Float> = _highPassCutoff.asStateFlow()
 
     // Global 1Hz high-pass setting (exposed in settings)
@@ -509,12 +510,13 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     val useTestSignal: StateFlow<Boolean> = _useTestSignal.asStateFlow()
 
     enum class TestSignalPreset(
-        val label: String,
-        val carrierMultiple: Float,
-        val modulationAmp: Float,
+        @StringRes val labelResId: Int,
+            val carrierMultiple: Float = 0f,
+            val modulationAmp: Float = 0f,
     ) {
-        SPWM_18("异步SPWM", 18f, 0.5f),
-        SPWM_3_M2_5("方波调制", 3f, 2.5f),
+        SPWM_18(R.string.test_signal_spwm_18, 18f, 0.5f),
+        SPWM_3_M2_5(R.string.test_signal_spwm_3_m2_5, 3f, 2.5f),
+            WAV_1S(R.string.test_signal_5p),
     }
 
     private val _testSignalPreset = MutableStateFlow(TestSignalPreset.SPWM_18)
@@ -646,7 +648,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private var recordingPtsUs: Long = 0L
 
     // WAV (raw PCM) recording
-    private var wavOut: RandomAccessFile? = null
+    private var wavOut: java.io.RandomAccessFile? = null
     private var wavDataBytes: Long = 0L
     private var wavSampleRate: Int = 44100
     private var recordingActiveFormat: RecordingFormat? = null
@@ -829,6 +831,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         _importedSignalPaused.value = !_importedSignalPaused.value
     }
 
+    @SuppressLint("SuspiciousIndentation")
     fun startEngine(context: Context) {
         if (_isRunning.value) return
 
@@ -1036,7 +1039,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     val significantChange =
                         alive != lastPublishedAlive ||
                                 readSamples != lastPublishedRead ||
-                                abs(maxAbs - lastPublishedMaxAbs) >= 512
+                                kotlin.math.abs(maxAbs - lastPublishedMaxAbs) >= 512
                     val publishIntervalMs = currentPublishIntervalMs()
                     val shouldPublish = force ||
                             alive != lastPublishedAlive ||
@@ -1346,7 +1349,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 else -> 0.45f
                             }
                             val extraSamples = (windowSamples * extraSamplesRatio).toInt()
-                            val minTriggerSamples = if (triggerArmed) 640 else 0
+                                val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
                             val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
                             if (fetchSamples > 0) {
                                 val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
@@ -1354,6 +1357,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 for (i in 0 until fetchSamples) {
                                     uiSlice[i] = ring[(fetchStart + i) % ring.size]
                                 }
+                                    // Remove DC offset so the trigger threshold ~0.02 is meaningful
+                                    var dcMean = 0f
+                                    for (i in 0 until fetchSamples) dcMean += uiSlice[i]
+                                    dcMean /= fetchSamples.toFloat()
+                                    for (i in 0 until fetchSamples) uiSlice[i] -= dcMean
+                                        // Adaptive gain: scale quiet signals so the trigger threshold ~0.02 is meaningful
+                                        var peakVal = 1e-6f
+                                        for (i in 0 until fetchSamples) { val a = abs(uiSlice[i]); if (a > peakVal) peakVal = a }
+                                        if (peakVal > 1e-6f && peakVal < 0.08f) {
+                                            val gain = (0.1f / peakVal).coerceAtMost(20f)
+                                            for (i in 0 until fetchSamples) uiSlice[i] *= gain
+                                        }
 
                                 val publishedSpanMs = if (windowSamples > 0) {
                                     _windowMs.value * (fetchSamples.toFloat() / windowSamples.toFloat())
@@ -1362,23 +1377,24 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 val cfg = NewTriggerEngine.Config(
                                     mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
                                     sampleRateHz = sampleRate.toFloat(),
-                                    strongLowPassHz = if (triggerArmed) 240f else 160f,
-                                    fMaxHz = if (triggerArmed) 280f else 2000f,
-                                    useAutocorrelation = triggerArmed,
-                                    autocorrRefreshFrames = 8,
-                                    autocorrMaxSamples = 512,
+                                        fMaxHz = 2000f,
                                     preTriggerRatio = 0.16f,
-                                    hysteresisRatio = 0.16f,
-                                    holdoffRatio = 0.60f,
                                 )
 
                                 // process trigger on uiSlice[0..fetchSamples)
-                                val trigSource = uiSlice // reuse buffer
+                                val trigSource = uiSlice.copyOfRange(0, fetchSamples)
                                 val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
                                 if (res != null) {
-                                    val win = try { captureTriggerEngine.extractTriggeredWindow(trigSource, res) } catch (_: Throwable) { trigSource.copyOfRange(0, min(trigSource.size, 512)) }
+                                        // Extract from filtered data for display, not raw trigSource
+                                        val filteredTrigSrc = if (needFilteredBlock && filteredOutShort != null) {
+                                            FloatArray(fetchSamples) { ringFiltered[(fetchStart + it) % ring.size] }
+                                        } else {
+                                            FloatArray(fetchSamples) { ring[(fetchStart + it) % ring.size] }
+                                        }
+                                        val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc, res) } catch (_: Throwable) { filteredTrigSrc.copyOfRange(0, min(filteredTrigSrc.size, 512)) }
                                     _triggerResult.value = res
                                     _triggeredWindow.value = win
+                                        Log.d("Oscope", "TRIGGER: res.start=${res.startIndex} anchor=${res.anchorIndex} period=${res.periodSamples} conf=${res.confidence} locked=${res.locked} win.len=${win.size}")
                                 }
                             }
                         }
@@ -1404,6 +1420,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private var testJob: Job? = null
+        private var cachedTestAudioSamples: FloatArray? = null
+        private var wavTestSignalSampleRate: Int = 0
     private var importedSignalJob: Job? = null
     private var importJob: Job? = null
     private var importedSignalData: ImportedAudioData? = null
@@ -1423,56 +1441,153 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+        /** Load cached WAV test signal from res/raw, parse 16-bit mono PCM into -1..1 floats */
+        private fun loadWavTestSignal(): FloatArray? {
+            cachedTestAudioSamples?.let { return it }
+            try {
+                val app = getApplication<Application>()
+                val inputStream = app.resources.openRawResource(R.raw.test_signal_1s)
+                val rawBytes = inputStream.readBytes()
+                inputStream.close()
+                if (rawBytes.size < 44) return null
+                // Parse WAV header: sample rate at byte 24 (4 bytes LE), data size at byte 40 (4 bytes LE)
+                    val formatTag = (rawBytes[20].toInt() and 0xFF)
+                        .or((rawBytes[21].toInt() and 0xFF) shl 8)
+                val sampleRate = (rawBytes[24].toInt() and 0xFF)
+                    .or((rawBytes[25].toInt() and 0xFF) shl 8)
+                    .or((rawBytes[26].toInt() and 0xFF) shl 16)
+                    .or((rawBytes[27].toInt() and 0xFF) shl 24)
+                wavTestSignalSampleRate = sampleRate
+                val bitsPerSample = (rawBytes[34].toInt() and 0xFF)
+                    .or((rawBytes[35].toInt() and 0xFF) shl 8)
+                val dataSize = (rawBytes[40].toInt() and 0xFF)
+                    .or((rawBytes[41].toInt() and 0xFF) shl 8)
+                    .or((rawBytes[42].toInt() and 0xFF) shl 16)
+                    .or((rawBytes[43].toInt() and 0xFF) shl 24)
+                val offset = 44
+                val samples: FloatArray
+                if (formatTag == 3) {
+                    // WAVE_FORMAT_IEEE_FLOAT: 32-bit float
+                    val sampleCount = dataSize / 4
+                    samples = FloatArray(sampleCount)
+                    for (i in 0 until sampleCount) {
+                        val bits = (rawBytes[offset + i * 4].toInt() and 0xFF)
+                            .or((rawBytes[offset + i * 4 + 1].toInt() and 0xFF) shl 8)
+                            .or((rawBytes[offset + i * 4 + 2].toInt() and 0xFF) shl 16)
+                            .or((rawBytes[offset + i * 4 + 3].toInt() and 0xFF) shl 24)
+                        samples[i] = Float.fromBits(bits)
+                    }
+                } else {
+                    // WAVE_FORMAT_PCM: assume 16-bit mono
+                    val sampleCount = dataSize / 2
+                        samples = FloatArray(sampleCount)
+                    for (i in 0 until sampleCount) {
+                        val lo = rawBytes[offset + i * 2].toInt() and 0xFF
+                        val hi = rawBytes[offset + i * 2 + 1].toInt() and 0xFF
+                        val pcm16 = (hi shl 8 or lo).toShort().toInt()
+                        samples[i] = pcm16 / 32767f
+                    }
+                }
+                cachedTestAudioSamples = samples
+                return samples
+            } catch (e: Exception) {
+                Log.e("Oscope", "loadWavTestSignal failed", e)
+                return null
+            }
+        }
+
     private fun startVvvfTestJob() {
         if (testJob != null) return
         resetWaveformPublishStats()
         testJob = viewModelScope.launch(Dispatchers.Default) {
-            // 固定 50Hz 基频：用当前 windowMs 来决定显示窗口
-            while (isActive && _useTestSignal.value) {
-                val window = _windowMs.value
-                val preset = _testSignalPreset.value
-                val displayTargetPoints = 512
-                val immersiveTargetPoints = 512 * 3
-                val publishedSpanMs = window * 3f
-                val samples = VvvfTestSignal.generateLineUv(
-                    sampleRate = sampleRate,
-                    windowMs = publishedSpanMs,
-                    baseHz = 50f,
-                    modulationAmp = preset.modulationAmp,
-                    carrierMultiple = preset.carrierMultiple,
-                )
+                var cachedWavResampled: FloatArray? = null
+                var wasWav = false
+                var cycleOffset = 0L
 
-                // raw: 原测试波形（不注入杂波）
-                val rawList = samples.toList()
-                val visibleWindowSamples = ((sampleRate * window) / 1000f).roundToInt().coerceIn(1, samples.size)
-                val visibleStart = (samples.size - visibleWindowSamples).coerceAtLeast(0)
-                val downRaw = downsamplePeakFloatArray(samples, visibleStart, samples.size, targetPoints = displayTargetPoints)
+                while (isActive && _useTestSignal.value) {
+                    val window = _windowMs.value
+                    val displayTargetPoints = 512
+                    val immersiveTargetPoints = 512 * 3
+                    val publishedSpanMs = window * 3f
 
-                // filtered: 复用当前高通/低通滤波链
-                val filteredAll = applyFiltersBiquad(
-                    input = rawList,
-                    sampleRate = sampleRate,
-                    lowPassEnabled = lowPassEnabled.value,
-                    lowPassCutoffHz = lowPassCutoff.value,
-                    highPassEnabled = highPassEnabled.value,
-                    highPassCutoffHz = highPassCutoff.value
-                )
-                val downFiltered = downsamplePeak(filteredAll.subList(visibleStart, filteredAll.size), targetPoints = displayTargetPoints).toFloatArray()
-                val immersiveFiltered = resampleLinearFloatArray(filteredAll.toFloatArray(), 0, filteredAll.size, immersiveTargetPoints)
+                    val samplesNeeded = ((sampleRate * publishedSpanMs) / 1000f).roundToInt().coerceAtLeast(1)
+                    val isWav = _testSignalPreset.value == TestSignalPreset.WAV_1S
 
-                _rawWaveform.value = downRaw
-                _filteredWaveform.value = downFiltered
-                _immersiveFilteredWaveform.value = immersiveFiltered
-                _publishedWaveformSpanMs.value = publishedSpanMs
-                markWaveformPublished()
+                    // (Re)load resampled WAV cache only when entering WAV mode
+                    if (isWav && cachedWavResampled == null) {
+                        val wavSamples = loadWavTestSignal()
+                        val wavSampleRate = if (wavSamples != null) wavTestSignalSampleRate else sampleRate
+                        cachedWavResampled = if (wavSamples != null && wavSampleRate != sampleRate) {
+                            resampleLinearFloatArray(wavSamples, 0, wavSamples.size, (wavSamples.size.toLong() * sampleRate / wavSampleRate).toInt())
+                        } else {
+                            wavSamples
+                        }
+                    }
+                    if (!isWav) cachedWavResampled = null
 
-                _audioInputAlive.value = true
-                _lastReadSamples.value = samples.size
-                _lastMaxAbsPcm.value = 32767
+                    // Reset cycle position when switching modes (SPWM↔WAV)
+                    if (isWav != wasWav) {
+                        cycleOffset = 0
+                        wasWav = isWav
+                    }
 
-                // 测试模式也跟随当前波形刷新率发布，方便在流畅度/性能之间切换
-                delay(currentPublishIntervalMs())
-            }
+                    val samples: FloatArray
+                    if (isWav && cachedWavResampled != null && cachedWavResampled!!.isNotEmpty()) {
+                        val cache = cachedWavResampled!!
+                            // Static display: always show from the beginning, never scroll
+                            samples = FloatArray(samplesNeeded) { i ->
+                                if (i < cache.size) cache[i] else 0f
+                            }
+                            cycleOffset = 0
+                    } else {
+                        val preset = _testSignalPreset.value
+                        samples = VvvfTestSignal.generateLineUv(
+                            sampleRate = sampleRate,
+                            windowMs = publishedSpanMs,
+                            baseHz = 50f,
+                            modulationAmp = preset.modulationAmp,
+                            carrierMultiple = preset.carrierMultiple,
+                        )
+                    }
+
+                    val rawList = samples.toList()
+                    val visibleWindowSamples = ((sampleRate * window) / 1000f).roundToInt().coerceIn(1, samplesNeeded)
+                    val visibleStart = (samplesNeeded - visibleWindowSamples).coerceAtLeast(0)
+                    val downRaw = downsamplePeakFloatArray(samples, visibleStart, samples.size, targetPoints = displayTargetPoints)
+
+                    val filteredAll = applyFiltersBiquad(
+                        input = rawList,
+                        sampleRate = sampleRate,
+                        lowPassEnabled = lowPassEnabled.value,
+                        lowPassCutoffHz = lowPassCutoff.value,
+                        highPassEnabled = highPassEnabled.value,
+                        highPassCutoffHz = highPassCutoff.value
+                    )
+                    val downFiltered = downsamplePeak(filteredAll.subList(visibleStart, filteredAll.size), targetPoints = displayTargetPoints).toFloatArray()
+                    val immersiveFiltered = resampleLinearFloatArray(filteredAll.toFloatArray(), 0, filteredAll.size, immersiveTargetPoints)
+
+                    _rawWaveform.value = downRaw
+                    _filteredWaveform.value = downFiltered
+                    _immersiveFilteredWaveform.value = immersiveFiltered
+                    _publishedWaveformSpanMs.value = publishedSpanMs
+                    markWaveformPublished()
+
+                    _audioInputAlive.value = true
+                    _lastReadSamples.value = samplesNeeded
+                    _lastMaxAbsPcm.value = if (isWav && cachedWavResampled != null) {
+                        var maxAbs = 0
+                        for (i in samples.indices) {
+                            val pcm = (samples[i] * 32767f).toInt().coerceIn(-32768, 32767)
+                            val a = kotlin.math.abs(pcm)
+                            if (a > maxAbs) maxAbs = a
+                        }
+                        maxAbs
+                    } else {
+                        32767
+                    }
+
+                    kotlinx.coroutines.delay(currentPublishIntervalMs())
+                }
         }
     }
 
@@ -1785,21 +1900,36 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 val monitorOn = _isMonitoring.value
                                 val triggerArmed = _triggerEnabled
                                 val extraSamples = (windowSamples * 0.45f).toInt()
-                                val minTriggerSamples = if (triggerArmed) 640 else 0
+                                    val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
                                 val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
                                 if (fetchSamples > 0) {
                                     val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
                                     for (i in 0 until fetchSamples) {
                                         uiSlice[i] = ring[(fetchStart + i) % ring.size]
                                     }
+                                        // Remove DC offset so the trigger threshold ~0.02 is meaningful
+                                        var dcMean = 0f
+                                        for (i in 0 until fetchSamples) dcMean += uiSlice[i]
+                                        dcMean /= fetchSamples.toFloat()
+                                        for (i in 0 until fetchSamples) uiSlice[i] -= dcMean
+                                        // Adaptive gain: scale quiet signals so the trigger threshold ~0.02 is meaningful
+                                        var peakVal2 = 1e-6f
+                                        for (i in 0 until fetchSamples) { val a = abs(uiSlice[i]); if (a > peakVal2) peakVal2 = a }
+                                        if (peakVal2 > 1e-6f && peakVal2 < 0.08f) {
+                                            val gain2 = (0.1f / peakVal2).coerceAtMost(20f)
+                                            for (i in 0 until fetchSamples) uiSlice[i] *= gain2
+                                        }
                                     val cfg = NewTriggerEngine.Config(
                                         mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
                                         sampleRateHz = sampleRate.toFloat(),
-                                        useAutocorrelation = triggerArmed,
+                                            fMaxHz = 2000f,
                                     )
-                                    val res = try { captureTriggerEngine.process(uiSlice, cfg) } catch (_: Throwable) { null }
+                                val trigSource = uiSlice.copyOfRange(0, fetchSamples)
+                                    val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
                                     if (res != null) {
-                                        val win = try { captureTriggerEngine.extractTriggeredWindow(uiSlice, res) } catch (_: Throwable) { uiSlice.copyOfRange(0, min(uiSlice.size, 512)) }
+                                    // Extract from filtered ring data for display
+                                    val filteredTrigSrc2 = FloatArray(fetchSamples) { ringFiltered[(fetchStart + it) % ring.size] }
+                                    val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc2, res) } catch (_: Throwable) { filteredTrigSrc2.copyOfRange(0, min(filteredTrigSrc2.size, 512)) }
                                         _triggerResult.value = res
                                         _triggeredWindow.value = win
                                     }
@@ -1930,7 +2060,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 outBuf.get(data)
 
                                 if (outEncoding == AudioFormat.ENCODING_PCM_FLOAT) {
-                                    val bb = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+                                    val bb = java.nio.ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
                                     val frameCount = info.size / (4 * outChannels)
                                     for (f in 0 until frameCount) {
                                         var s = 0f
@@ -1938,7 +2068,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                         writeSample(s / outChannels)
                                     }
                                 } else {
-                                    val bb = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+                                    val bb = java.nio.ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
                                     val frameCount = info.size / (2 * outChannels)
                                     for (f in 0 until frameCount) {
                                         var s = 0f
@@ -2062,7 +2192,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             label = "m4a",
             extension = "m4a",
             muxerFormat = MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4,
-            mimeType = MediaFormat.MIMETYPE_AUDIO_AAC,
+            mimeType = android.media.MediaFormat.MIMETYPE_AUDIO_AAC,
             usesMuxer = true
         ),
         WAV(
@@ -2396,11 +2526,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         return null
     }
 
-    /** 计算下一个录音显示名称（格式："录音 n"） */
+    /** 计算下一个录音显示名称（格式："Record n"） */
     private fun nextRecordingDisplayName(): String {
         val maxNum = _allRecordings.value.maxOfOrNull { clip ->
             val name = clip.customName?.takeIf { it.isNotBlank() } ?: clip.fileName.removeSuffix(".m4a")
-            Regex("""录音\D*(\d+)""").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            Regex("""Record\D*(\d+)""").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         } ?: 0
         return "录音 ${maxNum + 1}"
     }
@@ -2558,31 +2688,31 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         // Encoder sample rate might differ from capture sampleRate.
         val encSr = targetSampleRate.coerceIn(8000, sampleRate)
 
-        fun buildAacFormat(sr: Int): MediaFormat {
-            return MediaFormat.createAudioFormat(fmt.mimeType, sr, 1).apply {
+        fun buildAacFormat(sr: Int): android.media.MediaFormat {
+            return android.media.MediaFormat.createAudioFormat(fmt.mimeType, sr, 1).apply {
                 setInteger(
-                    MediaFormat.KEY_AAC_PROFILE,
-                    MediaCodecInfo.CodecProfileLevel.AACObjectLC
+                    android.media.MediaFormat.KEY_AAC_PROFILE,
+                    android.media.MediaCodecInfo.CodecProfileLevel.AACObjectLC
                 )
-                setInteger(MediaFormat.KEY_BIT_RATE, 128_000)
-                setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16_384)
+                setInteger(android.media.MediaFormat.KEY_BIT_RATE, 128_000)
+                setInteger(android.media.MediaFormat.KEY_MAX_INPUT_SIZE, 16_384)
             }
         }
 
         val codec = try {
-            MediaCodec.createEncoderByType(fmt.mimeType)
+            android.media.MediaCodec.createEncoderByType(fmt.mimeType)
         } catch (t: Throwable) {
             throw IllegalStateException("Failed to create AAC encoder (${fmt.mimeType}): ${t.message}", t)
         }
 
         try {
             try {
-                codec.configure(buildAacFormat(encSr), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                codec.configure(buildAacFormat(encSr), null, null, android.media.MediaCodec.CONFIGURE_FLAG_ENCODE)
                 codec.start()
             } catch (t: Throwable) {
                 // Fallback to capture sample rate
                 try { codec.reset() } catch (_: Throwable) {}
-                codec.configure(buildAacFormat(sampleRate), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                codec.configure(buildAacFormat(sampleRate), null, null, android.media.MediaCodec.CONFIGURE_FLAG_ENCODE)
                 codec.start()
             }
         } catch (t: Throwable) {
@@ -2668,18 +2798,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private fun startWavRecording(outFile: File, targetSampleRate: Int) {
         wavSampleRate = targetSampleRate.coerceIn(8000, sampleRate)
         wavDataBytes = 0L
-        val raf = RandomAccessFile(outFile, "rw")
+        val raf = java.io.RandomAccessFile(outFile, "rw")
         raf.setLength(0L)
         writeWavHeader(raf, wavSampleRate, 0L)
         wavOut = raf
     }
 
-    private fun finalizeWavRecording(raf: RandomAccessFile, sampleRate: Int, dataBytes: Long) {
+    private fun finalizeWavRecording(raf: java.io.RandomAccessFile, sampleRate: Int, dataBytes: Long) {
         raf.seek(0L)
         writeWavHeader(raf, sampleRate, dataBytes)
     }
 
-    private fun writeWavHeader(raf: RandomAccessFile, sampleRate: Int, dataBytes: Long) {
+    private fun writeWavHeader(raf: java.io.RandomAccessFile, sampleRate: Int, dataBytes: Long) {
         val channels = 1
         val bitsPerSample = 16
         val byteRate = sampleRate * channels * bitsPerSample / 8
@@ -3216,10 +3346,10 @@ private fun safeShelfSlope(rawSlope: Float, gainDb: Float): Float {
     return s.coerceAtMost(sMax)
 }
 
-private fun rtDesignLowPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / sqrt(2f)): RtBiquad {
-    val w0 = (2f * PI.toFloat() * cutoffHz) / sampleRate
-    val cosW0 = cos(w0)
-    val sinW0 = sin(w0)
+private fun rtDesignLowPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / kotlin.math.sqrt(2f)): RtBiquad {
+    val w0 = (2f * kotlin.math.PI.toFloat() * cutoffHz) / sampleRate
+    val cosW0 = kotlin.math.cos(w0)
+    val sinW0 = kotlin.math.sin(w0)
     val alpha = sinW0 / (2f * q)
 
     val b0 = (1f - cosW0) / 2f
@@ -3238,10 +3368,10 @@ private fun rtDesignLowPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / sq
     )
 }
 
-private fun rtDesignHighPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / sqrt(2f)): RtBiquad {
-    val w0 = (2f * PI.toFloat() * cutoffHz) / sampleRate
-    val cosW0 = cos(w0)
-    val sinW0 = sin(w0)
+private fun rtDesignHighPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / kotlin.math.sqrt(2f)): RtBiquad {
+    val w0 = (2f * kotlin.math.PI.toFloat() * cutoffHz) / sampleRate
+    val cosW0 = kotlin.math.cos(w0)
+    val sinW0 = kotlin.math.sin(w0)
     val alpha = sinW0 / (2f * q)
 
     val b0 = (1f + cosW0) / 2f
@@ -3261,9 +3391,9 @@ private fun rtDesignHighPass(sampleRate: Int, cutoffHz: Float, q: Float = 1f / s
 }
 
 private fun rtDesignPeakingEq(sampleRate: Int, centerHz: Float, q: Float, gainDb: Float): RtBiquad {
-    val w0 = (2f * PI.toFloat() * centerHz) / sampleRate
-    val cosW0 = cos(w0)
-    val sinW0 = sin(w0)
+    val w0 = (2f * kotlin.math.PI.toFloat() * centerHz) / sampleRate
+    val cosW0 = kotlin.math.cos(w0)
+    val sinW0 = kotlin.math.sin(w0)
     val a = 10f.pow(gainDb / 40f)
     val alpha = sinW0 / (2f * q)
 
@@ -3284,15 +3414,15 @@ private fun rtDesignPeakingEq(sampleRate: Int, centerHz: Float, q: Float, gainDb
 }
 
 private fun rtDesignLowShelf(sampleRate: Int, centerHz: Float, slope: Float, gainDb: Float): RtBiquad {
-    val w0 = (2f * PI.toFloat() * centerHz) / sampleRate
-    val cosW0 = cos(w0)
-    val sinW0 = sin(w0)
+    val w0 = (2f * kotlin.math.PI.toFloat() * centerHz) / sampleRate
+    val cosW0 = kotlin.math.cos(w0)
+    val sinW0 = kotlin.math.sin(w0)
     val a = 10f.pow(gainDb / 40f)
     val s = safeShelfSlope(slope, gainDb)
 
     val alphaTerm = max((a + 1f / a) * (1f / s - 1f) + 2f, 0f)
-    val alpha = sinW0 / 2f * sqrt(alphaTerm)
-    val twoSqrtAAlpha = 2f * sqrt(a) * alpha
+    val alpha = sinW0 / 2f * kotlin.math.sqrt(alphaTerm)
+    val twoSqrtAAlpha = 2f * kotlin.math.sqrt(a) * alpha
 
     val b0 = a * ((a + 1f) - (a - 1f) * cosW0 + twoSqrtAAlpha)
     val b1 = 2f * a * ((a - 1f) - (a + 1f) * cosW0)
@@ -3311,15 +3441,15 @@ private fun rtDesignLowShelf(sampleRate: Int, centerHz: Float, slope: Float, gai
 }
 
 private fun rtDesignHighShelf(sampleRate: Int, centerHz: Float, slope: Float, gainDb: Float): RtBiquad {
-    val w0 = (2f * PI.toFloat() * centerHz) / sampleRate
-    val cosW0 = cos(w0)
-    val sinW0 = sin(w0)
+    val w0 = (2f * kotlin.math.PI.toFloat() * centerHz) / sampleRate
+    val cosW0 = kotlin.math.cos(w0)
+    val sinW0 = kotlin.math.sin(w0)
     val a = 10f.pow(gainDb / 40f)
     val s = safeShelfSlope(slope, gainDb)
 
     val alphaTerm = max((a + 1f / a) * (1f / s - 1f) + 2f, 0f)
-    val alpha = sinW0 / 2f * sqrt(alphaTerm)
-    val twoSqrtAAlpha = 2f * sqrt(a) * alpha
+    val alpha = sinW0 / 2f * kotlin.math.sqrt(alphaTerm)
+    val twoSqrtAAlpha = 2f * kotlin.math.sqrt(a) * alpha
 
     val b0 = a * ((a + 1f) + (a - 1f) * cosW0 + twoSqrtAAlpha)
     val b1 = -2f * a * ((a - 1f) + (a + 1f) * cosW0)
