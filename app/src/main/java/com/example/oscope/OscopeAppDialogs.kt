@@ -766,6 +766,7 @@ internal fun AboutDialog(
                     "更换 UI 字体",
                     "EQ 均衡器部分可读性增强",
                     "增强了 Trigger 功能",
+                    "将“录音列表”的文字按钮替换为图标",
                     "修复了一些问题",
                 ),
             ),
@@ -814,6 +815,7 @@ internal fun AboutDialog(
                 bullets = listOf(
                     "Changed UI font",
                     "Improved readability of EQ section",
+                    "Replace Recording List text button with icon button",
                     "Enhanced Trigger functionality",
                     "Fixed some issues",
                 ),

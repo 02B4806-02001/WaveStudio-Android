@@ -76,6 +76,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import java.io.File
 import java.io.InputStream
@@ -505,12 +506,11 @@ internal fun PortraitSettingsSection(
                 )
             }
 
-            TextButton(
+            IconButton(
                 onClick = { showRecordList = true },
                 enabled = state.recordings.isNotEmpty(),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                 modifier = Modifier.align(Alignment.CenterVertically),
-            ) { Text(stringResource(R.string.list_title)) }
+            ) { Icon(painter = painterResource(id = R.drawable.ic_list), contentDescription = stringResource(R.string.list_title)) }
         }
 
         if (state.useImportedSignal) {
