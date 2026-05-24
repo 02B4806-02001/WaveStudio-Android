@@ -455,7 +455,8 @@ internal fun PortraitSettingsSection(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = mainActionColor,
                 ),
-                contentPadding = PaddingValues(vertical = 8.dp),
+                shape = RoundedCornerShape(11.dp),
+                contentPadding = PaddingValues(vertical = 9.dp),
                 modifier = Modifier.weight(1f),
             ) {
                 Text(mainActionText, fontSize = 15.sp)
@@ -473,7 +474,8 @@ internal fun PortraitSettingsSection(
             Button(
                 onClick = actions.onRecordAction,
                 enabled = state.isRunning || state.useImportedSignal,
-                contentPadding = PaddingValues(vertical = 8.dp),
+                shape = RoundedCornerShape(11.dp),
+                contentPadding = PaddingValues(vertical = 9.dp),
                 modifier = Modifier.weight(1f),
             ) {
                 Text(if (state.isRecording) stringResource(R.string.action_stop) else stringResource(R.string.action_record), fontSize = 15.sp)
@@ -482,7 +484,8 @@ internal fun PortraitSettingsSection(
             Button(
                 onClick = actions.onMonitoringToggle,
                 enabled = state.isRunning || state.useImportedSignal,
-                contentPadding = PaddingValues(vertical = 8.dp),
+                shape = RoundedCornerShape(11.dp),
+                contentPadding = PaddingValues(vertical = 9.dp),
                 modifier = Modifier.weight(1f),
             ) {
                 Text(if (state.isMonitoring) stringResource(R.string.monitor_off) else stringResource(R.string.monitor_on), fontSize = 15.sp)
@@ -493,7 +496,8 @@ internal fun PortraitSettingsSection(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                 ),
-                contentPadding = PaddingValues(vertical = 8.dp),
+                shape = RoundedCornerShape(11.dp),
+                contentPadding = PaddingValues(vertical = 9.dp),
                 modifier = Modifier.weight(1f),
                 enabled = !state.isImportingAudio,
             ) {
@@ -590,7 +594,7 @@ internal fun PortraitSettingsSection(
                         lpFreq01 = hzToSliderBlend(snapped, 800f, 30001f, linearWeight = 0.5f)
                     },
                     style = MaterialTheme.typography.bodyLarge,
-                    contentPadding = PaddingValues(0.dp),
+                contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
                     trailingIcon = {
                         InfoIconButton(
@@ -646,7 +650,7 @@ internal fun PortraitSettingsSection(
                         hpFreq01 = hzToSlider(snapped, 30f, 8001f)
                     },
                     style = MaterialTheme.typography.bodyLarge,
-                    contentPadding = PaddingValues(0.dp),
+                contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
                     trailingIcon = {
                         InfoIconButton(
@@ -724,7 +728,7 @@ internal fun PortraitSettingsSection(
                     parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(-20f, 40f) },
                     onValue = { db -> actions.onUpdateFilterGain(dbToGain(db).coerceIn(0.1f, 100f)) },
                     style = MaterialTheme.typography.bodyLarge,
-                    contentPadding = PaddingValues(0.dp),
+                contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
                     trailingIcon = {
                         InfoIconButton(
@@ -789,7 +793,7 @@ internal fun PortraitSettingsSection(
                     parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(5f, 300f) },
                     onValue = actions.onUpdateTimeSlider,
                     style = MaterialTheme.typography.bodyLarge,
-                    contentPadding = PaddingValues(0.dp),
+                contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
                     trailingIcon = {
                         InfoIconButton(

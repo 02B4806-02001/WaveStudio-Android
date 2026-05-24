@@ -519,7 +519,7 @@ fun ClickToEditNumberText(
  * normal spacing for non-digit runs.
  */
 private fun buildTightDigitText(text: String, style: TextStyle): Pair<AnnotatedString, TextStyle> {
-    val tightOverall = style.copy(letterSpacing = (-0.07).em)
+    val tightOverall = style.copy(letterSpacing = (-0.03).em)
     val annotated = buildAnnotatedString {
         for (ch in text) {
             if (ch.isDigit()) {

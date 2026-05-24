@@ -512,12 +512,12 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             val carrierMultiple: Float = 0f,
             val modulationAmp: Float = 0f,
     ) {
-        SPWM_18(R.string.test_signal_spwm_18, 18f, 0.5f),
-        SPWM_3_M2_5(R.string.test_signal_spwm_3_m2_5, 3f, 2.5f),
+        SPWM_1P(R.string.test_signal_spwm_1p, 3f, 2.5f),
         REC_5P(R.string.test_signal_5p),
+        W7(R.string.test_signal_w7),
     }
 
-    private val _testSignalPreset = MutableStateFlow(TestSignalPreset.SPWM_18)
+    private val _testSignalPreset = MutableStateFlow(TestSignalPreset.SPWM_1P)
     val testSignalPreset: StateFlow<TestSignalPreset> = _testSignalPreset.asStateFlow()
 
     private val _useImportedSignal = MutableStateFlow(false)
@@ -695,6 +695,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     fun updateTimeSlider(value: Float) {
         _lastWindowWriteSource.value = "ui"
         _windowMs.value = value
+        _triggeredWindow.value = floatArrayOf()
     }
 
     fun updateAmpSlider(value: Float) {
@@ -996,6 +997,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 // Trigger processing cadence for capture path
                 var lastTriggerProcessAt = 0L
                 val triggerProcessIntervalMs = 30L // run trigger processing at ~33Hz independent of UI publish rate
+                var lastGoodTriggerMs = 0L
 
                 fun publishCaptureDiagnostics(readSamples: Int, maxAbs: Int, alive: Boolean, force: Boolean = false) {
                     val now = SystemClock.elapsedRealtime()
@@ -1354,10 +1356,16 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                         } else {
                                             FloatArray(fetchSamples) { ring[(fetchStart + it) % ring.size] }
                                         }
-                                        val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc, res) } catch (_: Throwable) { filteredTrigSrc.copyOfRange(0, min(filteredTrigSrc.size, 512)) }
                                     _triggerResult.value = res
-                                    _triggeredWindow.value = win
-                                        Log.d("Oscope", "TRIGGER: res.start=${res.startIndex} anchor=${res.anchorIndex} period=${res.periodSamples} conf=${res.confidence} locked=${res.locked} win.len=${win.size}")
+                                    if (res.periodSamples > 0) {
+                                        lastGoodTriggerMs = SystemClock.elapsedRealtime()
+                                        val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc, res, windowSamples) } catch (_: Throwable) { filteredTrigSrc.copyOfRange(0, min(filteredTrigSrc.size, windowSamples)) }
+                                        _triggeredWindow.value = win
+                                    } else if (SystemClock.elapsedRealtime() - lastGoodTriggerMs > 500L) {
+                                        // No valid trigger for 500ms — fall back to rolling waveform
+                                        if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
+                                    }
+                                        Log.d("Oscope", "TRIGGER: res.start=${res.startIndex} anchor=${res.anchorIndex} period=${res.periodSamples} conf=${res.confidence} locked=${res.locked} win.len=${_triggeredWindow.value.size}")
                                 }
                             }
                         }
@@ -1408,7 +1416,11 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             cachedTestAudioSamples?.let { return it }
             try {
                 val app = getApplication<Application>()
-                val inputStream = app.resources.openRawResource(R.raw.test_signal_1s)
+                val rawResId = when (_testSignalPreset.value) {
+                    TestSignalPreset.W7 -> R.raw.test_signal_w7
+                    else -> R.raw.test_signal_5p
+                }
+                val inputStream = app.resources.openRawResource(rawResId)
                 val rawBytes = inputStream.readBytes()
                 inputStream.close()
                 if (rawBytes.size < 44) return null
@@ -1463,6 +1475,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         resetWaveformPublishStats()
         testJob = viewModelScope.launch(Dispatchers.Default) {
                 var cachedWavResampled: FloatArray? = null
+                var lastWavPreset: TestSignalPreset? = null
                 var wasWav = false
                 var cycleOffset = 0L
 
@@ -1473,7 +1486,14 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     val publishedSpanMs = window * 3f
 
                     val samplesNeeded = ((sampleRate * publishedSpanMs) / 1000f).roundToInt().coerceAtLeast(1)
-                    val isWav = _testSignalPreset.value == TestSignalPreset.REC_5P
+                    val isWav = _testSignalPreset.value == TestSignalPreset.REC_5P || _testSignalPreset.value == TestSignalPreset.W7
+
+                    // Invalidate WAV caches when switching between different WAV presets (e.g. REC_5P ↔ W7)
+                    if (isWav && _testSignalPreset.value != lastWavPreset) {
+                        cachedTestAudioSamples = null
+                        cachedWavResampled = null
+                        lastWavPreset = _testSignalPreset.value
+                    }
 
                     // (Re)load resampled WAV cache only when entering WAV mode
                     if (isWav && cachedWavResampled == null) {
@@ -1485,7 +1505,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             wavSamples
                         }
                     }
-                    if (!isWav) cachedWavResampled = null
+                    if (!isWav) {
+                        cachedWavResampled = null
+                        lastWavPreset = null
+                    }
 
                     // Reset cycle position when switching modes (SPWM↔WAV)
                     if (isWav != wasWav) {
@@ -1652,6 +1675,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 // Trigger processing cadence for imported signal path (mirror capture path variables)
                 var lastTriggerProcessAt = 0L
                 val triggerProcessIntervalMs = 30L // run trigger processing at ~33Hz independent of UI publish rate
+                var lastGoodTriggerMs = 0L
 
                 val chunkSize = inBlock.size
                 val chunkDurationMs = (chunkSize * 1000L / sampleRate).coerceAtLeast(8L)
@@ -1783,10 +1807,12 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             var offset = 0
                             while (offset < chunkSize) {
                                 val written = track.write(pcm, offset, chunkSize - offset, AudioTrack.WRITE_NON_BLOCKING)
-                                when {
-                                    written > 0 -> offset += written
-                                    written == 0 -> break
-                                    else -> throw IllegalStateException("AudioTrack.write failed: $written")
+                                if (written > 0) {
+                                    offset += written
+                                } else if (written == 0) {
+                                    break
+                                } else {
+                                    throw IllegalStateException("AudioTrack.write failed: $written")
                                 }
                             }
                         } catch (_: Throwable) {
@@ -1891,7 +1917,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                     if (res != null) {
                                     // Extract from filtered ring data for display
                                     val filteredTrigSrc2 = FloatArray(fetchSamples) { ringFiltered[(fetchStart + it) % ring.size] }
-                                    val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc2, res) } catch (_: Throwable) { filteredTrigSrc2.copyOfRange(0, min(filteredTrigSrc2.size, 512)) }
+                                    val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc2, res, windowSamples) } catch (_: Throwable) { filteredTrigSrc2.copyOfRange(0, min(filteredTrigSrc2.size, windowSamples)) }
                                         _triggerResult.value = res
                                         _triggeredWindow.value = win
                                     }
