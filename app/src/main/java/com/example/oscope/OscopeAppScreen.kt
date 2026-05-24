@@ -840,7 +840,7 @@ fun OscopeApp(
 
     // ===== 竖屏：原界面保持不变（仅加了横屏切换按钮） =====
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().navigationBarsPadding()) {
         // ===== 固定波形区：两行 =====
         Column(
             modifier = Modifier
