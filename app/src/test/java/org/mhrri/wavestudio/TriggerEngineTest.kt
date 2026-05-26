@@ -22,7 +22,6 @@ class TriggerEngineTest {
             lockEnterConfidence = 0.24f,
             lockExitConfidence = 0.10f,
             unlockAfterBadFrames = 10,
-            maxStepPerFrame = 10,
         )
 
         val n = 768
@@ -62,17 +61,18 @@ class TriggerEngineTest {
         val cfg = NewTriggerEngine.Config(
             mode = NewTriggerEngine.Mode.RISING,
             sampleRateHz = sampleRateHz,
+            sourceMode = NewTriggerEngine.TriggerSourceMode.OUTPUT,
             preTriggerRatio = 0.16f,
         )
 
         val n = 1536
         val x = FloatArray(n)
         // earlier valid crossing
-        for (i in 930..980) x[i] = 0.08f
+        for (i in 930..980) x[i] = 0.20f
         // latest valid crossing
-        for (i in 1100..1160) x[i] = 0.09f
+        for (i in 1100..1160) x[i] = 0.22f
         // invalid late crossing that would push the display window out of bounds after pre-trigger placement
-        for (i in 1320..1400) x[i] = 0.10f
+        for (i in 1320..1400) x[i] = 0.25f
 
         val result = engine.process(x, cfg)
 
@@ -144,10 +144,10 @@ class TriggerEngineTest {
         val cfg = NewTriggerEngine.Config(
             mode = NewTriggerEngine.Mode.RISING,
             sampleRateHz = sampleRateHz,
-            strongLowPassHz = 240f,
+            sourceMode = NewTriggerEngine.TriggerSourceMode.OUTPUT,
+            triggerAssistLowPassCutoffHz = 240f,
             fMinHz = 5f,
             fMaxHz = 260f,
-            useAutocorrelation = true,
             preTriggerRatio = 0.16f,
         )
 
@@ -190,12 +190,11 @@ class TriggerEngineTest {
         val cfg = NewTriggerEngine.Config(
             mode = NewTriggerEngine.Mode.RISING,
             sampleRateHz = sampleRateHz,
-            strongLowPassHz = 240f,
+            sourceMode = NewTriggerEngine.TriggerSourceMode.OUTPUT,
+            triggerAssistLowPassCutoffHz = 240f,
             fMinHz = 5f,
             fMaxHz = 260f,
-            useAutocorrelation = true,
             preTriggerRatio = 0.16f,
-            autocorrRefreshFrames = 4,
         )
 
         val n = 768

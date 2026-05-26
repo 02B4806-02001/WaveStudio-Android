@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         if (MainActivityHolder.activity === this) MainActivityHolder.activity = null
+        android.util.Log.i("WaveStudio", "Exit application")
         super.onDestroy()
     }
 }

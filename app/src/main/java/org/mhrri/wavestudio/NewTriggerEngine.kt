@@ -21,26 +21,26 @@ internal class NewTriggerEngine(
         private const val TRIGGER_CROSSING_HYSTERESIS_FLOOR = 0.002f
         private const val TRIGGER_CROSSING_HYSTERESIS_RATIO = 0.18f
         private const val TRIGGER_WEAK_SIGNAL_RMS_FLOOR = 0.006f
-            private const val TRIGGER_MAX_ACCEPTED_PERIOD_JUMP_RATIO = 0.18f
+        private const val TRIGGER_MAX_ACCEPTED_PERIOD_JUMP_RATIO = 0.18f
         private const val TRIGGER_PHASE_ERROR_EMA_ALPHA = 0.12f
-            private const val PERIOD_EMA_NEW_WEIGHT = 0.12f
-            private const val TRIGGER_MIN_FUNDAMENTAL_HZ = 1.0f
-            private const val TRIGGER_MAX_FUNDAMENTAL_HZ = 240.0f
-            private const val TRIGGER_CONDITIONING_HIGH_SHELF_HZ = 156.0f
-            private const val TRIGGER_CONDITIONING_HIGH_SHELF_GAIN_DB = -40.0f
-            private const val TRIGGER_CONDITIONING_LOW_PASS_HZ = 800.0f
-            private const val TRIGGER_ASSIST_LOW_PASS_CUTOFF_HZ = 360.0f
-            private const val TRIGGER_ASSIST_LOW_PASS_ORDER = 3
-            private const val TRIGGER_HALF_CYCLE_ALIAS_PENALTY = 0.22f
-            private const val TRIGGER_PREDICTION_WEIGHT = 0.82f
-            private const val TRIGGER_MINIMUM_CONFIDENCE_FOR_ACCEPTANCE = 0.52f
-            private const val TRIGGER_PHASE_STICKINESS_MARGIN = 0.12f
-            private const val TRIGGER_RENDER_REFINE_MAX_OFFSET_SAMPLES = 18
-            private const val TRIGGER_SEARCH_MAX_SAMPLES = 6144
-            private const val TRIGGER_PERIOD_ESTIMATE_MAX_SAMPLES = 2048
-            private const val FINGERPRINT_TAPS = 24
-            private const val CONDITIONING_LP_ORDER = 4
-            private const val CROSSING_CLIP_MAX = 192
+        private const val PERIOD_EMA_NEW_WEIGHT = 0.12f
+        private const val TRIGGER_MIN_FUNDAMENTAL_HZ = 1.0f
+        private const val TRIGGER_MAX_FUNDAMENTAL_HZ = 240.0f
+        private const val TRIGGER_CONDITIONING_HIGH_SHELF_HZ = 156.0f
+        private const val TRIGGER_CONDITIONING_HIGH_SHELF_GAIN_DB = -40.0f
+        private const val TRIGGER_CONDITIONING_LOW_PASS_HZ = 800.0f
+        private const val TRIGGER_ASSIST_LOW_PASS_CUTOFF_HZ = 360.0f
+        private const val TRIGGER_ASSIST_LOW_PASS_ORDER = 3
+        private const val TRIGGER_HALF_CYCLE_ALIAS_PENALTY = 0.22f
+        private const val TRIGGER_PREDICTION_WEIGHT = 0.82f
+        private const val TRIGGER_MINIMUM_CONFIDENCE_FOR_ACCEPTANCE = 0.52f
+        private const val TRIGGER_PHASE_STICKINESS_MARGIN = 0.12f
+        private const val TRIGGER_RENDER_REFINE_MAX_OFFSET_SAMPLES = 18
+        private const val TRIGGER_SEARCH_MAX_SAMPLES = 6144
+        private const val TRIGGER_PERIOD_ESTIMATE_MAX_SAMPLES = 2048
+        private const val FINGERPRINT_TAPS = 24
+        private const val CONDITIONING_LP_ORDER = 4
+        private const val CROSSING_CLIP_MAX = 192
     }
 
     enum class Mode {
@@ -111,10 +111,10 @@ internal class NewTriggerEngine(
             var phaseErrorSamples: Float
                 get() = phaseErrorRatioEMA.toFloat()
                 set(v) { phaseErrorRatioEMA = v.toDouble() }
-                var confidenceEma: Float = 0f
-                var badFrames: Int = 0
-                var locked: Boolean = false
-                var lastAbsoluteAnchorIndex: Long = -1L
+            var confidenceEma: Float = 0f
+            var badFrames: Int = 0
+            var locked: Boolean = false
+            var lastAbsoluteAnchorIndex: Long = -1L
             }
 
     private data class ScoredCrossing(
@@ -126,29 +126,29 @@ internal class NewTriggerEngine(
 
     private var lp = FloatArray(0)
     private var ac = FloatArray(0)
-        private var condBuf = FloatArray(0)
+    private var condBuf = FloatArray(0)
 
-        // high-shelf biquad state
-        private var hsX1 = 0f
-        private var hsX2 = 0f
-        private var hsY1 = 0f
-        private var hsY2 = 0f
+    // high-shelf biquad state
+    private var hsX1 = 0f
+    private var hsX2 = 0f
+    private var hsY1 = 0f
+    private var hsY2 = 0f
 
-        // conditioning low-pass cascade states
-        private val condLpStates = FloatArray(CONDITIONING_LP_ORDER)
+    // conditioning low-pass cascade states
+    private val condLpStates = FloatArray(CONDITIONING_LP_ORDER)
 
-        // assist LP cascade states
-        private val assistLpStates = FloatArray(TRIGGER_ASSIST_LOW_PASS_ORDER)
+    // assist LP cascade states
+    private val assistLpStates = FloatArray(TRIGGER_ASSIST_LOW_PASS_ORDER)
 
-        private var periodEstimationPhase = false
+    private var periodEstimationPhase = false
     private var estimatedPeriodSamples: Int = 0
     private var lastTriggerAnchor: Int = -1
     private var processFrameIndex: Int = 0
-        private var lastOutputSignalCache = FloatArray(0)
-        private val rawLock = TriggerLockState()
-        private val filteredLock = TriggerLockState()
+    private var lastOutputSignalCache = FloatArray(0)
+    private val rawLock = TriggerLockState()
+    private val filteredLock = TriggerLockState()
 
-        private var acCountSinceLastRefresh = 0
+    private var acCountSinceLastRefresh = 0
 
     fun process(x: FloatArray, config: Config): Result {
         val n = x.size
@@ -279,11 +279,6 @@ internal class NewTriggerEngine(
         signal: FloatArray,
         config: Config,
     ): Boolean {
-
-
-
-
-
             lockState.confidenceEma = smoothFloat(lockState.confidenceEma, confidence, 0.22f)
             lockState.phaseErrorSamples = phaseError
             when {
@@ -324,8 +319,8 @@ internal class NewTriggerEngine(
                     outputSignal = null,
                 )
             val phaseErr = if (predictedAnchor >= 0) anchor - predictedAnchor else 0
-                if (best == null || score > best.score) {
-                    best = ScoredCrossing(anchor, score, score, phaseErr)
+            if (best == null || score > best.score) {
+                best = ScoredCrossing(anchor, score, score, phaseErr)
             }
         }
         return best

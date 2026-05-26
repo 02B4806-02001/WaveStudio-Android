@@ -1,9 +1,22 @@
 package org.mhrri.wavestudio
-
+ 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +26,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,18 +34,19 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,16 +54,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -58,6 +67,7 @@ import androidx.core.net.toUri
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.RestoreFromTrash
 
@@ -213,7 +223,6 @@ internal fun RecordingsListDialog(
                 Column(
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    // 顶部把手 + 标题 + 编辑/关闭按钮
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -228,7 +237,6 @@ internal fun RecordingsListDialog(
                         )
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // 编辑按钮（两个标签共用）
                             TextButton(onClick = {
                                 if (isEditMode) {
                                     selectedIds = emptySet()
@@ -242,7 +250,6 @@ internal fun RecordingsListDialog(
                                 )
                             }
 
-                            // 最近删除 / 返回录音列表 切换按钮
                             if (currentTab == 0 && recentlyDeletedClips.isNotEmpty()) {
                                 TextButton(onClick = {
                                     isEditMode = false
@@ -283,8 +290,6 @@ internal fun RecordingsListDialog(
                     }
 
                     if (currentTab == 0) {
-                        // ===== 录音列表标签 =====
-                        // 编辑模式下的操作栏
                         if (isEditMode) {
                             val sortedRecordings = recordings.sortedByDescending { it.date }
                             val allSelected = sortedRecordings.isNotEmpty() &&
@@ -345,7 +350,6 @@ internal fun RecordingsListDialog(
                             }
                         }
 
-                        // 录音列表内容
                         RecordingsListView(
                             recordings = recordings.sortedByDescending { it.date },
                             onItemClick = { },
@@ -368,8 +372,6 @@ internal fun RecordingsListDialog(
                             },
                         )
                     } else {
-                        // ===== 最近删除标签 =====
-                        // 编辑模式下的操作栏
                         if (isEditMode) {
                             val sortedDeleted = recentlyDeletedClips.sortedByDescending { it.date }
                             val allSelected = sortedDeleted.isNotEmpty() &&
@@ -690,6 +692,10 @@ internal fun StartupNoteDialog(
     )
 }
 
+// Data classes for About dialog sections
+internal data class AboutDialogAboutSection(val title: String, val bullets: List<String>)
+internal data class ContributorSection(val title: String, val members: List<String>)
+
 @Composable
 internal fun AboutDialog(
     visible: Boolean,
@@ -700,14 +706,10 @@ internal fun AboutDialog(
     if (!visible) return
 
     val context = androidx.compose.ui.platform.LocalContext.current
-    val windowInfo = LocalWindowInfo.current
-    val density = LocalDensity.current
-    val aboutDialogScrollState = rememberScrollState()
-    val windowHeightDp = with(density) { windowInfo.containerSize.height.toDp() }
-    val aboutDialogMaxHeight = if (windowHeightDp > 0.dp) minOf(windowHeightDp * 0.68f, 520.dp) else 360.dp
-    var showChangelog by remember { mutableStateOf(false) }
-
-    data class AboutSection(val title: String, val bullets: List<String>)
+    var showChangelogDialog by remember { mutableStateOf(false) }
+    var showContributorsDialog by remember { mutableStateOf(false) }
+    var showCommunityDialog by remember { mutableStateOf(false) }
+    var showWebsiteConfirm by remember { mutableStateOf(false) }
 
     val appTitle = stringResource(R.string.about_app_title)
     val appVersion = try {
@@ -718,12 +720,14 @@ internal fun AboutDialog(
     }
     val aboutByline = stringResource(R.string.about_byline)
     val aboutHint = stringResource(R.string.about_hint)
-    val changelogTitle = stringResource(R.string.about_changelog_title)
-    val aboutWebsiteLabel = stringResource(R.string.about_website_label_new)
     val aboutWebsiteUrl = stringResource(R.string.about_website_url_new)
-    val aboutPresetPlaceholder = stringResource(R.string.about_preset_placeholder)
+    // Pre-compute strings needed in non-Composable onClick lambdas
+    val presetUnavailableMsg = stringResource(R.string.about_preset_download_unavailable)
+    val websiteRedirectMsg = stringResource(R.string.about_website_redirect_confirm, aboutWebsiteUrl)
 
     val aboutSections = listOf(
+        "0.16.1" to R.array.about_changelog_v0161,
+        "0.16.0" to R.array.about_changelog_v0160,
         "0.15.3.1" to R.array.about_changelog_v01531,
         "0.15.3" to R.array.about_changelog_v0153,
         "0.15.1" to R.array.about_changelog_v0151,
@@ -731,161 +735,514 @@ internal fun AboutDialog(
         "0.14.1" to R.array.about_changelog_v0141,
         "0.14.0" to R.array.about_changelog_v0140,
         "0.13.0" to R.array.about_changelog_v0130,
+        "0.11.5" to R.array.about_changelog_v0115,
+        "0.11.4" to R.array.about_changelog_v0114,
+        "0.11.3" to R.array.about_changelog_v0113,
     ).map { (version, arrayResId) ->
-        AboutSection(
+        AboutDialogAboutSection(
             title = stringResource(R.string.about_changelog_version_title, version),
             bullets = context.resources.getStringArray(arrayResId).toList()
         )
     }
 
+    // Structured contributor sections (extensible: add new sections / members here)
+    val contributorSections = listOf(
+        ContributorSection(
+            title = stringResource(R.string.about_dev_section_main),
+            members = context.resources.getStringArray(R.array.about_dev_main_members).toList(),
+        ),
+        ContributorSection(
+            title = stringResource(R.string.about_dev_section_testers),
+            members = context.resources.getStringArray(R.array.about_dev_tester_members).toList(),
+        ),
+        ContributorSection(
+            title = stringResource(R.string.about_dev_section_icon_design),
+            members = context.resources.getStringArray(R.array.about_dev_icon_design_members).toList(),
+        ),
+        ContributorSection(
+            title = stringResource(R.string.about_dev_section_english_proofreading),
+            members = context.resources.getStringArray(R.array.about_dev_english_proofreading_members).toList(),
+        ),
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.about_title)) },
-        text = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = aboutDialogMaxHeight),
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(
-                    modifier = Modifier.verticalScroll(aboutDialogScrollState),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                Text(stringResource(R.string.about_title))
+                TextButton(
+                    onClick = {
+                        onDismiss()
+                        onShowStartupNote()
+                    },
                 ) {
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    Text(
+                        text = stringResource(R.string.startup_note_show_button),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // 1. App icon + name + version
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    // App icon with border, adapts to dark/light mode
+                    val isDark = isSystemInDarkTheme()
+                    Surface(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.Transparent,
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                text = "$appTitle $appVersion",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                            Text(
-                                text = aboutByline,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.88f),
-                            )
-                            Text(
-                                text = aboutHint,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f),
-                            )
-                        }
+                        Image(
+                            painter = painterResource(
+                                if (isDark) R.drawable.ic_launcher_dark else R.drawable.ic_launcher_light
+                            ),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.FillBounds,
+                        )
                     }
-
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showChangelog = !showChangelog },
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Text(
-                                    text = changelogTitle,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Icon(
-                                    painter = painterResource(
-                                        id = if (showChangelog) R.drawable.ic_expand_less else R.drawable.ic_expand_more
-                                    ),
-                                    contentDescription = if (showChangelog) stringResource(R.string.common_collapse) else stringResource(R.string.common_expand),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                val visibleSections = if (showChangelog) aboutSections else aboutSections.take(1)
-                                visibleSections.forEach { section ->
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(
-                                            text = section.title,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                        section.bullets.forEach { bullet ->
-                                            AboutBullet(bullet)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = appTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = "${stringResource(R.string.about_version_label)}: $appVersion",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
+                }
 
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                // 2. Development organization
+                Text(
+                    text = "${stringResource(R.string.about_development_org_label)}: $aboutByline",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                // 3. Separator
+                HorizontalDivider()
+
+                // 4. Usage tips (prominent red warning)
+                Text(
+                    text = stringResource(R.string.about_usage_tips_label),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.Red,
+                )
+                Text(
+                    text = aboutHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Red,
+                )
+
+                // 5. Bottom buttons – Row 1: 预设配置下载 (full width)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            Toast.makeText(context, presetUnavailableMsg, Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(0.7f),
                     ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.about_more_info),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        Text(
+                            text = stringResource(R.string.about_preset_download_button),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                        )
+                    }
+                }
 
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val annotatedLabel = buildAnnotatedString {
-                                    pushStringAnnotation(tag = "URL", annotation = aboutWebsiteUrl)
-                                    withStyle(
-                                        SpanStyle(
-                                            color = MaterialTheme.colorScheme.primary,
-                                            textDecoration = TextDecoration.Underline,
-                                        )
-                                    ) {
-                                        append(aboutWebsiteLabel)
-                                    }
-                                    pop()
-                                }
-                                Text(
-                                    text = annotatedLabel,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.clickable {
-                                        try {
-                                            val intent = Intent(Intent.ACTION_VIEW, aboutWebsiteUrl.toUri())
-                                            context.startActivity(intent)
-                                        } catch (_: Throwable) {
-                                        }
-                                    },
-                                )
-                            }
+                // 6. Bottom buttons – Row 2: 更新日志 | 开发人员名单
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { showChangelogDialog = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.about_changelog_title),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { showContributorsDialog = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.about_contributors_button),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                        )
+                    }
+                }
 
-                            Text(
-                                text = aboutPresetPlaceholder,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            )
-                        }
+                // 7. Bottom buttons – Row 3: 组织官网链接 | 社区
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { showWebsiteConfirm = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.about_website_button),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { showCommunityDialog = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.about_community_button),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                        )
                     }
                 }
             }
         },
-        dismissButton = {
-            TextButton(
-                onClick = {
-                    onDismiss()
-                    onShowStartupNote()
-                },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) }
+        },
+    )
+
+    // Full-screen changelog dialog
+    if (showChangelogDialog) {
+        ChangelogFullScreenDialog(
+            aboutSections = aboutSections,
+            onDismiss = { showChangelogDialog = false },
+        )
+    }
+
+    // Full-screen contributors dialog
+    if (showContributorsDialog) {
+        ContributorsFullScreenDialog(
+            sections = contributorSections,
+            onDismiss = { showContributorsDialog = false },
+        )
+    }
+
+    // Community dialog (QQ + Discord clipboard)
+    if (showCommunityDialog) {
+        CommunityDialog(
+            qqGroupNumber = stringResource(R.string.about_qq_group_number),
+            discordInvite = stringResource(R.string.about_discord_server_invite_link),
+            onDismiss = { showCommunityDialog = false },
+        )
+    }
+
+    // Website redirect confirmation dialog
+    if (showWebsiteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showWebsiteConfirm = false },
+            title = { Text(stringResource(R.string.about_website_redirect_title)) },
+            text = { Text(websiteRedirectMsg) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showWebsiteConfirm = false
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, aboutWebsiteUrl.toUri())
+                        context.startActivity(intent)
+                    } catch (_: Throwable) {
+                    }
+                }) {
+                    Text(stringResource(R.string.common_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWebsiteConfirm = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun ChangelogFullScreenDialog(
+    aboutSections: List<AboutDialogAboutSection>,
+    onDismiss: () -> Unit,
+) {
+    var animatedVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { animatedVisible = true }
+
+    val dismissWithAnimation: () -> Unit = { animatedVisible = false }
+
+    LaunchedEffect(animatedVisible) {
+        if (!animatedVisible) {
+            kotlinx.coroutines.delay(350)
+            onDismiss()
+        }
+    }
+
+    Dialog(
+        onDismissRequest = dismissWithAnimation,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        AnimatedVisibility(
+            visible = animatedVisible,
+            enter = fadeIn(animationSpec = tween(300)) +
+                    slideInVertically(animationSpec = tween(300)) { it },
+            exit = fadeOut(animationSpec = tween(300)) +
+                    slideOutVertically(animationSpec = tween(300)) { it },
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.40f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = dismissWithAnimation,
+                    ),
             ) {
-                Text(stringResource(R.string.startup_note_show_button))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.85f)
+                        .align(Alignment.BottomCenter),
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 8.dp,
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.about_changelog_title),
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            IconButton(onClick = dismissWithAnimation) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = stringResource(R.string.common_close),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            aboutSections.forEach { section ->
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = section.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    section.bullets.forEach { bullet ->
+                                        AboutBullet(bullet)
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(32.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContributorsFullScreenDialog(
+    sections: List<ContributorSection>,
+    onDismiss: () -> Unit,
+) {
+    var animatedVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { animatedVisible = true }
+
+    val dismissWithAnimation: () -> Unit = { animatedVisible = false }
+
+    LaunchedEffect(animatedVisible) {
+        if (!animatedVisible) {
+            kotlinx.coroutines.delay(350)
+            onDismiss()
+        }
+    }
+
+    Dialog(
+        onDismissRequest = dismissWithAnimation,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        AnimatedVisibility(
+            visible = animatedVisible,
+            enter = fadeIn(animationSpec = tween(300)) +
+                    slideInVertically(animationSpec = tween(300)) { it },
+            exit = fadeOut(animationSpec = tween(300)) +
+                    slideOutVertically(animationSpec = tween(300)) { it },
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.40f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = dismissWithAnimation,
+                    ),
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.85f)
+                        .align(Alignment.BottomCenter),
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 8.dp,
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.about_contributors_title),
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            IconButton(onClick = dismissWithAnimation) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = stringResource(R.string.common_close),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            sections.forEach { section ->
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = section.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    section.members.forEach { member ->
+                                        AboutBullet(member)
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(32.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommunityDialog(
+    qqGroupNumber: String,
+    discordInvite: String,
+    onDismiss: () -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val copiedToast = stringResource(R.string.about_copied_toast)
+    val qqLabel = stringResource(R.string.about_qq_group_label)
+    val discordLabel = stringResource(R.string.about_discord_server_label)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.about_community_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // QQ section
+                Text(
+                    text = qqLabel,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText(qqLabel, qqGroupNumber)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = qqGroupNumber,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Discord section
+                Text(
+                    text = discordLabel,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText(discordLabel, discordInvite)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = discordInvite,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) }
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_close))
+            }
         },
     )
 }
@@ -969,7 +1326,6 @@ internal fun RecentlyDeletedDialog(
                 Column(
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    // 顶部标题行
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1063,5 +1419,3 @@ internal fun RecentlyDeletedDialog(
         }
     }
 }
-
-

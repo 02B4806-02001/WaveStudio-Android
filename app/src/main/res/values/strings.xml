@@ -110,8 +110,8 @@
     <string name="test_waveform_label">测试波形</string>
     <string name="test_waveform_hint">在异步 SPWM 与方波调制之间切换</string>
     <string name="test_signal_spwm_1p">方波调制（模拟）</string>
-    <string name="test_signal_5p">CP 5 分频</string>
-    <string name="test_signal_w7">CHM 广域7分频</string>
+    <string name="test_signal_5p">同步5分频（CP）</string>
+    <string name="test_signal_w7">同步广域7分频（CHM）</string>
     <string name="recording_format_label">录音格式</string>
     <string name="sample_rate_label">采样率</string>
     <string name="recording_locked_format_hint">录音时无法修改格式与采样率</string>
@@ -131,11 +131,11 @@
 
     <string name="trigger_label">Trigger</string>
     <string name="eq_graph_dragging_label">EQ 频响曲线可拖动</string>
-    <string name="trigger_on">Trigger 开</string>
-    <string name="trigger_off">Trigger 关</string>
+    <string name="trigger_on">Trigger · 开</string>
+    <string name="trigger_off">Trigger · 关</string>
     <string name="trigger_advanced_title">Trigger 增强</string>
-    <string name="trigger_advanced_on">增强·开</string>
-    <string name="trigger_advanced_off">增强·关</string>
+    <string name="trigger_advanced_on">增强 · 开</string>
+    <string name="trigger_advanced_off">增强 · 关</string>
     <string name="trigger_switch_info_title">Trigger 开关</string>
     <string name="trigger_switch_info_message">启用后使用升沿触发，并结合自相关与历史相位以稳定触发点。</string>
     <string name="trigger_advanced_info_title">Trigger 增强</string>
@@ -174,23 +174,6 @@
     <string name="settings_scroll_top">回到顶部</string>
     <string name="preset_help_text">预设是 .json 文件。先点“导出”保存到手机；如果要发给别人，也可以不导出直接点“分享”。对方收到后点“导入”选择该文件即可。</string>
 
-    <string name="about_app_signature">Wave Studio v0.11.5 by 磁拾音器研究所</string>
-    <string name="about_permission_tip">提示：使用前请授予麦克风权限。</string>
-    <string name="about_update_v0115_title">0.11.5版本主要更新内容如下：</string>
-    <string name="about_update_v0115_item_1">- 均衡器</string>
-    <string name="about_update_v0115_item_2">- 修复了监听模式卡顿的问题</string>
-    <string name="about_update_v0115_item_3">- 修复了一些其他 bug</string>
-    <string name="about_update_v0114_title">0.11.4版本主要更新内容如下：</string>
-    <string name="about_update_v0114_item_1">- 滤波器改为默认关闭</string>
-    <string name="about_update_v0114_item_2">- 修复了监听模式卡顿的问题</string>
-    <string name="about_update_v0114_item_3">- 修复了一些其他 bug</string>
-    <string name="about_update_v0113_title">0.11.3版本主要更新内容如下：</string>
-    <string name="about_update_v0113_item_1">- 加回“显示/隐藏参考线”按钮</string>
-    <string name="about_update_v0113_item_2">- 滤波器与均衡器改为默认开启</string>
-    <string name="about_update_v0113_item_3">- 均衡器 Shelf 模式下限制有效Q值</string>
-    <string name="about_update_v0113_item_4">- 修复了一些情况下的掉帧问题</string>
-    <string name="about_update_v0113_item_5">- 修复了导入音频时监听卡顿的问题</string>
-    <string name="about_update_v0113_item_6">- 改动了一些细节</string>
     <string name="about_contributors">参与开发人员（B站名）：02B4806長-02001、某地铁迷_、莓喵の小风扇、TEP-28WG01等</string>
     <string name="about_qq_group">磁拾音器QQ交流群：762852552</string>
     <string name="about_official_website_label">磁拾音器研究所官网：</string>
@@ -198,13 +181,53 @@
 
     <!-- About dialog (refactored) -->
     <string name="about_app_title">Wave Studio</string>
-    <string name="about_byline">by 磁拾音器研究所</string>
-    <string name="about_hint">提示：使用前请授予麦克风权限。</string>
+    <string name="about_byline">磁拾音器研究所</string>
+    <string name="about_hint">使用前请授予麦克风权限。</string>
     <string name="about_changelog_title">更新日志</string>
     <string name="about_more_info">更多信息</string>
     <string name="about_website_label_new">磁拾音器研究所官网</string>
     <string name="about_website_url_new">https://www.mhrri.org/</string>
     <string name="about_preset_placeholder">预设配置下载：（暂时预留）</string>
+    <string name="about_version_label">版本</string>
+    <string name="about_development_org_label">开发组织</string>
+    <string name="about_usage_tips_label">软件使用提示</string>
+    <string name="about_contributors_button">开发人员名单</string>
+    <string name="about_preset_download_button">预设配置下载</string>
+    <string name="about_website_button">组织官网</string>
+    <string name="about_contributors_title">开发名单</string>
+    <string name="about_preset_download_unavailable">预设下载功能暂未开放</string>
+    <string name="about_community_button">社区</string>
+    <string name="about_community_title">社区</string>
+    <string name="about_qq_group_label">QQ交流群</string>
+    <string name="about_qq_group_number">762852552</string>
+    <string name="about_discord_server_label">Discord服务器</string>
+    <string name="about_discord_server_invite_link">https://discord.gg/nduVkGtSbP</string>
+    <string name="about_copied_toast">已复制到剪贴板</string>
+    <string name="about_website_redirect_title">打开网页</string>
+    <string name="about_website_redirect_confirm">即将跳转到 %1$s，是否继续？</string>
+
+    <!-- Developer team sections (extensible) -->
+    <string name="about_dev_section_main">主要开发者</string>
+    <string name="about_dev_section_testers">测试人员</string>
+    <string name="about_dev_section_icon_design">软件图标设计</string>
+    <string name="about_dev_section_english_proofreading">英语校对</string>
+
+    <string-array name="about_dev_main_members">
+        <item>02B4806長-02001</item>
+        <item>TEP-28WG01</item>
+    </string-array>
+    <string-array name="about_dev_tester_members">
+        <item>某地铁迷_</item>
+        <item>莓喵の小风扇</item>
+    </string-array>
+    <string-array name="about_dev_icon_design_members">
+        <item>TEP-28WG01</item>
+    </string-array>
+    <string-array name="about_dev_english_proofreading_members">
+        <item>PulsMeister</item>
+        <item>TriumphantCreator</item>
+    </string-array>
+
 
     <string name="trigger_pre_trigger_ratio_value">预触发比例: %1$s</string>
     <string name="trigger_assist_lowpass_value">辅助低通: %1$sHz</string>

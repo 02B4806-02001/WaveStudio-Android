@@ -1,6 +1,7 @@
 package org.mhrri.wavestudio
 
 // Intent/Uri are referenced via fully-qualified names to avoid import ambiguity in some environments.
+import android.util.Log
 import android.widget.Toast
 import android.view.Gravity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -356,6 +357,7 @@ internal fun PortraitSettingsSection(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: android.net.Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
+        Log.i("WaveStudio", "Import preset file: $uri")
         try {
             context.contentResolver.openInputStream(uri).use { inS: InputStream? ->
                 val text = inS?.bufferedReader(Charsets.UTF_8)?.readText()
@@ -365,6 +367,7 @@ internal fun PortraitSettingsSection(
                     val preset = FilterPreset.fromJsonString(text)
                     audioViewModel.applyPreset(preset)
                     val presetName = preset.name?.takeIf { it.isNotBlank() }
+                    Log.i("WaveStudio", "Import preset file success: ${presetName ?: "unnamed"}")
                     showCenterToast(
                         context,
                         if (presetName != null) resources.getString(R.string.preset_import_success_named, presetName)
@@ -785,6 +788,7 @@ internal fun PortraitSettingsSection(
                 onPresetShareNameChange = { presetShareName = it },
                 onDismiss = { presetShareDialog = false },
                 onShare = {
+                    Log.i("WaveStudio", "Share preset file: $presetShareName")
                     val file = exportCurrentPresetToCache(context, audioViewModel, presetShareName)
                     if (file != null) {
                         showCenterToast(context, resources.getString(R.string.preset_share_success_named, file.name))
@@ -802,6 +806,7 @@ internal fun PortraitSettingsSection(
                 visible = true,
                 onDismiss = { presetResetConfirmDialog = false },
                 onConfirm = {
+                    Log.i("WaveStudio", "Reset preset to defaults")
                     audioViewModel.resetFilterPresetToDefault()
                     showCenterToast(context, resources.getString(R.string.preset_restore_default_done))
                     presetResetConfirmDialog = false

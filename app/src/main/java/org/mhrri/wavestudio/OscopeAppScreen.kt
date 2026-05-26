@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import android.widget.Toast
 import android.view.Gravity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -177,6 +178,7 @@ fun OscopeApp(
 
     fun switchAppLanguage(lang: String) {
         if (selectedLanguage == lang) return
+        Log.i("WaveStudio", "Language switch: $lang")
         selectedLanguage = lang
         startupPrefs.edit {
             putString(KEY_APP_LANGUAGE, lang)
@@ -277,6 +279,7 @@ fun OscopeApp(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
+        Log.i("WaveStudio", "Import preset file: $uri")
         try {
             context.contentResolver.openInputStream(uri).use { inS: InputStream? ->
                 val text = inS?.bufferedReader(Charsets.UTF_8)?.readText()
@@ -286,6 +289,7 @@ fun OscopeApp(
                     val preset = FilterPreset.fromJsonString(text)
                     audioViewModel.applyPreset(preset)
                     val presetName = preset.name?.takeIf { it.isNotBlank() }
+                    Log.i("WaveStudio", "Import preset file success: ${presetName ?: "unnamed"}")
                     showCenterToast(
                         if (presetName != null) resources.getString(R.string.preset_import_success_named, presetName)
                         else resources.getString(R.string.preset_import_success)
@@ -309,6 +313,7 @@ fun OscopeApp(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
+        Log.i("WaveStudio", "Export preset file: $uri")
         try {
             val preset = audioViewModel.exportPreset()
             val json = preset.toJsonString(pretty = true)
@@ -316,6 +321,7 @@ fun OscopeApp(
                 outS?.write(json.toByteArray(Charsets.UTF_8))
                 outS?.flush()
             }
+            Log.i("WaveStudio", "Export preset file success")
             showCenterToast(resources.getString(R.string.preset_export_success))
 
             // 同时在 externalCacheDir 保存一份，方便一键分享
@@ -1481,12 +1487,16 @@ fun OscopeApp(
             actions = PortraitSettingsActions(
                 onStartStopAction = {
                     if (useTestSignal) {
+                        Log.i("WaveStudio", "Stop (source: test signal)")
                         audioViewModel.toggleVvvfTestSignal()
                     } else if (useImportedSignal) {
+                        Log.i("WaveStudio", "Stop (source: imported signal)")
                         audioViewModel.stopImportedSignalInput()
                     } else if (isRunning) {
+                        Log.i("WaveStudio", "Stop (source: user)")
                         audioViewModel.stopEngine()
                     } else {
+                        Log.i("WaveStudio", "Start (source: user)")
                         val recordAudioGranted = permissionsState.permissions
                             .firstOrNull { it.permission == Manifest.permission.RECORD_AUDIO }
                             ?.status is PermissionStatus.Granted
@@ -1633,6 +1643,7 @@ fun OscopeApp(
             onPresetShareNameChange = { presetShareName = it },
             onDismiss = { presetShareDialog = false },
             onShare = {
+                Log.i("WaveStudio", "Share preset file: $presetShareName")
                 val file = exportCurrentPresetToCache(presetShareName)
                 if (file != null) {
                     showCenterToast(resources.getString(R.string.preset_share_success_named, file.name))
@@ -1650,6 +1661,7 @@ fun OscopeApp(
             visible = true,
             onDismiss = { presetResetConfirmDialog = false },
             onConfirm = {
+                Log.i("WaveStudio", "Reset preset to defaults")
                 audioViewModel.resetFilterPresetToDefault()
                 showCenterToast(resources.getString(R.string.preset_restore_default_done))
                 presetResetConfirmDialog = false
@@ -1665,6 +1677,7 @@ fun OscopeApp(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        Log.i("WaveStudio", "Exit application")
                         showExitConfirmDialog = false
                         // 尽量优雅退出：先停引擎/录音/监听
                         try { audioViewModel.stopEngine() } catch (_: Throwable) {}

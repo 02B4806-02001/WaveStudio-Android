@@ -183,6 +183,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     // ===== Public recording controls (used by MainActivity) =====
     fun stopRecording() {
         if (!_isRecording.value) return
+        Log.i("WaveStudio", "Stop recording")
         _isRecording.value = false
         // Avoid blocking UI
         recordingStopJob?.cancel()
@@ -510,7 +511,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     val useTestSignal: StateFlow<Boolean> = _useTestSignal.asStateFlow()
 
     enum class TestSignalPreset(
-        @StringRes val labelResId: Int,
+        @StringRes
+            val labelResId: Int,
             val carrierMultiple: Float = 0f,
             val modulationAmp: Float = 0f,
     ) {
@@ -740,6 +742,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     fun importAudioAsInput(context: Context, uri: Uri) {
         if (_isImportingAudio.value) return
+        Log.i("WaveStudio", "Prepare to import audio: $uri")
         _isImportingAudio.value = true
         _importProgress.value = 0f
         _importResultMessage.value = null
@@ -779,6 +782,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 _useImportedSignal.value = true
                 _isRunning.value = true
                 startImportedSignalJob()
+                Log.i("WaveStudio", "Import audio success: ${decoded.label ?: "unknown"}")
                 _importResultMessage.value = ctx.getString(R.string.import_audio_success_prefix) + (decoded.label ?: "")
             } catch (t: Throwable) {
                 if (t is kotlinx.coroutines.CancellationException) {
@@ -908,7 +912,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 } else {
                     "AudioRecord 初始化失败（state != INITIALIZED）"
                 }
-                Log.e("Oscope", "AudioRecord init failed for all sources")
+                Log.e("WaveStudio", "AudioRecord init failed for all sources")
                 return
             }
 
@@ -935,14 +939,14 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
                 _engineError.value = "startRecording() 后仍未进入 RECORDING（recState=${record.recordingState}）"
                 Log.e(
-                    "Oscope",
-                    "startRecording did not enter RECORDSTATE_RECORDING; state=${record.state} recState=${record.recordingState}"
+                    "WaveStudio",
+                    "startRecording did not enter RECORDSTATE_RECORDING; state=${record.state}, recState=${record.recordingState}"
                 )
             }
 
             Log.i(
-                "Oscope",
-                "AudioRecord started: src=$chosenSource sr=$sampleRate bufBytes=${chosenBufferBytes ?: -1} state=${record.state} recState=${record.recordingState}"
+                "WaveStudio",
+                "AudioRecord started: src=$chosenSource, sr=$sampleRate, bufBytes=${chosenBufferBytes ?: -1}, state=${record.state}, recState=${record.recordingState}"
             )
 
             _isRunning.value = true
@@ -1066,7 +1070,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                     if (now - lastLogAt >= 2000L) {
                         lastLogAt = now
                         Log.i(
-                            "Oscope",
+                            "WaveStudio",
                             "capture: read=$read err=${_lastReadError.value} state=${record.state} recState=${record.recordingState}"
                         )
                     }
@@ -1081,7 +1085,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             // 某些环境会卡在 0：连续 1s 都是 0，就认为采集卡死
                             if (consecutiveZeroReads >= 10) {
                                 _engineError.value = "AudioRecord.read() 连续返回 0：可能是模拟器无麦克风输入或麦克风被占用"
-                                Log.e("Oscope", "AudioRecord.read() stuck at 0; stopping engine")
+                                Log.e("WaveStudio", "AudioRecord.read() stuck at 0; stopping engine")
                                 _isRunning.value = false
                                 break
                             }
@@ -1351,7 +1355,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 else -> 0.45f
                             }
                             val extraSamples = (windowSamples * extraSamplesRatio).toInt()
-                                val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
+                            val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
                             val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
                             if (fetchSamples > 0) {
                                 val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
@@ -1379,7 +1383,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 val cfg = NewTriggerEngine.Config(
                                     mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
                                     sampleRateHz = sampleRate.toFloat(),
-                                        fMaxHz = 2000f,
+                                    fMaxHz = 2000f,
                                     preTriggerRatio = 0.16f,
                                 )
 
@@ -1402,7 +1406,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                         // No valid trigger for 500ms — fall back to rolling waveform
                                         if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
                                     }
-                                        Log.d("Oscope", "TRIGGER: res.start=${res.startIndex} anchor=${res.anchorIndex} period=${res.periodSamples} conf=${res.confidence} locked=${res.locked} win.len=${_triggeredWindow.value.size}")
+                                        Log.d("WaveStudio", "TRIGGER: res.start=${res.startIndex}, anchor=${res.anchorIndex}, period=${res.periodSamples}, conf=${res.confidence}, locked=${res.locked}, win.len=${_triggeredWindow.value.size}")
                                 }
                             }
                         }
@@ -1422,7 +1426,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
             stopEngine()
         } catch (t: Throwable) {
             _engineError.value = "启动录音失败：${t.message}"
-            Log.e("Oscope", "startEngine failed", t)
+            Log.e("WaveStudio", "startEngine failed", t)
             stopEngine()
         }
     }
@@ -1463,8 +1467,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 inputStream.close()
                 if (rawBytes.size < 44) return null
                 // Parse WAV header: sample rate at byte 24 (4 bytes LE), data size at byte 40 (4 bytes LE)
-                    val formatTag = (rawBytes[20].toInt() and 0xFF)
-                        .or((rawBytes[21].toInt() and 0xFF) shl 8)
+                val formatTag = (rawBytes[20].toInt() and 0xFF)
+                    .or((rawBytes[21].toInt() and 0xFF) shl 8)
                 val sampleRate = (rawBytes[24].toInt() and 0xFF)
                     .or((rawBytes[25].toInt() and 0xFF) shl 8)
                     .or((rawBytes[26].toInt() and 0xFF) shl 16)
@@ -1503,7 +1507,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 cachedTestAudioSamples = samples
                 return samples
             } catch (e: Exception) {
-                Log.e("Oscope", "loadWavTestSignal failed", e)
+                Log.e("WaveStudio", "loadWavTestSignal failed", e)
                 return null
             }
         }
@@ -2421,9 +2425,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private fun publicDownloadsTargetPath(relativePath: String? = null): String {
         val rel = normalizeRelativeRecordingPath(relativePath)
         return if (rel.isBlank()) {
-            "Oscope"
+            "WaveStudio"
         } else {
-            "Oscope/$rel"
+            "WaveStudio/$rel"
         }
     }
 
@@ -2569,6 +2573,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         }
         if (_isRecording.value) return
 
+        Log.i("WaveStudio", "Start recording")
         try {
             val dir = resolveRecordingDir(context)
             val fmt = _recordingFormat.value
@@ -3199,6 +3204,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         if (!_isRunning.value && !_useImportedSignal.value) return
         if (_useTestSignal.value) return
         _isMonitoring.value = !_isMonitoring.value
+        Log.i("WaveStudio", if (_isMonitoring.value) "Enable monitoring" else "Disable monitoring")
     }
 
     fun renameRecording(clipId: String, newBaseName: String) {
@@ -3215,6 +3221,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
 
     fun deleteRecording(clipId: String) {
+        Log.i("WaveStudio", "Delete recording: $clipId")
         val clip = _allRecordings.value.firstOrNull { it.id == clipId }
         if (clip != null) {
             if (_playingId.value == clipId) stopPlayback()
@@ -3236,6 +3243,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 永久删除录音文件并从列表中移除 */
     fun permanentlyDeleteRecording(clipId: String) {
+        Log.i("WaveStudio", "Permanently delete recording: $clipId")
         val clip = _allRecordings.value.firstOrNull { it.id == clipId }
         if (clip != null) {
             if (_playingId.value == clipId) stopPlayback()
