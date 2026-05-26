@@ -25,10 +25,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.abs
@@ -465,9 +471,12 @@ fun ClickToEditNumberText(
             .padding(contentPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val (tightAnnotated, tightStyle) = remember(text, style) {
+            buildTightDigitText(text, style)
+        }
         Text(
-            text = text,
-            style = style,
+            text = tightAnnotated,
+            style = tightStyle,
             modifier = Modifier.clickable { showDialog = true }
         )
         if (trailingIcon != null) {
@@ -502,6 +511,27 @@ fun ClickToEditNumberText(
             }
         )
     }
+}
+
+/**
+ * Build an AnnotatedString that tightens spacing of digit runs by applying
+ * a negative overall letterSpacing to a base [style] and then restoring
+ * normal spacing for non-digit runs.
+ */
+private fun buildTightDigitText(text: String, style: TextStyle): Pair<AnnotatedString, TextStyle> {
+    val tightOverall = style.copy(letterSpacing = (-0.03).em)
+    val annotated = buildAnnotatedString {
+        for (ch in text) {
+            if (ch.isDigit()) {
+                append(ch.toString())
+            } else {
+                withStyle(SpanStyle(letterSpacing = 0.sp)) {
+                    append(ch.toString())
+                }
+            }
+        }
+    }
+    return annotated to tightOverall
 }
 
 @Composable

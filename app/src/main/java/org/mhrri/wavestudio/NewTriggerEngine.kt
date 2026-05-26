@@ -598,12 +598,13 @@ internal class NewTriggerEngine(
 
     private fun preferredAnchorSamples(): Int = (nominalWindowSize / 5).coerceAtLeast(1)
 
-    fun extractTriggeredWindow(source: FloatArray, result: Result?): FloatArray {
+    fun extractTriggeredWindow(source: FloatArray, result: Result?, targetSize: Int = nominalWindowSize): FloatArray {
         if (source.isEmpty()) return source
-        if (source.size <= nominalWindowSize || result == null || result.mode == Mode.OFF) return source.copyOf()
-        val maxStart = max(0, source.size - nominalWindowSize)
+        val tgt = targetSize.coerceAtLeast(64)
+        if (source.size <= tgt || result == null || result.mode == Mode.OFF) return source.copyOf()
+        val maxStart = max(0, source.size - tgt)
         val start = result.startIndex.coerceIn(0, maxStart)
-        return extractLinearWindow(source, start, nominalWindowSize)
+        return extractLinearWindow(source, start, tgt)
     }
 
     private fun collectHysteresisCrossings(

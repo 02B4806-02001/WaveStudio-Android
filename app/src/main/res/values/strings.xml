@@ -109,9 +109,9 @@
     <string name="test_mode_info_message">启用后将以固定频率播放测试信号，用于快速验证输出波形，无需外部输入信号。</string>
     <string name="test_waveform_label">测试波形</string>
     <string name="test_waveform_hint">在异步 SPWM 与方波调制之间切换</string>
-    <string name="test_signal_spwm_18">异步 SPWM</string>
-    <string name="test_signal_spwm_3_m2_5">方波调制</string>
-    <string name="test_signal_5p">同步 5 分频（录音片段）</string>
+    <string name="test_signal_spwm_1p">方波调制（模拟）</string>
+    <string name="test_signal_5p">CP 5 分频</string>
+    <string name="test_signal_w7">CHM 广域7分频</string>
     <string name="recording_format_label">录音格式</string>
     <string name="sample_rate_label">采样率</string>
     <string name="recording_locked_format_hint">录音时无法修改格式与采样率</string>
