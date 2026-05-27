@@ -20,7 +20,7 @@ class TriggerEngineTest {
             lockEnterConfidence = 0.24f,
             lockExitConfidence = 0.10f,
             unlockAfterBadFrames = 10,
-            maxStepPerFrame = 10,
+            // maxStepPerFrame removed in new engine
         )
 
         val n = 768
@@ -77,7 +77,8 @@ class TriggerEngineTest {
         assertTrue(result.locked)
         assertTrue("anchor not in latest valid plateau: ${result.anchorIndex}", result.anchorIndex in 1100..1250)
         assertTrue("anchor spilled into invalid late plateau: ${result.anchorIndex}", result.anchorIndex < 1320)
-        val expectedStart = (result.anchorIndex - (512 / 5)).coerceAtLeast(0)
+        val maxStart = (n - 512).coerceAtLeast(0)
+        val expectedStart = (result.anchorIndex - (512 / 5)).coerceIn(0, maxStart)
         assertTrue("start mismatch: ${result.startIndex} vs $expectedStart", abs(result.startIndex - expectedStart) <= 2)
     }
 
@@ -142,10 +143,9 @@ class TriggerEngineTest {
         val cfg = NewTriggerEngine.Config(
             mode = NewTriggerEngine.Mode.RISING,
             sampleRateHz = sampleRateHz,
-            strongLowPassHz = 240f,
+            triggerAssistLowPassCutoffHz = 240f,
             fMinHz = 5f,
             fMaxHz = 260f,
-            useAutocorrelation = true,
             preTriggerRatio = 0.16f,
         )
 
@@ -188,12 +188,11 @@ class TriggerEngineTest {
         val cfg = NewTriggerEngine.Config(
             mode = NewTriggerEngine.Mode.RISING,
             sampleRateHz = sampleRateHz,
-            strongLowPassHz = 240f,
+            triggerAssistLowPassCutoffHz = 240f,
             fMinHz = 5f,
             fMaxHz = 260f,
-            useAutocorrelation = true,
             preTriggerRatio = 0.16f,
-            autocorrRefreshFrames = 4,
+            // autocorrRefreshFrames removed; engine uses per-frame dual estimation
         )
 
         val n = 768
