@@ -695,6 +695,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     fun updateTimeSlider(value: Float) {
         _lastWindowWriteSource.value = "ui"
         _windowMs.value = value
+        _triggeredWindow.value = floatArrayOf()
     }
 
     fun updateAmpSlider(value: Float) {
@@ -1295,29 +1296,80 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         _immersiveFilteredWaveform.value = immersiveFiltered
                         _publishedWaveformSpanMs.value = publishedSpanMs.coerceAtLeast(_windowMs.value)
                         markWaveformPublished()
+                    }
 
-                        // Trigger: run on the same uiFiltered data that _filteredWaveform is built from
-                        if (_triggerEnabled && uiFiltered.size >= 64) {
-                            val trigSource = FloatArray(fetchSamples) { ring[(fetchStart + it) % ring.size] }
-                            var dc = 0f; for (i in 0 until fetchSamples) dc += trigSource[i]
-                            dc /= fetchSamples; for (i in 0 until fetchSamples) trigSource[i] -= dc
-                            val cfg = NewTriggerEngine.Config(
-                                mode = NewTriggerEngine.Mode.RISING,
-                                sampleRateHz = sampleRate.toFloat(),
-                                fMinHz = 5f, fMaxHz = 1200f,
-                                sourceMode = NewTriggerEngine.TriggerSourceMode.OUTPUT,
-                                preTriggerRatio = 0.16f,
-                            )
-                            val trigRes = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
-                            if (trigRes != null && trigRes.periodSamples > 0) {
-                                _triggerResult.value = trigRes
-                                // Extract at windowSamples (driven by time window slider), must be < fetchSamples for alignment
-                                val extractSize = windowSamples.coerceIn(64, uiFiltered.size - 1)
-                                val win = try { captureTriggerEngine.extractTriggeredWindow(uiFiltered, trigRes, extractSize) } catch (_: Throwable) { uiFiltered.copyOf(extractSize) }
-                                _triggeredWindow.value = downsamplePeakFloatArray(win, 0, win.size, targetPoints)
+                    // Trigger processing: run at its own cadence so trigger detection is stable even if UI publish rate changes
+                    try {
+                        val nowTrig = SystemClock.elapsedRealtime()
+                        if (nowTrig - lastTriggerProcessAt >= triggerProcessIntervalMs) {
+                            lastTriggerProcessAt = nowTrig
+                            val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
+                                .coerceAtMost(ring.size)
+                            val monitorOn = _isMonitoring.value
+                            val triggerArmed = _triggerEnabled
+                            val extraSamplesRatio = when {
+                                monitorOn && triggerArmed -> 0.20f
+                                monitorOn -> 0.20f
+                                busyRealtimePath -> 0.20f
+                                else -> 0.45f
+                            }
+                            val extraSamples = (windowSamples * extraSamplesRatio).toInt()
+                                val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
+                            val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
+                            if (fetchSamples > 0) {
+                                val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
+                                // prepare source into uiSlice (already allocated)
+                                for (i in 0 until fetchSamples) {
+                                    uiSlice[i] = ring[(fetchStart + i) % ring.size]
+                                }
+                                    // Remove DC offset so the trigger threshold ~0.02 is meaningful
+                                    var dcMean = 0f
+                                    for (i in 0 until fetchSamples) dcMean += uiSlice[i]
+                                    dcMean /= fetchSamples.toFloat()
+                                    for (i in 0 until fetchSamples) uiSlice[i] -= dcMean
+                                        // Adaptive gain: scale quiet signals so the trigger threshold ~0.02 is meaningful
+                                        var peakVal = 1e-6f
+                                        for (i in 0 until fetchSamples) { val a = abs(uiSlice[i]); if (a > peakVal) peakVal = a }
+                                        if (peakVal > 1e-6f && peakVal < 0.08f) {
+                                            val gain = (0.1f / peakVal).coerceAtMost(20f)
+                                            for (i in 0 until fetchSamples) uiSlice[i] *= gain
+                                        }
+
+                                val publishedSpanMs = if (windowSamples > 0) {
+                                    _windowMs.value * (fetchSamples.toFloat() / windowSamples.toFloat())
+                                } else _windowMs.value
+
+                                val cfg = NewTriggerEngine.Config(
+                                    mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
+                                    sampleRateHz = sampleRate.toFloat(),
+                                        fMaxHz = 2000f,
+                                    preTriggerRatio = 0.16f,
+                                )
+
+                                // process trigger on uiSlice[0..fetchSamples)
+                                val trigSource = uiSlice.copyOfRange(0, fetchSamples)
+                                val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
+                                if (res != null) {
+                                        // Extract from filtered data for display, not raw trigSource
+                                        val filteredTrigSrc = if (needFilteredBlock && filteredOutShort != null) {
+                                            FloatArray(fetchSamples) { ringFiltered[(fetchStart + it) % ring.size] }
+                                        } else {
+                                            FloatArray(fetchSamples) { ring[(fetchStart + it) % ring.size] }
+                                        }
+                                    _triggerResult.value = res
+                                    if (res.periodSamples > 0) {
+                                        lastGoodTriggerMs = SystemClock.elapsedRealtime()
+                                        val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc, res, windowSamples) } catch (_: Throwable) { filteredTrigSrc.copyOfRange(0, min(filteredTrigSrc.size, windowSamples)) }
+                                        _triggeredWindow.value = win
+                                    } else if (SystemClock.elapsedRealtime() - lastGoodTriggerMs > 500L) {
+                                        // No valid trigger for 500ms — fall back to rolling waveform
+                                        if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
+                                    }
+                                        Log.d("Oscope", "TRIGGER: res.start=${res.startIndex} anchor=${res.anchorIndex} period=${res.periodSamples} conf=${res.confidence} locked=${res.locked} win.len=${_triggeredWindow.value.size}")
+                                }
                             }
                         }
-                    }
+                    } catch (_: Throwable) {}
 
                     // ===== 写入“滤波后音频”到录音文件（实时跟随参数变化） =====
                     // NOTE: recording uses filteredOutShort computed from the current block before the next read() overwrites shortBuf
@@ -1863,8 +1915,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 val trigSource = uiSlice.copyOfRange(0, fetchSamples)
                                     val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
                                     if (res != null) {
-                                    // Extract from trigSource (same data engine processed), downsample to display size
-                                    val win = try { captureTriggerEngine.extractTriggeredWindow(trigSource, res, 640) } catch (_: Throwable) { trigSource.copyOf(640) }
+                                    // Extract from filtered ring data for display
+                                    val filteredTrigSrc2 = FloatArray(fetchSamples) { ringFiltered[(fetchStart + it) % ring.size] }
+                                    val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc2, res, windowSamples) } catch (_: Throwable) { filteredTrigSrc2.copyOfRange(0, min(filteredTrigSrc2.size, windowSamples)) }
                                         _triggerResult.value = res
                                         _triggeredWindow.value = win
                                     }

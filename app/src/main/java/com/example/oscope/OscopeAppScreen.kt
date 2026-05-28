@@ -396,9 +396,9 @@ fun OscopeApp(
     }
 
     fun snapLowPassHz(hz: Float): Float {
-        val v = hz.coerceIn(600f, 30001f)
+        val v = hz.coerceIn(800f, 30001f)
         val step = cutoffStepLowPass(v)
-        return (round(v / step) * step).coerceIn(600f, 30001f)
+        return (round(v / step) * step).coerceIn(800f, 30001f)
     }
 
     fun snapHighPassHz(hz: Float): Float {
@@ -527,12 +527,62 @@ fun OscopeApp(
     val windowMs by audioViewModel.windowMs.collectAsStateWithLifecycle()
     val ampScale by audioViewModel.ampScale.collectAsStateWithLifecycle()
     val filteredWaveSamples by audioViewModel.filteredWaveform.collectAsStateWithLifecycle()
+    val normalTriggerEngine = remember(normalTriggerEnabled) { NewTriggerEngine(nominalWindowSize = 512) }
 
     LaunchedEffect(normalTriggerEnabled) {
         triggerPrefs.edit { putBoolean(KEY_TRIGGER_NORMAL_ENABLED, normalTriggerEnabled) }
     }
     LaunchedEffect(isLandscape, normalTriggerEnabled) {
         if (!isLandscape) audioViewModel.setTriggerEnabled(normalTriggerEnabled)
+    }
+
+    fun buildNormalTriggeredWindow(source: FloatArray, waveformSpanMs: Float): FloatArray {
+        // 1. 采集最近200ms的波形作为Trigger参考
+        val referenceMs = 200f
+        val sampleRate = if (waveformSpanMs > 0f) (source.size.toFloat() / (waveformSpanMs / 1000f)) else 44100f
+        val referenceSamples = (sampleRate * (referenceMs / 1000f)).toInt().coerceAtMost(source.size)
+        if (!normalTriggerEnabled) return source
+        if (source.isEmpty() || referenceSamples < 32) return source
+
+        // 取最近200ms的数据
+        val refStart = source.size - referenceSamples
+        val refWave = source.copyOfRange(refStart, source.size)
+
+        // 2. 在200ms参考波形上做Trigger检测
+        val cfg = NewTriggerEngine.Config(
+            mode = NewTriggerEngine.Mode.RISING,
+            sampleRateHz = sampleRate.coerceAtLeast(1000f),
+            fMinHz = 5f,
+            fMaxHz = 1200f,
+            preTriggerRatio = 0.16f,
+        )
+        val result = normalTriggerEngine.process(refWave, cfg)
+        val triggered = normalTriggerEngine.extractTriggeredWindow(refWave, result)
+
+        // 3. 将200ms参考波形按当前windowMs横向缩放适配显示
+        val targetMs = waveformSpanMs.coerceAtLeast(10f)
+        val targetSamples = (sampleRate * (targetMs / 1000f)).toInt().coerceAtLeast(16)
+        // 若triggered长度不足，补零；若过长，插值缩放
+        val scaled = if (triggered.size == targetSamples) {
+            triggered
+        } else if (triggered.size > 1 && targetSamples > 1) {
+            // 线性插值缩放
+            val arr = FloatArray(targetSamples)
+            for (i in 0 until targetSamples) {
+                val pos = i * (triggered.size - 1).toFloat() / (targetSamples - 1)
+                val idx = pos.toInt()
+                val frac = pos - idx
+                arr[i] = if (idx + 1 < triggered.size) {
+                    triggered[idx] * (1 - frac) + triggered[idx + 1] * frac
+                } else {
+                    triggered[idx]
+                }
+            }
+            arr
+        } else {
+            triggered
+        }
+        return scaled
     }
 
     // ===== 显示幅度（倍数）范围：0.5..30（手势/显示用） =====
@@ -618,7 +668,7 @@ fun OscopeApp(
     }
 
     // ===== 频率滑块：拖动时用本地 0..1 状态避免“映射回写”造成手指/滑块不贴合 =====
-    val lowPassMin = 600f
+    val lowPassMin = 800f
     val lowPassMax = 30001f
     val highPassMin = 30f
     val highPassMax = 8001f
@@ -1306,10 +1356,20 @@ fun OscopeApp(
                         )
                     }
             ) {
-                val vmTriggeredWindow by audioViewModel.triggeredWindow.collectAsStateWithLifecycle()
-                val displayFilteredSamples = if (normalTriggerEnabled && vmTriggeredWindow.isNotEmpty())
-                    vmTriggeredWindow else filteredWaveSamples
-
+                val displayFilteredSamples by produceState(
+                    initialValue = filteredWaveSamples,
+                    filteredWaveSamples,
+                    immersiveWaveformSpanMs,
+                    normalTriggerEnabled,
+                ) {
+                    value = withContext(Dispatchers.Default) {
+                        buildNormalTriggeredWindow(
+                            source = filteredWaveSamples,
+                            // use the actual published span (may be larger than the current visible window)
+                            waveformSpanMs = immersiveWaveformSpanMs,
+                        )
+                    }
+                }
                 WaveformView(
                     samples = displayFilteredSamples,
                     ampScale = filteredDisplayScale,

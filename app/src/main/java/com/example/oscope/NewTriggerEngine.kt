@@ -1,6 +1,5 @@
 package org.mhrri.wavestudio
 
-import android.annotation.SuppressLint
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
@@ -149,14 +148,11 @@ internal class NewTriggerEngine(
 
         private var acCountSinceLastRefresh = 0
 
-    private var lastConfig: Config = Config(mode = Mode.OFF, sampleRateHz = 48000f)
-
     fun process(x: FloatArray, config: Config): Result {
         val n = x.size
         val maxStart = max(0, n - nominalWindowSize)
         val preferredAnchor = preferredAnchorSamples()
         processFrameIndex++
-        lastConfig = config
         if (config.mode == Mode.OFF || n < 64) {
               rawLock.locked = false
               rawLock.badFrames = 0
@@ -299,7 +295,6 @@ internal class NewTriggerEngine(
             return lockState.locked
     }
 
-    @SuppressLint("SuspiciousIndentation")
     private fun chooseBestTriggerCrossing(
         signal: FloatArray,
         crossings: List<Int>,
@@ -604,13 +599,10 @@ internal class NewTriggerEngine(
     fun extractTriggeredWindow(source: FloatArray, result: Result?, targetSize: Int = nominalWindowSize): FloatArray {
         if (source.isEmpty()) return source
         val tgt = targetSize.coerceAtLeast(64)
-        if (result == null || result.mode == Mode.OFF || result.periodSamples <= 0 || source.size < 2) return source.copyOf()
-        // Align by anchorIndex with preTriggerRatio
-        val pre = (tgt * lastConfig.preTriggerRatio).roundToInt()
-        var start = (result.anchorIndex - pre).coerceIn(0, max(0, source.size - tgt))
-        // Ensure we always return exactly tgt samples if possible
-        if (start + tgt > source.size) start = max(0, source.size - tgt)
-        return source.copyOfRange(start, min(start + tgt, source.size))
+        if (source.size <= tgt || result == null || result.mode == Mode.OFF) return source.copyOf()
+        val maxStart = max(0, source.size - tgt)
+        val start = result.startIndex.coerceIn(0, maxStart)
+        return extractLinearWindow(source, start, tgt)
     }
 
     private fun collectHysteresisCrossings(
@@ -674,8 +666,8 @@ internal class NewTriggerEngine(
     private fun extractLinearWindow(source: FloatArray, start: Int, size: Int): FloatArray {
         if (source.isEmpty()) return source
         val safeStart = start.coerceIn(0, max(0, source.size - 1))
-        val safeEnd = (safeStart + size).coerceIn(safeStart, source.size)
-        return source.copyOfRange(safeStart, min(safeEnd, source.size))
+        val safeEnd = (safeStart + size).coerceIn(safeStart + 1, source.size)
+        return source.copyOfRange(safeStart, safeEnd)
     }
 
     private fun triggerLowPass(x: FloatArray, n: Int, sampleRateHz: Float, cutoffHz: Float): FloatArray {
