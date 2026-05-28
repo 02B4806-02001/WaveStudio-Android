@@ -1,6 +1,7 @@
 package org.mhrri.wavestudio
 
 import android.annotation.SuppressLint
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -214,7 +215,7 @@ fun ImmersiveScreen(
             val immersiveRef = filteredDisplayScale.coerceAtLeast(1e-4f)
 
             val displaySamples = if (triggerMode != NewTriggerEngine.Mode.OFF) {
-                 if (vmTriggeredWindowValue.isNotEmpty()) vmTriggeredWindowValue else filteredSamples
+                if (vmTriggeredWindowValue.isNotEmpty()) vmTriggeredWindowValue else filteredSamples
             } else {
                 filteredSamples
             }

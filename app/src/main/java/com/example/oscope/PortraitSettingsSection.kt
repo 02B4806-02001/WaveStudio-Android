@@ -252,9 +252,9 @@ private fun cutoffStepHighPass(hz: Float): Float {
 }
 
 private fun snapLowPassHz(hz: Float): Float {
-    val v = hz.coerceIn(800f, 30001f)
+    val v = hz.coerceIn(600f, 30001f)
     val step = cutoffStepLowPass(v)
-    return (round(v / step) * step).coerceIn(800f, 30001f)
+    return (round(v / step) * step).coerceIn(600f, 30001f)
 }
 
 private fun snapHighPassHz(hz: Float): Float {
@@ -303,14 +303,14 @@ internal fun PortraitSettingsSection(
     var deleteTarget by remember { mutableStateOf<RecordedClip?>(null) }
     var testSignalMenu by remember { mutableStateOf(false) }
 
-    var lpFreq01 by remember { mutableStateOf(hzToSliderBlend(state.lowPassCutoff, 800f, 30001f, linearWeight = 0.5f)) }
+    var lpFreq01 by remember { mutableStateOf(hzToSliderBlend(state.lowPassCutoff, 600f, 30001f, linearWeight = 0.5f)) }
     var hpFreq01 by remember { mutableStateOf(hzToSlider(state.highPassCutoff, 30f, 8001f)) }
     var lpDragging by remember { mutableStateOf(false) }
     var hpDragging by remember { mutableStateOf(false) }
 
     // 拖动时标题显示值：做轻微低通平滑；实际参数仍实时生效
     val lowPassDisplayHzTarget = if (lpDragging)
-        sliderToHzBlend(lpFreq01, 800f, 30001f, linearWeight = 0.5f)
+        sliderToHzBlend(lpFreq01, 600f, 30001f, linearWeight = 0.5f)
     else state.lowPassCutoff
     val lowPassDisplayHz = rememberDisplayLowPass(
         target = lowPassDisplayHzTarget,
@@ -330,7 +330,7 @@ internal fun PortraitSettingsSection(
     )
 
     LaunchedEffect(state.lowPassCutoff) {
-        if (!lpDragging) lpFreq01 = hzToSliderBlend(state.lowPassCutoff, 800f, 30001f, linearWeight = 0.5f)
+        if (!lpDragging) lpFreq01 = hzToSliderBlend(state.lowPassCutoff, 600f, 30001f, linearWeight = 0.5f)
     }
     LaunchedEffect(state.highPassCutoff) {
         if (!hpDragging) hpFreq01 = hzToSlider(state.highPassCutoff, 30f, 8001f)
@@ -341,7 +341,7 @@ internal fun PortraitSettingsSection(
         if (!lpDragging) return@LaunchedEffect
         kotlinx.coroutines.delay(8)
         audioViewModel.updateLowPassSlider(
-            snapLowPassHz(sliderToHzBlend(lpFreq01, 800f, 30001f, linearWeight = 0.5f))
+            snapLowPassHz(sliderToHzBlend(lpFreq01, 600f, 30001f, linearWeight = 0.5f))
         )
     }
     LaunchedEffect(hpDragging, hpFreq01) {
@@ -591,7 +591,7 @@ internal fun PortraitSettingsSection(
                         lpDragging = false
                         val snapped = snapLowPassHz(hz)
                         audioViewModel.updateLowPassSlider(snapped)
-                        lpFreq01 = hzToSliderBlend(snapped, 800f, 30001f, linearWeight = 0.5f)
+                        lpFreq01 = hzToSliderBlend(snapped, 600f, 30001f, linearWeight = 0.5f)
                     },
                     style = MaterialTheme.typography.bodyLarge,
                 contentPadding = PaddingValues(0.dp),
@@ -623,7 +623,7 @@ internal fun PortraitSettingsSection(
             },
             onFreq01ChangeFinished = {
                 lpDragging = false
-                audioViewModel.updateLowPassSlider(snapLowPassHz(sliderToHzBlend(lpFreq01, 800f, 30001f, linearWeight = 0.5f)))
+                audioViewModel.updateLowPassSlider(snapLowPassHz(sliderToHzBlend(lpFreq01, 600f, 30001f, linearWeight = 0.5f)))
             },
         )
 
