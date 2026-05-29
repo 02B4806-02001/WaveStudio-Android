@@ -368,7 +368,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     private val _globalHighPassCutoff = MutableStateFlow(1f)
     val globalHighPassCutoff: StateFlow<Float> = _globalHighPassCutoff.asStateFlow()
 
-    private val _windowMs = MutableStateFlow(20f)
+    private val _windowMs = MutableStateFlow(25f)
     val windowMs: StateFlow<Float> = _windowMs.asStateFlow()
 
     private val _ampScale = MutableStateFlow(1f)
@@ -392,6 +392,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     internal val triggerResult: StateFlow<NewTriggerEngine.Result?> = _triggerResult.asStateFlow()
     private val _triggeredWindow = MutableStateFlow(floatArrayOf())
     val triggeredWindow: StateFlow<FloatArray> = _triggeredWindow.asStateFlow()
+    // 标记：时间窗滑块刚被移动，需要在下一个 trigger 周期立即重新提取
+    private val _pendingTimeWindowUpdate = MutableStateFlow(false)
 
     private val _publishedWaveformSpanMs = MutableStateFlow(20f)
     val publishedWaveformSpanMs: StateFlow<Float> = _publishedWaveformSpanMs.asStateFlow()
@@ -695,7 +697,9 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     fun updateTimeSlider(value: Float) {
         _lastWindowWriteSource.value = "ui"
         _windowMs.value = value
-        _triggeredWindow.value = floatArrayOf()
+        // 不清空 _triggeredWindow — 时间窗改变时由 trigger 处理循环自然刷新
+        // 但立即触发一次重新提取（如果有有效的 trigger 结果缓存）
+        _pendingTimeWindowUpdate.value = true
     }
 
     fun updateAmpSlider(value: Float) {
@@ -994,9 +998,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 var lastPublishedAlive = false
                 var lastLogAt = 0L
                 var lastUiUpdateAt = 0L
-                // Trigger processing cadence for capture path
-                var lastTriggerProcessAt = 0L
-                val triggerProcessIntervalMs = 30L // run trigger processing at ~33Hz independent of UI publish rate
+                // Trigger processing: now runs inline with UI publish, no independent cadence needed
                 var lastGoodTriggerMs = 0L
 
                 fun publishCaptureDiagnostics(readSamples: Int, maxAbs: Int, alive: Boolean, force: Boolean = false) {
@@ -1298,23 +1300,17 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         markWaveformPublished()
                     }
 
-                    // Trigger processing: run at its own cadence so trigger detection is stable even if UI publish rate changes
+                    // Trigger processing: run at same cadence as UI publish so time window changes take effect immediately
                     try {
-                        val nowTrig = SystemClock.elapsedRealtime()
-                        if (nowTrig - lastTriggerProcessAt >= triggerProcessIntervalMs) {
-                            lastTriggerProcessAt = nowTrig
-                            val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
-                                .coerceAtMost(ring.size)
-                            val monitorOn = _isMonitoring.value
-                            val triggerArmed = _triggerEnabled
-                            val extraSamplesRatio = when {
-                                monitorOn && triggerArmed -> 0.20f
-                                monitorOn -> 0.20f
-                                busyRealtimePath -> 0.20f
-                                else -> 0.45f
-                            }
+                        val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
+                            .coerceAtMost(ring.size)
+                        val triggerArmed = _triggerEnabled
+                        // Always process trigger when armed — the UI publish rate already throttles overall cadence
+                        if (triggerArmed || _pendingTimeWindowUpdate.value) {
+                            _pendingTimeWindowUpdate.value = false
+                            val extraSamplesRatio = 0.20f
                             val extraSamples = (windowSamples * extraSamplesRatio).toInt()
-                                val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
+                            val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
                             val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
                             if (fetchSamples > 0) {
                                 val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
@@ -1335,10 +1331,6 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                             for (i in 0 until fetchSamples) uiSlice[i] *= gain
                                         }
 
-                                val publishedSpanMs = if (windowSamples > 0) {
-                                    _windowMs.value * (fetchSamples.toFloat() / windowSamples.toFloat())
-                                } else _windowMs.value
-
                                 val cfg = NewTriggerEngine.Config(
                                     mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
                                     sampleRateHz = sampleRate.toFloat(),
@@ -1350,23 +1342,20 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 val trigSource = uiSlice.copyOfRange(0, fetchSamples)
                                 val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
                                 if (res != null) {
-                                        // Extract from filtered data for display, not raw trigSource
-                                        val filteredTrigSrc = if (needFilteredBlock && filteredOutShort != null) {
-                                            FloatArray(fetchSamples) { ringFiltered[(fetchStart + it) % ring.size] }
-                                        } else {
-                                            FloatArray(fetchSamples) { ring[(fetchStart + it) % ring.size] }
+                                        // CRITICAL: extract from the SAME data that trigger detection used (trigSource, not raw ring)
+                                        // trigSource has DC removed and adaptive gain applied, matching the anchorIndex from process()
+                                        _triggerResult.value = res
+                                        if (res.periodSamples > 0) {
+                                            lastGoodTriggerMs = SystemClock.elapsedRealtime()
+                                            // Use current windowSamples (reflects latest time slider position)
+                                            val win = try { captureTriggerEngine.extractTriggeredWindow(trigSource, res, windowSamples) } catch (_: Throwable) { trigSource.copyOfRange(0, min(trigSource.size, windowSamples)) }
+                                            _triggeredWindow.value = win
+                                        } else if (SystemClock.elapsedRealtime() - lastGoodTriggerMs > 500L) {
+                                            // No valid trigger for 500ms — fall back to rolling waveform
+                                            if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
                                         }
-                                    _triggerResult.value = res
-                                    if (res.periodSamples > 0) {
-                                        lastGoodTriggerMs = SystemClock.elapsedRealtime()
-                                        val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc, res, windowSamples) } catch (_: Throwable) { filteredTrigSrc.copyOfRange(0, min(filteredTrigSrc.size, windowSamples)) }
-                                        _triggeredWindow.value = win
-                                    } else if (SystemClock.elapsedRealtime() - lastGoodTriggerMs > 500L) {
-                                        // No valid trigger for 500ms — fall back to rolling waveform
-                                        if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
+                                            Log.d("Oscope", "TRIGGER: ws=$windowSamples res.start=${res.startIndex} anchor=${res.anchorIndex} period=${res.periodSamples} conf=${res.confidence} locked=${res.locked} win.len=${_triggeredWindow.value.size}")
                                     }
-                                        Log.d("Oscope", "TRIGGER: res.start=${res.startIndex} anchor=${res.anchorIndex} period=${res.periodSamples} conf=${res.confidence} locked=${res.locked} win.len=${_triggeredWindow.value.size}")
-                                }
                             }
                         }
                     } catch (_: Throwable) {}
@@ -1672,9 +1661,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 var ringWrite = 0
                 var ringSize = 0
                 var lastUiUpdateAt = 0L
-                // Trigger processing cadence for imported signal path (mirror capture path variables)
-                var lastTriggerProcessAt = 0L
-                val triggerProcessIntervalMs = 30L // run trigger processing at ~33Hz independent of UI publish rate
+                // Trigger processing: now runs inline with UI publish, no independent cadence needed
                 var lastGoodTriggerMs = 0L
 
                 val chunkSize = inBlock.size
@@ -1878,17 +1865,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             markWaveformPublished()
                         }
 
-                        // Trigger processing for imported signal path (run at fixed cadence)
+                        // Trigger processing for imported signal path (sync with UI publish, no independent cadence)
                         try {
-                            val nowTrig = SystemClock.elapsedRealtime()
-                            if (nowTrig - lastTriggerProcessAt >= triggerProcessIntervalMs) {
-                                lastTriggerProcessAt = nowTrig
-                                val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
-                                    .coerceAtMost(ring.size)
-                                val monitorOn = _isMonitoring.value
-                                val triggerArmed = _triggerEnabled
+                            val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
+                                .coerceAtMost(ring.size)
+                            val triggerArmed = _triggerEnabled
+                            if (triggerArmed || _pendingTimeWindowUpdate.value) {
+                                _pendingTimeWindowUpdate.value = false
                                 val extraSamples = (windowSamples * 0.45f).toInt()
-                                    val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
+                                val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
                                 val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
                                 if (fetchSamples > 0) {
                                     val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
@@ -1915,9 +1900,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 val trigSource = uiSlice.copyOfRange(0, fetchSamples)
                                     val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
                                     if (res != null) {
-                                    // Extract from filtered ring data for display
-                                    val filteredTrigSrc2 = FloatArray(fetchSamples) { ringFiltered[(fetchStart + it) % ring.size] }
-                                    val win = try { captureTriggerEngine.extractTriggeredWindow(filteredTrigSrc2, res, windowSamples) } catch (_: Throwable) { filteredTrigSrc2.copyOfRange(0, min(filteredTrigSrc2.size, windowSamples)) }
+                                    // CRITICAL: extract from the SAME data trigger detection used (trigSource)
+                                    val win = try { captureTriggerEngine.extractTriggeredWindow(trigSource, res, windowSamples) } catch (_: Throwable) { trigSource.copyOfRange(0, min(trigSource.size, windowSamples)) }
                                         _triggerResult.value = res
                                         _triggeredWindow.value = win
                                     }
@@ -3291,7 +3275,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         _filterGain.value = 1f
 
         _lastWindowWriteSource.value = "resetDefault"
-        _windowMs.value = 20f
+        _windowMs.value = 25f
 
         _lastAmpWriteSource.value = "resetDefault"
         _ampScale.value = 1f

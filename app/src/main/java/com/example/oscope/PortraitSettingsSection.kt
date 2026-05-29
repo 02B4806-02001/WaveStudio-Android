@@ -790,7 +790,7 @@ internal fun PortraitSettingsSection(
                     initialText = winText,
                     title = stringResource(R.string.time_window_set_title),
                     unit = "ms",
-                    parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(5f, 300f) },
+                    parseAndClamp = { s -> s.trim().replace(",", ".").toFloatOrNull()?.coerceIn(5f, 120f) },
                     onValue = actions.onUpdateTimeSlider,
                     style = MaterialTheme.typography.bodyLarge,
                 contentPadding = PaddingValues(0.dp),
@@ -807,10 +807,10 @@ internal fun PortraitSettingsSection(
                 )
             }
 
-            val p01 = hzToSlider(state.windowMs, 5f, 300f)
+            val p01 = hzToSlider(state.windowMs, 5f, 120f)
             OscopeSlider(
                 value = p01,
-                onValueChange = { p -> actions.onUpdateTimeSlider(sliderToHz(p, 5f, 300f)) },
+                onValueChange = { p -> actions.onUpdateTimeSlider(sliderToHz(p, 5f, 120f)) },
                 valueRange = 0f..1f,
                 steps = 180,
                 accentColor = MaterialTheme.colorScheme.tertiary,
