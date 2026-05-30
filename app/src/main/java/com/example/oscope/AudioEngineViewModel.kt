@@ -1298,67 +1298,45 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         _immersiveFilteredWaveform.value = immersiveFiltered
                         _publishedWaveformSpanMs.value = publishedSpanMs.coerceAtLeast(_windowMs.value)
                         markWaveformPublished()
-                    }
 
-                    // Trigger processing: run at same cadence as UI publish so time window changes take effect immediately
-                    try {
-                        val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
-                            .coerceAtMost(ring.size)
-                        val triggerArmed = _triggerEnabled
-                        // Always process trigger when armed — the UI publish rate already throttles overall cadence
-                        if (triggerArmed || _pendingTimeWindowUpdate.value) {
+                        // Trigger: detect on raw (uiSlice), extract window from filtered (uiFiltered)
+                        // Uses the same windowSamples/fetchSamples as UI publish for consistent time scale
+                        val triggerArmedNow = _triggerEnabled
+                        if (triggerArmedNow || _pendingTimeWindowUpdate.value) {
                             _pendingTimeWindowUpdate.value = false
-                            val extraSamplesRatio = 0.20f
-                            val extraSamples = (windowSamples * extraSamplesRatio).toInt()
-                            val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
-                            val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
-                            if (fetchSamples > 0) {
-                                val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
-                                // prepare source into uiSlice (already allocated)
-                                for (i in 0 until fetchSamples) {
-                                    uiSlice[i] = ring[(fetchStart + i) % ring.size]
+                            // Build detection source from raw data with DC removal + adaptive gain
+                            val trigSrc = FloatArray(fetchSamples) { uiSlice[it] }
+                            var dcMean = 0f
+                            for (i in 0 until fetchSamples) dcMean += trigSrc[i]
+                            dcMean /= fetchSamples.toFloat()
+                            for (i in 0 until fetchSamples) trigSrc[i] -= dcMean
+                            var peakVal = 1e-6f
+                            for (i in 0 until fetchSamples) { val a = abs(trigSrc[i]); if (a > peakVal) peakVal = a }
+                            if (peakVal > 1e-6f && peakVal < 0.08f) {
+                                val gain = (0.1f / peakVal).coerceAtMost(20f)
+                                for (i in 0 until fetchSamples) trigSrc[i] *= gain
+                            }
+                            val cfg = NewTriggerEngine.Config(
+                                mode = if (triggerArmedNow) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
+                                sampleRateHz = sampleRate.toFloat(),
+                                fMaxHz = 2000f,
+                                preTriggerRatio = 0.16f,
+                            )
+                            val res = try { captureTriggerEngine.process(trigSrc, cfg) } catch (_: Throwable) { null }
+                            if (res != null) {
+                                _triggerResult.value = res
+                                if (res.periodSamples > 0) {
+                                    lastGoodTriggerMs = SystemClock.elapsedRealtime()
+                                    // Extract from FILTERED data (uiFiltered) so UI filter changes are visible
+                                    val filteredSrc = uiFiltered.copyOfRange(0, fetchSamples)
+                                    val win = try { captureTriggerEngine.extractTriggeredWindow(filteredSrc, res, windowSamples) } catch (_: Throwable) { filteredSrc.copyOfRange(max(0, filteredSrc.size - windowSamples), filteredSrc.size) }
+                                    _triggeredWindow.value = win
+                                } else if (SystemClock.elapsedRealtime() - lastGoodTriggerMs > 500L) {
+                                    if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
                                 }
-                                    // Remove DC offset so the trigger threshold ~0.02 is meaningful
-                                    var dcMean = 0f
-                                    for (i in 0 until fetchSamples) dcMean += uiSlice[i]
-                                    dcMean /= fetchSamples.toFloat()
-                                    for (i in 0 until fetchSamples) uiSlice[i] -= dcMean
-                                        // Adaptive gain: scale quiet signals so the trigger threshold ~0.02 is meaningful
-                                        var peakVal = 1e-6f
-                                        for (i in 0 until fetchSamples) { val a = abs(uiSlice[i]); if (a > peakVal) peakVal = a }
-                                        if (peakVal > 1e-6f && peakVal < 0.08f) {
-                                            val gain = (0.1f / peakVal).coerceAtMost(20f)
-                                            for (i in 0 until fetchSamples) uiSlice[i] *= gain
-                                        }
-
-                                val cfg = NewTriggerEngine.Config(
-                                    mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
-                                    sampleRateHz = sampleRate.toFloat(),
-                                        fMaxHz = 2000f,
-                                    preTriggerRatio = 0.16f,
-                                )
-
-                                // process trigger on uiSlice[0..fetchSamples)
-                                val trigSource = uiSlice.copyOfRange(0, fetchSamples)
-                                val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
-                                if (res != null) {
-                                        // CRITICAL: extract from the SAME data that trigger detection used (trigSource, not raw ring)
-                                        // trigSource has DC removed and adaptive gain applied, matching the anchorIndex from process()
-                                        _triggerResult.value = res
-                                        if (res.periodSamples > 0) {
-                                            lastGoodTriggerMs = SystemClock.elapsedRealtime()
-                                            // Use current windowSamples (reflects latest time slider position)
-                                            val win = try { captureTriggerEngine.extractTriggeredWindow(trigSource, res, windowSamples) } catch (_: Throwable) { trigSource.copyOfRange(0, min(trigSource.size, windowSamples)) }
-                                            _triggeredWindow.value = win
-                                        } else if (SystemClock.elapsedRealtime() - lastGoodTriggerMs > 500L) {
-                                            // No valid trigger for 500ms — fall back to rolling waveform
-                                            if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
-                                        }
-                                            Log.d("Oscope", "TRIGGER: ws=$windowSamples res.start=${res.startIndex} anchor=${res.anchorIndex} period=${res.periodSamples} conf=${res.confidence} locked=${res.locked} win.len=${_triggeredWindow.value.size}")
-                                    }
                             }
                         }
-                    } catch (_: Throwable) {}
+                    }
 
                     // ===== 写入“滤波后音频”到录音文件（实时跟随参数变化） =====
                     // NOTE: recording uses filteredOutShort computed from the current block before the next read() overwrites shortBuf
@@ -1400,64 +1378,65 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-        /** Load cached WAV test signal from res/raw, parse 16-bit mono PCM into -1..1 floats */
-        private fun loadWavTestSignal(): FloatArray? {
-            cachedTestAudioSamples?.let { return it }
-            try {
-                val app = getApplication<Application>()
-                val rawResId = when (_testSignalPreset.value) {
-                    TestSignalPreset.W7 -> R.raw.test_signal_w7
-                    else -> R.raw.test_signal_5p
-                }
-                val inputStream = app.resources.openRawResource(rawResId)
-                val rawBytes = inputStream.readBytes()
-                inputStream.close()
-                if (rawBytes.size < 44) return null
-                // Parse WAV header: sample rate at byte 24 (4 bytes LE), data size at byte 40 (4 bytes LE)
-                    val formatTag = (rawBytes[20].toInt() and 0xFF)
-                        .or((rawBytes[21].toInt() and 0xFF) shl 8)
-                val sampleRate = (rawBytes[24].toInt() and 0xFF)
-                    .or((rawBytes[25].toInt() and 0xFF) shl 8)
-                    .or((rawBytes[26].toInt() and 0xFF) shl 16)
-                    .or((rawBytes[27].toInt() and 0xFF) shl 24)
-                wavTestSignalSampleRate = sampleRate
-                val bitsPerSample = (rawBytes[34].toInt() and 0xFF)
-                    .or((rawBytes[35].toInt() and 0xFF) shl 8)
-                val dataSize = (rawBytes[40].toInt() and 0xFF)
-                    .or((rawBytes[41].toInt() and 0xFF) shl 8)
-                    .or((rawBytes[42].toInt() and 0xFF) shl 16)
-                    .or((rawBytes[43].toInt() and 0xFF) shl 24)
-                val offset = 44
-                val samples: FloatArray
-                if (formatTag == 3) {
-                    // WAVE_FORMAT_IEEE_FLOAT: 32-bit float
-                    val sampleCount = dataSize / 4
-                    samples = FloatArray(sampleCount)
-                    for (i in 0 until sampleCount) {
-                        val bits = (rawBytes[offset + i * 4].toInt() and 0xFF)
-                            .or((rawBytes[offset + i * 4 + 1].toInt() and 0xFF) shl 8)
-                            .or((rawBytes[offset + i * 4 + 2].toInt() and 0xFF) shl 16)
-                            .or((rawBytes[offset + i * 4 + 3].toInt() and 0xFF) shl 24)
-                        samples[i] = Float.fromBits(bits)
-                    }
-                } else {
-                    // WAVE_FORMAT_PCM: assume 16-bit mono
-                    val sampleCount = dataSize / 2
-                        samples = FloatArray(sampleCount)
-                    for (i in 0 until sampleCount) {
-                        val lo = rawBytes[offset + i * 2].toInt() and 0xFF
-                        val hi = rawBytes[offset + i * 2 + 1].toInt() and 0xFF
-                        val pcm16 = (hi shl 8 or lo).toShort().toInt()
-                        samples[i] = pcm16 / 32767f
-                    }
-                }
-                cachedTestAudioSamples = samples
-                return samples
-            } catch (e: Exception) {
-                Log.e("Oscope", "loadWavTestSignal failed", e)
-                return null
+    /** Load cached WAV test signal from res/raw, parse 16-bit mono PCM into -1..1 floats */
+    private fun loadWavTestSignal(): FloatArray? {
+        cachedTestAudioSamples?.let { return it }
+        try {
+            val app = getApplication<Application>()
+            val rawResId = when (_testSignalPreset.value) {
+                TestSignalPreset.W7 -> R.raw.test_signal_w7
+                else -> R.raw.test_signal_5p
             }
+            val inputStream = app.resources.openRawResource(rawResId)
+            val rawBytes = inputStream.readBytes()
+            inputStream.close()
+            if (rawBytes.size < 44) return null
+            // Parse WAV header: sample rate at byte 24 (4 bytes LE), data size at byte 40 (4 bytes LE)
+            val formatTag = (rawBytes[20].toInt() and 0xFF)
+                .or((rawBytes[21].toInt() and 0xFF) shl 8)
+            val sampleRate = (rawBytes[24].toInt() and 0xFF)
+                .or((rawBytes[25].toInt() and 0xFF) shl 8)
+                .or((rawBytes[26].toInt() and 0xFF) shl 16)
+                .or((rawBytes[27].toInt() and 0xFF) shl 24)
+            wavTestSignalSampleRate = sampleRate
+            val bitsPerSample = (rawBytes[34].toInt() and 0xFF)
+                .or((rawBytes[35].toInt() and 0xFF) shl 8)
+            val dataSize = (rawBytes[40].toInt() and 0xFF)
+                .or((rawBytes[41].toInt() and 0xFF) shl 8)
+                .or((rawBytes[42].toInt() and 0xFF) shl 16)
+                .or((rawBytes[43].toInt() and 0xFF) shl 24)
+            val offset = 44
+            val samples: FloatArray
+            if (formatTag == 3) {
+                // WAVE_FORMAT_IEEE_FLOAT: 32-bit float
+                val sampleCount = dataSize / 4
+                samples = FloatArray(sampleCount)
+                for (i in 0 until sampleCount) {
+                    val bits = (rawBytes[offset + i * 4].toInt() and 0xFF)
+                        .or((rawBytes[offset + i * 4 + 1].toInt() and 0xFF) shl 8)
+                        .or((rawBytes[offset + i * 4 + 2].toInt() and 0xFF) shl 16)
+                        .or((rawBytes[offset + i * 4 + 3].toInt() and 0xFF) shl 24)
+                    samples[i] = Float.fromBits(bits)
+                }
+            } else {
+                // WAVE_FORMAT_PCM: assume 16-bit mono
+                val sampleCount = dataSize / 2
+                    samples = FloatArray(sampleCount)
+                for (i in 0 until sampleCount) {
+                    val lo = rawBytes[offset + i * 2].toInt() and 0xFF
+                    val hi = rawBytes[offset + i * 2 + 1].toInt() and 0xFF
+                    val pcm16 = (hi shl 8 or lo).toShort().toInt()
+                    samples[i] = pcm16 / 32767f
+                }
+            }
+            cachedTestAudioSamples = samples
+            return samples
         }
+        catch (e: Exception) {
+            Log.e("Oscope", "loadWavTestSignal failed", e)
+            return null
+        }
+    }
 
     private fun startVvvfTestJob() {
         if (testJob != null) return
@@ -1863,51 +1842,39 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             _immersiveFilteredWaveform.value = immersiveFiltered
                             _publishedWaveformSpanMs.value = publishedSpanMs.coerceAtLeast(_windowMs.value)
                             markWaveformPublished()
-                        }
 
-                        // Trigger processing for imported signal path (sync with UI publish, no independent cadence)
-                        try {
-                            val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
-                                .coerceAtMost(ring.size)
-                            val triggerArmed = _triggerEnabled
-                            if (triggerArmed || _pendingTimeWindowUpdate.value) {
+                            // Trigger: detect on raw (uiSlice), extract window from filtered (uiFiltered)
+                            val triggerArmedNow2 = _triggerEnabled
+                            if (triggerArmedNow2 || _pendingTimeWindowUpdate.value) {
                                 _pendingTimeWindowUpdate.value = false
-                                val extraSamples = (windowSamples * 0.45f).toInt()
-                                val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
-                                val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
-                                if (fetchSamples > 0) {
-                                    val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
-                                    for (i in 0 until fetchSamples) {
-                                        uiSlice[i] = ring[(fetchStart + i) % ring.size]
-                                    }
-                                        // Remove DC offset so the trigger threshold ~0.02 is meaningful
-                                        var dcMean = 0f
-                                        for (i in 0 until fetchSamples) dcMean += uiSlice[i]
-                                        dcMean /= fetchSamples.toFloat()
-                                        for (i in 0 until fetchSamples) uiSlice[i] -= dcMean
-                                        // Adaptive gain: scale quiet signals so the trigger threshold ~0.02 is meaningful
-                                        var peakVal2 = 1e-6f
-                                        for (i in 0 until fetchSamples) { val a = abs(uiSlice[i]); if (a > peakVal2) peakVal2 = a }
-                                        if (peakVal2 > 1e-6f && peakVal2 < 0.08f) {
-                                            val gain2 = (0.1f / peakVal2).coerceAtMost(20f)
-                                            for (i in 0 until fetchSamples) uiSlice[i] *= gain2
-                                        }
-                                    val cfg = NewTriggerEngine.Config(
-                                        mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
-                                        sampleRateHz = sampleRate.toFloat(),
-                                            fMaxHz = 2000f,
-                                    )
-                                val trigSource = uiSlice.copyOfRange(0, fetchSamples)
-                                    val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
-                                    if (res != null) {
-                                    // CRITICAL: extract from the SAME data trigger detection used (trigSource)
-                                    val win = try { captureTriggerEngine.extractTriggeredWindow(trigSource, res, windowSamples) } catch (_: Throwable) { trigSource.copyOfRange(0, min(trigSource.size, windowSamples)) }
-                                        _triggerResult.value = res
-                                        _triggeredWindow.value = win
+                                val trigSrc2 = FloatArray(fetchSamples) { uiSlice[it] }
+                                var dcMean2 = 0f
+                                for (i in 0 until fetchSamples) dcMean2 += trigSrc2[i]
+                                dcMean2 /= fetchSamples.toFloat()
+                                for (i in 0 until fetchSamples) trigSrc2[i] -= dcMean2
+                                var peakVal2 = 1e-6f
+                                for (i in 0 until fetchSamples) { val a = abs(trigSrc2[i]); if (a > peakVal2) peakVal2 = a }
+                                if (peakVal2 > 1e-6f && peakVal2 < 0.08f) {
+                                    val gain2 = (0.1f / peakVal2).coerceAtMost(20f)
+                                    for (i in 0 until fetchSamples) trigSrc2[i] *= gain2
+                                }
+                                val cfg2 = NewTriggerEngine.Config(
+                                    mode = if (triggerArmedNow2) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
+                                    sampleRateHz = sampleRate.toFloat(),
+                                    fMaxHz = 2000f,
+                                    preTriggerRatio = 0.16f,
+                                )
+                                val res2 = try { captureTriggerEngine.process(trigSrc2, cfg2) } catch (_: Throwable) { null }
+                                if (res2 != null) {
+                                    _triggerResult.value = res2
+                                    if (res2.periodSamples > 0) {
+                                        val filteredSrc2 = uiFiltered.copyOfRange(0, fetchSamples)
+                                        val win2 = try { captureTriggerEngine.extractTriggeredWindow(filteredSrc2, res2, windowSamples) } catch (_: Throwable) { filteredSrc2.copyOfRange(max(0, filteredSrc2.size - windowSamples), filteredSrc2.size) }
+                                        _triggeredWindow.value = win2
                                     }
                                 }
                             }
-                        } catch (_: Throwable) {}
+                        }
                     }
 
                     if (_isRecording.value && (recordingCodec != null || wavOut != null)) {
