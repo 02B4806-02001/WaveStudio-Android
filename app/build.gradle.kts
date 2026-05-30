@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.android.application)
 }
 
@@ -68,8 +67,7 @@ android {
     }
 
     composeOptions {
-        // Kotlin 2.3.20 匹配的 Compose 编译器版本
-        kotlinCompilerExtensionVersion = "2.3.20"
+        kotlinCompilerExtensionVersion = "2.3.21"
     }
 
     packaging {
@@ -77,11 +75,6 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-}
-
-// Kotlin 2.3.0 适配的 JVM 工具链
-kotlin {
-    jvmToolchain(17)
 }
 
 dependencies {
