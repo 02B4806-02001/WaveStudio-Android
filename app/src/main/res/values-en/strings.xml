@@ -78,6 +78,11 @@
     <string name="monitor_off">Off</string>
     <string name="load_audio">Load Aud.</string>
     <string name="importing">Importing</string>
+    <string name="import_audio_progress_title">Import Audio</string>
+    <string name="import_audio_decoding">Decoding audio file…</string>
+    <string name="import_audio_success_prefix">Import successful: </string>
+    <string name="import_audio_failed_prefix">Import failed: </string>
+    <string name="import_audio_cancelled">Import cancelled</string>
     <string name="audio_input_mode">Audio Input</string>
     <string name="audio_input_controller_title">Imported Audio Controller</string>
     <string name="audio_input_controller_hint">Current imported audio</string>
@@ -100,7 +105,7 @@
     <string name="processed_gain_set_title">Set Processed Gain</string>
     <string name="processed_gain_info_title">Gain</string>
     <string name="processed_gain_info_message">Adjusts overall level of the processed waveform.</string>
-    <string name="time_window_value_ms">Time Window %1$s ms</string>
+    <string name="time_window_value_ms">Time Window: %1$s ms</string>
     <string name="time_window_set_title">Set Time Window</string>
     <string name="time_window_info_title">Time Window</string>
     <string name="time_window_info_message">Longer window shows more periods but updates slower.</string>
@@ -114,8 +119,8 @@
     <string name="test_waveform_label">Test Waveform</string>
     <string name="test_waveform_hint">Switch between async SPWM and square modulation</string>
     <string name="test_signal_spwm_1p">Sync 1P (Simu.)</string>
-    <string name="test_signal_5p">Square 5P</string>
-    <string name="test_signal_w7">CHM Wide 7P</string>
+    <string name="test_signal_5p">Sync 5P (CP)</string>
+    <string name="test_signal_w7">Sync Wide-7P (CHM)</string>
     <string name="recording_format_label">Recording Format</string>
     <string name="sample_rate_label">Sample Rate</string>
     <string name="recording_locked_format_hint">Format &amp; sample rate cannot be changed while recording</string>
@@ -155,7 +160,7 @@
     <string name="lock">Lock</string>
     <string name="unlock">Unlock</string>
     <string name="amp_scale_overlay">Amplitude x %1$s</string>
-    <string name="time_window_overlay">Window %1$s ms</string>
+    <string name="time_window_overlay">Window: %1$s ms</string>
     <string name="unit_x">x</string>
     <string name="unit_ms">ms</string>
 
@@ -181,27 +186,59 @@
     <string name="settings_scroll_top">Scroll to Top</string>
     <string name="preset_help_text">Presets are .json files. Tap "Export" to save to your phone; if you want to send one to others, you can tap "Share" directly without exporting. After receiving it, tap "Import" and choose that file.</string>
 
-    <string name="about_app_signature">Wave Studio v0.11.5 by MoHa-Radio Institute</string>
-    <string name="about_permission_tip">Tip: Please grant microphone permission before use.</string>
-    <string name="about_update_v0115_title">Main updates in version 0.11.5:</string>
-    <string name="about_update_v0115_item_1">- Equalizer</string>
-    <string name="about_update_v0115_item_2">- Fixed lag in monitoring mode</string>
-    <string name="about_update_v0115_item_3">- Fixed several other bugs</string>
-    <string name="about_update_v0114_title">Main updates in version 0.11.4:</string>
-    <string name="about_update_v0114_item_1">- Filters are now disabled by default</string>
-    <string name="about_update_v0114_item_2">- Fixed lag in monitoring mode</string>
-    <string name="about_update_v0114_item_3">- Fixed several other bugs</string>
-    <string name="about_update_v0113_title">Main updates in version 0.11.3:</string>
-    <string name="about_update_v0113_item_1">- Restored the Show/Hide reference line button</string>
-    <string name="about_update_v0113_item_2">- Filters and equalizer are enabled by default</string>
-    <string name="about_update_v0113_item_3">- Limited effective Q value in EQ Shelf mode</string>
-    <string name="about_update_v0113_item_4">- Fixed frame drops in some scenarios</string>
-    <string name="about_update_v0113_item_5">- Fixed monitor lag when importing audio</string>
-    <string name="about_update_v0113_item_6">- Other detail improvements</string>
     <string name="about_contributors">Contributors (Bilibili): 02B4806長-02001, 某地铁迷_, 莓喵の小风扇, TEP-28WG01, etc.</string>
     <string name="about_qq_group">MoHa-Radio QQ Group: 762852552</string>
     <string name="about_official_website_label">Official website:</string>
     <string name="about_preset_download_placeholder">Preset download: (reserved)</string>
+
+    <!-- About dialog (refactored) -->
+    <string name="about_app_title">Wave Studio</string>
+    <string name="about_byline">MoHa-Radio Research Institute</string>
+    <string name="about_hint">Please grant microphone permission before use.</string>
+    <string name="about_changelog_title">Changelog</string>
+    <string name="about_more_info">More information</string>
+    <string name="about_website_label_new">Official website</string>
+    <string name="about_website_url_new">https://en.mhrri.org/</string>
+    <string name="about_preset_placeholder">Preset download: (reserved)</string>
+    <string name="about_version_label">Version</string>
+    <string name="about_development_org_label">Developer</string>
+    <string name="about_usage_tips_label">Usage Tips</string>
+    <string name="about_contributors_button">Dev Team</string>
+    <string name="about_preset_download_button">Preset Download</string>
+    <string name="about_website_button">Website</string>
+    <string name="about_contributors_title">Dev Team</string>
+    <string name="about_preset_download_unavailable">Preset download feature is not available yet</string>
+    <string name="about_community_button">Community</string>
+    <string name="about_community_title">Community</string>
+    <string name="about_qq_group_label">QQ Group</string>
+    <string name="about_qq_group_number">762852552</string>
+    <string name="about_discord_server_label">Discord Server</string>
+    <string name="about_discord_server_invite_link">https://discord.gg/nduVkGtSbP</string>
+    <string name="about_copied_toast">Copied to clipboard</string>
+    <string name="about_website_redirect_title">Open Website</string>
+    <string name="about_website_redirect_confirm">You will be redirected to %1$s. Continue?</string>
+
+    <!-- Developer team sections (extensible) -->
+    <string name="about_dev_section_main">Main Developers</string>
+    <string name="about_dev_section_testers">Testers</string>
+    <string name="about_dev_section_icon_design">Icon Design</string>
+    <string name="about_dev_section_english_proofreading">English Proofreading</string>
+
+    <string-array name="about_dev_main_members">
+        <item>02B4806長-02001</item>
+        <item>TEP-28WG01</item>
+    </string-array>
+    <string-array name="about_dev_tester_members">
+        <item>某地铁迷_</item>
+        <item>莓喵の小风扇</item>
+    </string-array>
+    <string-array name="about_dev_icon_design_members">
+        <item>TEP-28WG01</item>
+    </string-array>
+    <string-array name="about_dev_english_proofreading_members">
+        <item>PulsMeister</item>
+        <item>TriumphantCreator</item>
+    </string-array>
 
     <string name="trigger_pre_trigger_ratio_value">Pre-trigger ratio: %1$s</string>
     <string name="trigger_assist_lowpass_value">Assist low-pass: %1$sHz</string>
@@ -235,4 +272,19 @@
     <string name="recordings_recently_deleted_button">Recently Deleted (%1$d)</string>
     <string name="permanently_delete_all_confirm">Are you sure you want to permanently delete all recordings? This cannot be undone.</string>
     <string name="permanently_delete_batch_confirm">Are you sure you want to permanently delete the selected %1$d recordings? This cannot be undone.</string>
+
+    <!-- Language switch -->
+    <string name="language_switch_confirm_title">Switch Language</string>
+    <string name="language_switch_confirm_message">Switch to %1$s?</string>
+    <string name="language_switch_success">Language switched to %1$s</string>
+    <string name="language_switch_cancel">Keep Current</string>
+
+    <!-- Recordings list -->
+    <string name="recordings_count_format">%1$d recordings</string>
+    <string name="recordings_total_duration_format">Total %1$s</string>
+    <string name="recordings_status_playing">Playing</string>
+    <string name="recordings_status_saved">Saved</string>
+    <string name="recordings_status_waiting">Waiting</string>
+    <string name="recordings_empty_title">No recordings yet</string>
+    <string name="recordings_empty_hint">Finished recordings will appear here automatically.</string>
 </resources>

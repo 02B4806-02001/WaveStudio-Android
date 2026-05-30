@@ -1,5 +1,11 @@
 pluginManagement {
     repositories {
+
+        // mirror repo
+        maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
+
         google {
             content {
                 includeGroupByRegex("com\\.android.*")
@@ -22,5 +28,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Oscope"
+rootProject.name = "wavestudio"
 include(":app")

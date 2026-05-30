@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- About changelog -->
+    <string name="about_changelog_version_title">%1$s 版本主要更新内容：</string>
+
+    <string-array name="about_changelog_v0161">
+        <item>重构关于菜单</item>
+        <item>优化项目代码</item>
+    </string-array>
+    <string-array name="about_changelog_v0160">
+        <item>更换 UI 字体</item>
+        <item>EQ 均衡器部分可读性增强</item>
+        <item>增强了 Trigger 功能</item>
+        <item>将“录音列表”的文字按钮替换为图标</item>
+        <item>修复了一些问题</item>
+    </string-array>
+    <string-array name="about_changelog_v01531">
+        <item>优化导入外部音频时的相关逻辑</item>
+        <item>优化音频播放器UI</item>
+    </string-array>
+    <string-array name="about_changelog_v0153">
+        <item>优化语言切换功能</item>
+    </string-array>
+    <string-array name="about_changelog_v0151">
+        <item>修复了配置文件"分享"和"默认"按钮无法使用的问题</item>
+    </string-array>
+    <string-array name="about_changelog_v0150">
+        <item>重构了关于界面和录音列表界面</item>
+        <item>优化了自定义存储功能</item>
+    </string-array>
+    <string-array name="about_changelog_v0141">
+        <item>修复了自定义路径的 bug</item>
+        <item>优化了 Trigger 功能</item>
+    </string-array>
+    <string-array name="about_changelog_v0140">
+        <item>可使用自定义录音存储路径</item>
+        <item>设置中新增全局 1Hz 高通开关</item>
+        <item>优化了 Trigger 功能</item>
+        <item>修复了测试信号的 bug</item>
+    </string-array>
+    <string-array name="about_changelog_v0130">
+        <item>均衡器 EQ 频响图支持拖拽调节</item>
+        <item>新增导入音频控制器</item>
+        <item>竖屏模式下的最大波形高度提升至 200dp</item>
+    </string-array>
+    <string-array name="about_changelog_v0115">
+        <item>均衡器</item>
+        <item>修复了监听模式卡顿的问题</item>
+        <item>修复了一些其他 bug</item>
+    </string-array>
+    <string-array name="about_changelog_v0114">
+        <item>滤波器改为默认关闭</item>
+        <item>修复了监听模式卡顿的问题</item>
+        <item>修复了一些其他 bug</item>
+    </string-array>
+    <string-array name="about_changelog_v0113">
+        <item>加回“显示/隐藏参考线”按钮</item>
+        <item>滤波器与均衡器改为默认开启</item>
+        <item>均衡器 Shelf 模式下限制有效Q值</item>
+        <item>修复了一些情况下的掉帧问题</item>
+        <item>修复了导入音频时监听卡顿的问题</item>
+        <item>改动了一些细节</item>
+    </string-array>
+</resources>

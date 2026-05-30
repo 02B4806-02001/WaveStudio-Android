@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- About changelog -->
+    <string name="about_changelog_version_title">Key updates in version %1$s:</string>
+
+    <string-array name="about_changelog_v0161">
+        <item>Refactored the About menu</item>
+        <item>Optimized project code</item>
+    </string-array>
+    <string-array name="about_changelog_v0160">
+        <item>Changed UI font</item>
+        <item>Improved readability of EQ section</item>
+        <item>Enhanced Trigger functionality</item>
+        <item>Replace Recording List text button with icon button</item>
+        <item>Fixed some issues</item>
+    </string-array>
+    <string-array name="about_changelog_v01531">
+        <item>Optimized logic for importing external audio</item>
+        <item>Optimized the audio player UI</item>
+    </string-array>
+    <string-array name="about_changelog_v0153">
+        <item>Optimize language switching functionality</item>
+    </string-array>
+    <string-array name="about_changelog_v0151">
+        <item>Fixed: \'Share\' and \'Default\' buttons were not working.</item>
+    </string-array>
+    <string-array name="about_changelog_v0150">
+        <item>Refactored the About screen and the recording list screen</item>
+        <item>Optimized the custom storage feature</item>
+    </string-array>
+    <string-array name="about_changelog_v0141">
+        <item>Fixed a bug with the custom path</item>
+        <item>Optimized the Trigger function</item>
+    </string-array>
+    <string-array name="about_changelog_v0140">
+        <item>Custom recording storage path is now available</item>
+        <item>Added a global 1Hz high-pass filter toggle in settings</item>
+        <item>Optimized the Trigger function</item>
+        <item>Fixed a bug with the test signal</item>
+    </string-array>
+    <string-array name="about_changelog_v0130">
+        <item>EQ frequency response graph now supports drag adjustment</item>
+        <item>Added an imported audio controller</item>
+        <item>Increased the maximum waveform height to 200dp</item>
+    </string-array>
+    <string-array name="about_changelog_v0115">
+        <item>Equalizer</item>
+        <item>Fixed lag in monitoring mode</item>
+        <item>Fixed several other bugs</item>
+    </string-array>
+    <string-array name="about_changelog_v0114">
+        <item>Filters are now disabled by default</item>
+        <item>Fixed lag in monitoring mode</item>
+        <item>Fixed several other bugs</item>
+    </string-array>
+    <string-array name="about_changelog_v0113">
+        <item>Restored the Show/Hide reference line button</item>
+        <item>Filters and equalizer are enabled by default</item>
+        <item>Limited effective Q value in EQ Shelf mode</item>
+        <item>Fixed frame drops in some scenarios</item>
+        <item>Fixed monitor lag when importing audio</item>
+        <item>Other detail improvements</item>
+    </string-array>
+</resources>
