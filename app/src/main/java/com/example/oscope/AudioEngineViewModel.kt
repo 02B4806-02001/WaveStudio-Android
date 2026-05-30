@@ -998,6 +998,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 var lastPublishedAlive = false
                 var lastLogAt = 0L
                 var lastUiUpdateAt = 0L
+                // Trigger processing: now runs inline with UI publish, no independent cadence needed
                 var lastGoodTriggerMs = 0L
 
                 fun publishCaptureDiagnostics(readSamples: Int, maxAbs: Int, alive: Boolean, force: Boolean = false) {
@@ -1297,53 +1298,67 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         _immersiveFilteredWaveform.value = immersiveFiltered
                         _publishedWaveformSpanMs.value = publishedSpanMs.coerceAtLeast(_windowMs.value)
                         markWaveformPublished()
-
-                        // Trigger: find latest rising zero-crossing near end of frame
-                        if (_triggerEnabled && uiFiltered.isNotEmpty()) {
-                            try {
-                                val n = fetchSamples
-                                val ws = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt()).coerceAtMost(n)
-                                val pre = (ws * 0.16f).roundToInt().coerceAtLeast(1)
-
-                                // Adaptive hysteresis from signal peak in the last half of the frame
-                                var sigMax = 0f
-                                for (i in (n / 2).coerceAtLeast(1) until n) { val a = abs(uiFiltered[i]); if (a > sigMax) sigMax = a }
-                                val hyst = max(sigMax * 0.08f, 0.002f)
-
-                                // Collect ALL rising crossings in the frame
-                                val allCrossings = mutableListOf<Int>()
-                                for (i in 1 until n) {
-                                    if (uiFiltered[i - 1] <= hyst && uiFiltered[i] > hyst) allCrossings += i
-                                }
-
-                                // Pick the LAST crossing that is a legal anchor (allows full window)
-                                var anchor = -1
-                                for (idx in allCrossings.lastIndex downTo 0) {
-                                    val c = allCrossings[idx]
-                                    if (c >= pre && c <= n - (ws - pre)) { anchor = c; break }
-                                }
-                                if (anchor < 0 && allCrossings.isNotEmpty()) {
-                                    // No crossing fits perfectly — use the last one and let coerceIn handle it
-                                    anchor = allCrossings.last()
-                                }
-                                if (anchor < 0) anchor = (n * 0.8).toInt().coerceIn(1, n - 1)
-
-                                val start = (anchor - pre).coerceIn(0, n - ws)
-                                val win = try { uiFiltered.copyOfRange(start, start + ws) } catch (_: Throwable) { uiFiltered.copyOfRange(max(0, n - ws), n) }
-                                _triggeredWindow.value = win
-                                lastGoodTriggerMs = SystemClock.elapsedRealtime()
-
-                                // Period estimate
-                                val cross = allCrossings
-                                var newPeriod = 0
-                                if (cross.size >= 2) { val d = cross.zipWithNext { a, b -> b - a }.filter { it > 0 }.sorted(); if (d.isNotEmpty()) newPeriod = d[d.size / 2] }
-                                _triggerResult.value = NewTriggerEngine.Result(start, anchor, newPeriod, 0.95f, true, NewTriggerEngine.Mode.RISING, if (newPeriod > 1) sampleRate.toFloat() / newPeriod else 0f)
-                            } catch (_: Throwable) {}
-                        } else if (!_triggerEnabled && _triggeredWindow.value.isNotEmpty()) {
-                            _triggeredWindow.value = floatArrayOf()
-                            _triggerResult.value = null
-                        }
                     }
+
+                    // Trigger processing: run at same cadence as UI publish so time window changes take effect immediately
+                    try {
+                        val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
+                            .coerceAtMost(ring.size)
+                        val triggerArmed = _triggerEnabled
+                        // Always process trigger when armed — the UI publish rate already throttles overall cadence
+                        if (triggerArmed || _pendingTimeWindowUpdate.value) {
+                            _pendingTimeWindowUpdate.value = false
+                            val extraSamplesRatio = 0.20f
+                            val extraSamples = (windowSamples * extraSamplesRatio).toInt()
+                            val minTriggerSamples = if (triggerArmed) (sampleRate / 20).coerceAtLeast(2048) else 0
+                            val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
+                            if (fetchSamples > 0) {
+                                val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
+                                // prepare source into uiSlice (already allocated)
+                                for (i in 0 until fetchSamples) {
+                                    uiSlice[i] = ring[(fetchStart + i) % ring.size]
+                                }
+                                    // Remove DC offset so the trigger threshold ~0.02 is meaningful
+                                    var dcMean = 0f
+                                    for (i in 0 until fetchSamples) dcMean += uiSlice[i]
+                                    dcMean /= fetchSamples.toFloat()
+                                    for (i in 0 until fetchSamples) uiSlice[i] -= dcMean
+                                        // Adaptive gain: scale quiet signals so the trigger threshold ~0.02 is meaningful
+                                        var peakVal = 1e-6f
+                                        for (i in 0 until fetchSamples) { val a = abs(uiSlice[i]); if (a > peakVal) peakVal = a }
+                                        if (peakVal > 1e-6f && peakVal < 0.08f) {
+                                            val gain = (0.1f / peakVal).coerceAtMost(20f)
+                                            for (i in 0 until fetchSamples) uiSlice[i] *= gain
+                                        }
+
+                                val cfg = NewTriggerEngine.Config(
+                                    mode = if (triggerArmed) NewTriggerEngine.Mode.RISING else NewTriggerEngine.Mode.OFF,
+                                    sampleRateHz = sampleRate.toFloat(),
+                                        fMaxHz = 2000f,
+                                    preTriggerRatio = 0.16f,
+                                )
+
+                                // process trigger on uiSlice[0..fetchSamples)
+                                val trigSource = uiSlice.copyOfRange(0, fetchSamples)
+                                val res = try { captureTriggerEngine.process(trigSource, cfg) } catch (_: Throwable) { null }
+                                if (res != null) {
+                                        // CRITICAL: extract from the SAME data that trigger detection used (trigSource, not raw ring)
+                                        // trigSource has DC removed and adaptive gain applied, matching the anchorIndex from process()
+                                        _triggerResult.value = res
+                                        if (res.periodSamples > 0) {
+                                            lastGoodTriggerMs = SystemClock.elapsedRealtime()
+                                            // Use current windowSamples (reflects latest time slider position)
+                                            val win = try { captureTriggerEngine.extractTriggeredWindow(trigSource, res, windowSamples) } catch (_: Throwable) { trigSource.copyOfRange(0, min(trigSource.size, windowSamples)) }
+                                            _triggeredWindow.value = win
+                                        } else if (SystemClock.elapsedRealtime() - lastGoodTriggerMs > 500L) {
+                                            // No valid trigger for 500ms — fall back to rolling waveform
+                                            if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
+                                        }
+                                            Log.d("Oscope", "TRIGGER: ws=$windowSamples res.start=${res.startIndex} anchor=${res.anchorIndex} period=${res.periodSamples} conf=${res.confidence} locked=${res.locked} win.len=${_triggeredWindow.value.size}")
+                                    }
+                            }
+                        }
+                    } catch (_: Throwable) {}
 
                     // ===== 写入“滤波后音频”到录音文件（实时跟随参数变化） =====
                     // NOTE: recording uses filteredOutShort computed from the current block before the next read() overwrites shortBuf

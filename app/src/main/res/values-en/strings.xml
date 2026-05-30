@@ -113,7 +113,7 @@
     <string name="test_mode_info_message">When enabled, a static test signal is played to verify output waveform without requiring external input.</string>
     <string name="test_waveform_label">Test Waveform</string>
     <string name="test_waveform_hint">Switch between async SPWM and square modulation</string>
-    <string name="test_signal_spwm_1p">Square Modulation (Simulate)</string>
+    <string name="test_signal_spwm_1p">Sync 1P (Simu.)</string>
     <string name="test_signal_5p">Square 5P</string>
     <string name="test_signal_w7">CHM Wide 7P</string>
     <string name="recording_format_label">Recording Format</string>
