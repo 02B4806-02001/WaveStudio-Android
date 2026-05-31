@@ -33,7 +33,6 @@ internal class SimpleTriggerEngine(
         val freqHz: Float,
     )
 
-    private var lp = FloatArray(0)
     private var lastAnchor = -1
     private var lastPeriod = 0
     private var lockCounter = 0
@@ -43,10 +42,9 @@ internal class SimpleTriggerEngine(
      * Process a signal buffer and find the best trigger anchor point.
      *
      * Strategy:
-     * 1. Apply a gentle low-pass to remove high-frequency noise
-     * 2. Find all rising zero-crossings
-     * 3. Pick the crossing with the steepest local slope (most reliable edge)
-     * 4. Lock to that anchor if multiple consecutive frames agree on period
+    * 1. Find all rising zero-crossings (signal is pre-filtered)
+    * 2. Pick the crossing with the steepest local slope (most reliable edge)
+    * 3. Lock to that anchor if multiple consecutive frames agree on period
      */
     fun process(signal: FloatArray, config: Config): Result {
         val n = signal.size
@@ -56,13 +54,8 @@ internal class SimpleTriggerEngine(
             lockCounter = 0
             return Result(0, 0, 0f, false, config.mode, 0f)
         }
-        ensureCapacity(n)
-
-        // Step 1: low-pass filter
-        val filtered = applyLowPass(signal, n, config.sampleRateHz, config.lowPassHz)
-
-        // Step 2: find rising zero-crossings
-        val crossings = findRisingCrossings(filtered, n)
+        // Step 1: find rising zero-crossings (signal is already filtered by caller)
+        val crossings = findRisingCrossings(signal, n)
 
         if (crossings.isEmpty()) {
             lockCounter = max(0, lockCounter - 1)
@@ -79,7 +72,7 @@ internal class SimpleTriggerEngine(
             if (crossing !in 1 until n - 1) continue
 
             // Slope score: how steep is the edge at this crossing?
-            val slope = abs(filtered[crossing + 1] - filtered[crossing - 1])
+            val slope = abs(signal[crossing + 1] - signal[crossing - 1])
 
             // Period score: how consistent is this crossing with the last known period?
             val periodScore = if (lastPeriod > 0 && lastAnchor >= 0) {
@@ -166,21 +159,5 @@ internal class SimpleTriggerEngine(
         if (prev <= 0) return current
         if (current <= 0) return prev
         return ((1f - alpha) * prev + alpha * current).roundToInt().coerceAtLeast(1)
-    }
-
-    private fun applyLowPass(x: FloatArray, n: Int, sampleRateHz: Float, cutoffHz: Float): FloatArray {
-        val dt = 1f / sampleRateHz.coerceAtLeast(1f)
-        val rc = 1f / (2f * 3.1415927f * cutoffHz.coerceAtLeast(5f))
-        val alpha = dt / (rc + dt)
-        var y = 0f
-        for (i in 0 until n) {
-            y += alpha * (x[i] - y)
-            lp[i] = y
-        }
-        return lp
-    }
-
-    private fun ensureCapacity(n: Int) {
-        if (lp.size < n) lp = FloatArray(n)
     }
 }
