@@ -1353,14 +1353,19 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 _triggerResult.value = res
                                 if (res.locked || res.periodSamples > 0) {
                                     lastGoodTriggerMs = SystemClock.elapsedRealtime()
-                                    // Extract window from FILTERED data so UI filter changes take effect
-                                    val filteredSrc = uiFiltered.copyOfRange(0, fetchSamples)
-                                    val win = triggerEngine.extractWindow(filteredSrc, res, windowSamples, trigCfg.preTriggerRatio)
-                                    // Downsample to targetPoints so display pixel density matches non-trigger mode
-                                    _triggeredWindow.value = downsamplePeakFloatArray(win, 0, win.size, targetPoints = targetPoints)
-                                    // Update time-axis span to the actual triggered window size
-                                    _publishedWaveformSpanMs.value = _windowMs.value
+                                    // Extract fetchSamples from ringFiltered centered on trigger anchor,
+                                    // so the displayed time span matches non-trigger mode (same width, same samples)
+                                    val anchorRing = (fetchStart + res.anchorIndex) % ring.size
+                                    val preCount = (fetchSamples * trigCfg.preTriggerRatio).toInt().coerceIn(0, fetchSamples - 1)
+                                    val ringStart = ((anchorRing - preCount) % ring.size + ring.size) % ring.size
+                                    val trigWin = FloatArray(fetchSamples)
+                                    val firstPart = minOf(fetchSamples, ring.size - ringStart)
+                                    ringFiltered.copyInto(trigWin, 0, ringStart, ringStart + firstPart)
+                                    if (firstPart < fetchSamples) {
+                                        ringFiltered.copyInto(trigWin, firstPart, 0, fetchSamples - firstPart)
                                     }
+                                    _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, fetchSamples, targetPoints)
+                                }
                             } else if (SystemClock.elapsedRealtime() - lastGoodTriggerMs > 500L) {
                                 if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
                             }
@@ -1877,10 +1882,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 if (res2 != null && res2.mode != SimpleTriggerEngine.Mode.OFF) {
                                     _triggerResult.value = res2
                                     if (res2.locked || res2.periodSamples > 0) {
-                                        val filteredSrc2 = uiFiltered.copyOfRange(0, fetchSamples)
-                                        val win2 = triggerEngine.extractWindow(filteredSrc2, res2, windowSamples, trigCfg2.preTriggerRatio)
-                                        // Downsample to targetPoints so display pixel density matches non-trigger mode
-                                        _triggeredWindow.value = downsamplePeakFloatArray(win2, 0, win2.size, targetPoints = targetPoints)
+                                        // Extract fetchSamples from ringFiltered centered on trigger anchor,
+                                        // so the displayed time span matches non-trigger mode (same width, same samples)
+                                        val anchorRing = (fetchStart + res2.anchorIndex) % ring.size
+                                        val preCount = (fetchSamples * trigCfg2.preTriggerRatio).toInt().coerceIn(0, fetchSamples - 1)
+                                        val ringStart = ((anchorRing - preCount) % ring.size + ring.size) % ring.size
+                                        val trigWin = FloatArray(fetchSamples)
+                                        val firstPart = minOf(fetchSamples, ring.size - ringStart)
+                                        ringFiltered.copyInto(trigWin, 0, ringStart, ringStart + firstPart)
+                                        if (firstPart < fetchSamples) {
+                                            ringFiltered.copyInto(trigWin, firstPart, 0, fetchSamples - firstPart)
+                                        }
+                                        _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, fetchSamples, targetPoints)
                                     }
                                 }
                             }
