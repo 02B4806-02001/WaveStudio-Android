@@ -1366,8 +1366,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                     }
                                     _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, fetchSamples, targetPoints)
                                 }
-                            } else if (SystemClock.elapsedRealtime() - lastGoodTriggerMs > 500L) {
-                                if (_triggeredWindow.value.isNotEmpty()) _triggeredWindow.value = floatArrayOf()
+                            } else {
+                                // Trigger active but not yet locked — keep last good window alive
+                                // to avoid flicker between triggered and scrolling modes.
+                                lastGoodTriggerMs = SystemClock.elapsedRealtime()
                             }
                         }
                     }

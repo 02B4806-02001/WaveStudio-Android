@@ -253,7 +253,7 @@ fun ImmersiveScreen(
                 val conf = String.format(Locale.US, "%.2f", latestTriggerResult.confidence)
                 val hz = String.format(Locale.US, "%.1f", latestTriggerResult.freqHz)
                 Text(
-                    text = "TRG=ON, f=${hz}Hz, per=${latestTriggerResult.periodSamples}, s=${latestTriggerResult.startIndex}, a=${latestTriggerResult.anchorIndex}, lock=${latestTriggerResult.locked}, c=$conf",
+                    text = "TRG=ON, f=${hz}Hz, per=${latestTriggerResult.periodSamples}, a=${latestTriggerResult.anchorIndex}, lock=${latestTriggerResult.locked}, c=$conf",
                     color = Color.White,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier
