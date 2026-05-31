@@ -113,14 +113,14 @@ fun ImmersiveScreen(
     }
 
     // ===== 触发开关：开/关（开启时使用升沿 + 自相关辅助） =====
-    fun parseTriggerMode(name: String): NewTriggerEngine.Mode = when (name) {
-        NewTriggerEngine.Mode.OFF.name -> NewTriggerEngine.Mode.OFF
-        else -> NewTriggerEngine.Mode.RISING
+    fun parseTriggerMode(name: String): SimpleTriggerEngine.Mode = when (name) {
+        SimpleTriggerEngine.Mode.OFF.name -> SimpleTriggerEngine.Mode.OFF
+        else -> SimpleTriggerEngine.Mode.RISING
     }
 
     val triggerModeNameInitial = remember(triggerPrefs) {
-        triggerPrefs.getString(KEY_TRIGGER_MODE_NAME, NewTriggerEngine.Mode.OFF.name)
-            ?: NewTriggerEngine.Mode.OFF.name
+        triggerPrefs.getString(KEY_TRIGGER_MODE_NAME, SimpleTriggerEngine.Mode.OFF.name)
+            ?: SimpleTriggerEngine.Mode.OFF.name
     }
     var triggerModeName by rememberSaveable { mutableStateOf(triggerModeNameInitial) }
 
@@ -135,12 +135,12 @@ fun ImmersiveScreen(
 
     // Inform view model about trigger enabled state when UI mode changes.
     LaunchedEffect(triggerMode) {
-        onTriggerEnabled(triggerMode != NewTriggerEngine.Mode.OFF)
+        onTriggerEnabled(triggerMode != SimpleTriggerEngine.Mode.OFF)
     }
 
     fun nextTriggerModeName(name: String): String = when (name) {
-        NewTriggerEngine.Mode.OFF.name -> "ON"
-        else -> NewTriggerEngine.Mode.OFF.name
+        SimpleTriggerEngine.Mode.OFF.name -> "ON"
+        else -> SimpleTriggerEngine.Mode.OFF.name
     }
 
     Box(
@@ -214,7 +214,7 @@ fun ImmersiveScreen(
         ) {
             val immersiveRef = filteredDisplayScale.coerceAtLeast(1e-4f)
 
-            val displaySamples = if (triggerMode != NewTriggerEngine.Mode.OFF) {
+            val displaySamples = if (triggerMode != SimpleTriggerEngine.Mode.OFF) {
                 if (vmTriggeredWindowValue.isNotEmpty()) vmTriggeredWindowValue else filteredSamples
             } else {
                 filteredSamples
@@ -234,7 +234,7 @@ fun ImmersiveScreen(
 
             val latestTriggerResult = vmTriggerResultValue
                 // Always show trigger status when trigger is on
-                if (triggerMode != NewTriggerEngine.Mode.OFF) {
+                if (triggerMode != SimpleTriggerEngine.Mode.OFF) {
                     val statusText = if (latestTriggerResult != null) {
                         "${"%.1f".format(latestTriggerResult.freqHz)}Hz c=${"%.2f".format(latestTriggerResult.confidence)} ${if (latestTriggerResult.locked) "LOCK" else "..."}"
                     } else "WAIT"
@@ -249,7 +249,7 @@ fun ImmersiveScreen(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
-            if (triggerMode != NewTriggerEngine.Mode.OFF && latestTriggerResult != null && showDebugInfo) {
+            if (triggerMode != SimpleTriggerEngine.Mode.OFF && latestTriggerResult != null && showDebugInfo) {
                 val conf = String.format(Locale.US, "%.2f", latestTriggerResult.confidence)
                 val hz = String.format(Locale.US, "%.1f", latestTriggerResult.freqHz)
                 Text(
@@ -307,8 +307,8 @@ fun ImmersiveScreen(
                                     Text(stringResource(R.string.trigger_label))
                                     Spacer(Modifier.weight(1f))
                                     Switch(
-                                        checked = triggerMode != NewTriggerEngine.Mode.OFF,
-                                        onCheckedChange = { on -> triggerModeName = if (on) "ON" else NewTriggerEngine.Mode.OFF.name }
+                                        checked = triggerMode != SimpleTriggerEngine.Mode.OFF,
+                                        onCheckedChange = { on -> triggerModeName = if (on) "ON" else SimpleTriggerEngine.Mode.OFF.name }
                                     )
                                 }
                             },
