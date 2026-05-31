@@ -6,6 +6,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+// Deprecated
+
 internal class NewTriggerEngine(
     private val nominalWindowSize: Int = 512,
 ) {
