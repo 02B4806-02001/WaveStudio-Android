@@ -395,6 +395,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
     val triggeredWindow: StateFlow<FloatArray> = _triggeredWindow.asStateFlow()
     private val _pendingTimeWindowUpdate = MutableStateFlow(false)
 
+    // Tracks the ring-buffer-absolute position of the last trigger anchor.
+    // Used to re-project the engine's state across sliding input buffers.
+    private var triggerRingAnchorBase: Int = -1
+
     private val _publishedWaveformSpanMs = MutableStateFlow(20f)
     val publishedWaveformSpanMs: StateFlow<Float> = _publishedWaveformSpanMs.asStateFlow()
 
@@ -1038,6 +1042,10 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                 var lastUiUpdateAt = 0L
                 // Trigger processing: now runs inline with UI publish, no independent cadence needed
                 var lastGoodTriggerMs = 0L
+                // Fixed ring buffer read position for trigger engine. By always reading from
+                // the same position, the engine sees the same physical samples every frame,
+                // so lastAnchor/lastPeriod/lockCounter remain valid without seekAnchorTo().
+                var triggerRingBase: Int = -1
 
                 fun publishCaptureDiagnostics(readSamples: Int, maxAbs: Int, alive: Boolean, force: Boolean = false) {
                     val now = SystemClock.elapsedRealtime()
@@ -1211,104 +1219,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         val windowSamples = max(64, (sampleRate * (_windowMs.value / 1000f)).toInt())
                             .coerceAtMost(ring.size)
 
-                        val warmup = min(windowSamples, max(0, sampleRate / 20)) // 最多 50ms
-                        val total = min(ringSize, windowSamples + warmup)
+                        // Always fetch exactly windowSamples for the trigger engine.
+                        // This gives the engine a consistent frame-to-frame view of the
+                        // signal so its internal lastAnchor always refers to the same
+                        // physical position in the following frame's buffer.
+                        val fetchStart = (ringWrite - windowSamples + ring.size) % ring.size
 
-                        // ===== UI 波形计算：用数组 + 复用滤波器，避免 List 装箱和频繁分配造成卡顿 =====
-                        val startAll = (ringWrite - total + ring.size) % ring.size
-                        // 拷贝 sliceAll 到 uiSlice[0..total)
-                        for (i in 0 until total) {
-                            uiSlice[i] = ring[(startAll + i) % ring.size]
-                        }
-                        // We need a larger buffer for the UI to allow Trigger alignment without running out of data.
-                        // Instead of sending exactly 512 points representing the window, we send more data (e.g. 1.5x)
-                        // but tell the View it's "one window".
-                        // Actually, 'WaveformView' doesn't know 'windowMs', it just plots what it gets.
-                        // If we send more points, it squeezes them into the screen (time scale mismatch).
-
-                        // FIX: We must keep the *time per pixel* correct.
-                        // If we want to support trigger scrolling without black bars, we need to send EXTRA samples
-                        // that exist *past* the window end? Or *before* the window start?
-                        //
-                        // Standard scope: Trigger point is usually fixed on screen (e.g. center or left).
-                        // If trigger point is fixed at left (index 0), then we need valid data starting from trigger point.
-                        // Our current logic:
-                        // 1. Capture 'windowSamples' (latest N samples).
-                        // 2. View searches for trigger inside these N samples.
-                        //    If found at index K, it draws from K to N. Result: N-K samples.
-                        //    This is why the right side is empty.
-                        //
-                        // To fix this, we need to capture MORE than 'windowSamples'.
-                        // We need to capture 'windowSamples + maxTriggerSearch'.
-                        // maxTriggerSearch is e.g. 50% of window.
-                        //
-                        // Let's deliver more data to the View.
-                        // If we effectively double the buffer size sent to UI, but keep 'stepX' calculation based on 'windowSamples' equivalent?
-                        // No, WaveformSurfaceView logic is 'stepX = w / (n-1)'. It fits EVERYTHING into width.
-                        // The user said "Don't change time window".
-
-                        // Solution:
-                        // Change View logic: stepX = w / (TARGET_DISPLAY_POINTS - 1).
-                        // Pass a buffer larger than TARGET_DISPLAY_POINTS.
-                        // Draw from startIndex to startIndex + TARGET_DISPLAY_POINTS.
-
-                        // Let's modify AudioEngineViewModel to send a slightly larger buffer (e.g. +50%).
-                        // But we need to maintain 'downsample' target density.
-                        // If we just increase 'targetPoints' to 768 (512 * 1.5), the 'stepX' in view will squeeze it in.
-                        // We need coordination.
-
-                        // Simpler hack in View side implies we have the data.
-                        // Currently we don't. 'downsamplePeakFloatArray' outputs exactly 'targetPoints'.
-
-                        // 监听开启时也保持足够的显示密度，避免“波形像被低通/过度平滑”。
-                        val monitorOn = _isMonitoring.value
-                        val triggerArmed = _triggerEnabled
-                        val extraPoints = when {
-                            monitorOn && triggerArmed -> 128
-                            monitorOn -> 128
-                            busyRealtimePath -> 96
-                            else -> 192
-                        }
-                        val targetPoints = when {
-                            monitorOn && triggerArmed -> 640
-                            monitorOn -> 512
-                            else -> 512 + extraPoints
-                        }
-
-                        // We need more source samples to fill this larger target while keeping same time scale.
-                        // windowSamples represents the user's "30ms" setting.
-                        // We want to fetch 1.5 * 30ms so we have extra tail.
-                        val extraSamplesRatio = when {
-                            monitorOn && triggerArmed -> 0.20f
-                            monitorOn -> 0.20f
-                            busyRealtimePath -> 0.20f
-                            else -> 0.45f
-                        }
-                        val extraSamples = (windowSamples * extraSamplesRatio).toInt()
-                        val minTriggerSamples = if (triggerArmed) 640 else 0
-                        val fetchSamples = min(ringSize, max(windowSamples + extraSamples, minTriggerSamples))
-                        val fetchStart = (ringWrite - fetchSamples + ring.size) % ring.size
-                        val publishedSpanMs = if (windowSamples > 0) {
-                            _windowMs.value * (fetchSamples.toFloat() / windowSamples.toFloat())
-                        } else {
-                            _windowMs.value
-                        }
-
-                        // We need uiSlice to be big enough. ring is big enough?
-                        // ring size is max(64, sampleRate * 1.0f) = 44100.
-                        // windowSamples max 500ms ~ 22050.
-                        // So ring is large enough.
-                        // uiSlice is allocated as ring.size. Safe.
-
-                        for (i in 0 until fetchSamples) {
+                        for (i in 0 until windowSamples) {
                             uiSlice[i] = ring[(fetchStart + i) % ring.size]
                         }
 
-                        // downRaw: map 'fetchSamples' -> 'targetPoints'
-                        val downRaw = downsamplePeakFloatArray(uiSlice, 0, fetchSamples, targetPoints = targetPoints)
-
                         if (needFilteredBlock && filteredOutShort != null) {
-                            for (i in 0 until fetchSamples) {
+                            for (i in 0 until windowSamples) {
                                 uiFiltered[i] = ringFiltered[(fetchStart + i) % ring.size]
                             }
                         } else {
@@ -1326,10 +1248,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                 globalHighPassEnabled = _globalHighPassEnabled.value,
                                 globalHighPassCutoffHz = _globalHighPassCutoff.value,
                             )
-                            uiWaveformFilter.process(uiSlice, uiFiltered, fetchSamples)
+                            uiWaveformFilter.process(uiSlice, uiFiltered, windowSamples)
                         }
-                        val downFiltered = downsamplePeakFloatArray(uiFiltered, 0, fetchSamples, targetPoints = targetPoints)
-                        val immersiveFiltered = resampleLinearFloatArray(uiFiltered, 0, fetchSamples, targetPoints)
+
+                        // UI display: raw and filtered waveforms at full window resolution
+                        val targetPoints = 512
+                        val publishedSpanMs = _windowMs.value
+                        val downRaw = downsamplePeakFloatArray(uiSlice, 0, windowSamples, targetPoints = targetPoints)
+                        val downFiltered = downsamplePeakFloatArray(uiFiltered, 0, windowSamples, targetPoints = targetPoints)
+                        val immersiveFiltered = resampleLinearFloatArray(uiFiltered, 0, windowSamples, targetPoints)
 
                         _rawWaveform.value = downRaw
                         _filteredWaveform.value = downFiltered
@@ -1337,39 +1264,64 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         _publishedWaveformSpanMs.value = publishedSpanMs.coerceAtLeast(_windowMs.value)
                         markWaveformPublished()
 
-                        // Simple trigger: detect zero-crossings on raw, extract window from filtered
+                        // Simple trigger: uses a fixed ring buffer read position so the engine
+                        // sees the same physical samples every frame. This keeps lastAnchor,
+                        // lastPeriod, and lockCounter stable without needing seekAnchorTo().
                         val triggerArmedNow = _triggerEnabled
                         if (triggerArmedNow || _pendingTimeWindowUpdate.value) {
                             _pendingTimeWindowUpdate.value = false
+
+                            // Initialize triggerRingBase on first armed frame, or re-initialize
+                            // if the window size changed (e.g. user adjusted timebase).
+                            // Also re-initialize if ringWrite has wrapped around and overwritten
+                            // the data at triggerRingBase (ring buffer is only 1 second deep).
+                            val ringWrapped = triggerRingBase >= 0 &&
+                                ((ringWrite - triggerRingBase + ring.size) % ring.size) > (ring.size - windowSamples - 512)
+                            if (triggerRingBase < 0 || _pendingTimeWindowUpdate.value || ringWrapped) {
+                                triggerRingBase = fetchStart
+                                // Reset engine state when re-basing so old state doesn't
+                                // pollute the new window position.
+                                triggerEngine.seekAnchorTo(-1)
+                            }
+
                             val trigCfg = SimpleTriggerEngine.Config(
                                 mode = if (triggerArmedNow) SimpleTriggerEngine.Mode.RISING else SimpleTriggerEngine.Mode.OFF,
                                 sampleRateHz = sampleRate.toFloat(),
                                 preTriggerRatio = 0.30f,
                             )
-                            // Run trigger on FILTERED data so zero-crossings align with extracted window
-                            val trigSrc = uiFiltered.copyOfRange(0, fetchSamples)
+
+                            // Read from the fixed triggerRingBase position, not the current fetchStart.
+                            // This ensures the engine's internal state stays coherent across frames.
+                            val trigSrc = FloatArray(windowSamples)
+                            for (i in 0 until windowSamples) {
+                                trigSrc[i] = ringFiltered[(triggerRingBase + i) % ring.size]
+                            }
+
                             val res = try { triggerEngine.process(trigSrc, trigCfg) } catch (_: Throwable) { null }
+                            val now = SystemClock.elapsedRealtime()
                             if (res != null && res.mode != SimpleTriggerEngine.Mode.OFF) {
                                 _triggerResult.value = res
-                                if (res.locked || res.periodSamples > 0) {
-                                    lastGoodTriggerMs = SystemClock.elapsedRealtime()
-                                    // Extract fetchSamples from ringFiltered centered on trigger anchor,
-                                    // so the displayed time span matches non-trigger mode (same width, same samples)
-                                    val anchorRing = (fetchStart + res.anchorIndex) % ring.size
-                                    val preCount = (fetchSamples * trigCfg.preTriggerRatio).toInt().coerceIn(0, fetchSamples - 1)
-                                    val ringStart = ((anchorRing - preCount) % ring.size + ring.size) % ring.size
-                                    val trigWin = FloatArray(fetchSamples)
-                                    val firstPart = minOf(fetchSamples, ring.size - ringStart)
-                                    ringFiltered.copyInto(trigWin, 0, ringStart, ringStart + firstPart)
-                                    if (firstPart < fetchSamples) {
-                                        ringFiltered.copyInto(trigWin, firstPart, 0, fetchSamples - firstPart)
+                                if (res.locked && res.periodSamples > 0) {
+                                    // Only update the displayed window on the first locked frame
+                                    // after a period of being unlocked. Once locked, freeze the
+                                    // display until the next lock event.
+                                    if (lastGoodTriggerMs == 0L || now - lastGoodTriggerMs > 300L) {
+                                        lastGoodTriggerMs = now
+                                        val preCount = (windowSamples * trigCfg.preTriggerRatio).toInt().coerceIn(0, windowSamples - 1)
+                                        val ringStart = ((triggerRingBase + res.anchorIndex - preCount + ring.size) % ring.size)
+                                        val trigWin = FloatArray(windowSamples)
+                                        val firstPart = minOf(windowSamples, ring.size - ringStart)
+                                        ringFiltered.copyInto(trigWin, 0, ringStart, ringStart + firstPart)
+                                        if (firstPart < windowSamples) {
+                                            ringFiltered.copyInto(trigWin, firstPart, 0, windowSamples - firstPart)
+                                        }
+                                        _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, windowSamples, targetPoints)
                                     }
-                                    _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, fetchSamples, targetPoints)
                                 }
-                            } else {
-                                // Trigger active but not yet locked — keep last good window alive
-                                // to avoid flicker between triggered and scrolling modes.
-                                lastGoodTriggerMs = SystemClock.elapsedRealtime()
+                            }
+                            // Only fall back to scrolling after 300ms of no locked frame
+                            if (now - lastGoodTriggerMs > 300L) {
+                                _triggeredWindow.value = floatArrayOf()
                             }
                         }
                     }
@@ -1878,25 +1830,32 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                     sampleRateHz = sampleRate.toFloat(),
                                     preTriggerRatio = 0.30f,
                                 )
-                                // Run trigger on FILTERED data so zero-crossings align with extracted window
-                                val trigSrc2 = uiFiltered.copyOfRange(0, fetchSamples)
+                                val trigSrc2 = uiFiltered.copyOfRange(0, windowSamples)
+                                if (triggerRingAnchorBase >= 0 && trigSrc2.isNotEmpty()) {
+                                    val localAnchor = ((triggerRingAnchorBase - fetchStart + ring.size) % ring.size)
+                                        .coerceAtMost(trigSrc2.lastIndex.coerceAtLeast(0))
+                                    triggerEngine.seekAnchorTo(localAnchor)
+                                }
                                 val res2 = try { triggerEngine.process(trigSrc2, trigCfg2) } catch (_: Throwable) { null }
+                                val now2 = SystemClock.elapsedRealtime()
                                 if (res2 != null && res2.mode != SimpleTriggerEngine.Mode.OFF) {
                                     _triggerResult.value = res2
-                                    if (res2.locked || res2.periodSamples > 0) {
-                                        // Extract fetchSamples from ringFiltered centered on trigger anchor,
-                                        // so the displayed time span matches non-trigger mode (same width, same samples)
-                                        val anchorRing = (fetchStart + res2.anchorIndex) % ring.size
-                                        val preCount = (fetchSamples * trigCfg2.preTriggerRatio).toInt().coerceIn(0, fetchSamples - 1)
-                                        val ringStart = ((anchorRing - preCount) % ring.size + ring.size) % ring.size
-                                        val trigWin = FloatArray(fetchSamples)
-                                        val firstPart = minOf(fetchSamples, ring.size - ringStart)
+                                    if (res2.locked && res2.periodSamples > 0) {
+                                        lastGoodTriggerMs = now2
+                                        triggerRingAnchorBase = (fetchStart + res2.anchorIndex) % ring.size
+                                        val preCount = (windowSamples * trigCfg2.preTriggerRatio).toInt().coerceIn(0, windowSamples - 1)
+                                        val ringStart = ((triggerRingAnchorBase - preCount + ring.size) % ring.size)
+                                        val trigWin = FloatArray(windowSamples)
+                                        val firstPart = minOf(windowSamples, ring.size - ringStart)
                                         ringFiltered.copyInto(trigWin, 0, ringStart, ringStart + firstPart)
-                                        if (firstPart < fetchSamples) {
-                                            ringFiltered.copyInto(trigWin, firstPart, 0, fetchSamples - firstPart)
+                                        if (firstPart < windowSamples) {
+                                            ringFiltered.copyInto(trigWin, firstPart, 0, windowSamples - firstPart)
                                         }
-                                        _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, fetchSamples, targetPoints)
+                                        _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, windowSamples, targetPoints)
                                     }
+                                }
+                                if (now2 - lastGoodTriggerMs > 300L) {
+                                    _triggeredWindow.value = floatArrayOf()
                                 }
                             }
                         }

@@ -123,6 +123,25 @@ internal class SimpleTriggerEngine(
     }
 
     /**
+     * Projects the engine's internal anchor into the current input buffer's
+     * local coordinate space. Call before process() when the input buffer
+     * represents a different slice of the ring buffer than the previous call,
+     * so that lastAnchor/lastPeriod/lockCounter remain valid.
+     *
+     * Pass a negative value to reset the engine's internal state (e.g. when
+     * re-basing to a new ring buffer position).
+     */
+    fun seekAnchorTo(localAnchor: Int) {
+        if (localAnchor < 0) {
+            lastAnchor = -1
+            lastPeriod = 0
+            lockCounter = 0
+            return
+        }
+        lastAnchor = localAnchor
+    }
+
+    /**
      * Extract a triggered window from source data.
      * Positions the anchor at preTriggerRatio * targetSize from the left.
      */
