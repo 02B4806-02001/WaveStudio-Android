@@ -1271,30 +1271,20 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         if (triggerArmedNow || _pendingTimeWindowUpdate.value) {
                             _pendingTimeWindowUpdate.value = false
 
-                            // Initialize triggerRingBase on first armed frame, or re-initialize
-                            // if the window size changed (e.g. user adjusted timebase).
-                            // Also re-initialize if ringWrite has wrapped around and overwritten
-                            // the data at triggerRingBase (ring buffer is only 1 second deep).
-                            val ringWrapped = triggerRingBase >= 0 &&
-                                ((ringWrite - triggerRingBase + ring.size) % ring.size) > (ring.size - windowSamples - 512)
-                            if (triggerRingBase < 0 || _pendingTimeWindowUpdate.value || ringWrapped) {
-                                triggerRingBase = fetchStart
-                                // Reset engine state when re-basing so old state doesn't
-                                // pollute the new window position.
-                                triggerEngine.seekAnchorTo(-1)
-                            }
-
                             val trigCfg = SimpleTriggerEngine.Config(
                                 mode = if (triggerArmedNow) SimpleTriggerEngine.Mode.RISING else SimpleTriggerEngine.Mode.OFF,
                                 sampleRateHz = sampleRate.toFloat(),
                                 preTriggerRatio = 0.30f,
                             )
 
-                            // Read from the fixed triggerRingBase position, not the current fetchStart.
-                            // This ensures the engine's internal state stays coherent across frames.
-                            val trigSrc = FloatArray(windowSamples)
-                            for (i in 0 until windowSamples) {
-                                trigSrc[i] = ringFiltered[(triggerRingBase + i) % ring.size]
+                            // Use the current fetchStart (same as UI display). Before processing,
+                            // map the last known ring buffer anchor into the current frame's local
+                            // coordinate space so the engine's internal state stays coherent.
+                            val trigSrc = uiFiltered.copyOfRange(0, windowSamples)
+                            if (triggerRingBase >= 0) {
+                                val localAnchor = ((triggerRingBase - fetchStart + ring.size) % ring.size)
+                                    .coerceAtMost(trigSrc.lastIndex.coerceAtLeast(0))
+                                triggerEngine.seekAnchorTo(localAnchor)
                             }
 
                             val res = try { triggerEngine.process(trigSrc, trigCfg) } catch (_: Throwable) { null }
@@ -1302,13 +1292,15 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                             if (res != null && res.mode != SimpleTriggerEngine.Mode.OFF) {
                                 _triggerResult.value = res
                                 if (res.locked && res.periodSamples > 0) {
+                                    // Record the ring buffer position of this anchor
+                                    triggerRingBase = (fetchStart + res.anchorIndex) % ring.size
+
                                     // Only update the displayed window on the first locked frame
-                                    // after a period of being unlocked. Once locked, freeze the
-                                    // display until the next lock event.
+                                    // after a period of being unlocked.
                                     if (lastGoodTriggerMs == 0L || now - lastGoodTriggerMs > 300L) {
                                         lastGoodTriggerMs = now
                                         val preCount = (windowSamples * trigCfg.preTriggerRatio).toInt().coerceIn(0, windowSamples - 1)
-                                        val ringStart = ((triggerRingBase + res.anchorIndex - preCount + ring.size) % ring.size)
+                                        val ringStart = ((triggerRingBase - preCount + ring.size) % ring.size)
                                         val trigWin = FloatArray(windowSamples)
                                         val firstPart = minOf(windowSamples, ring.size - ringStart)
                                         ringFiltered.copyInto(trigWin, 0, ringStart, ringStart + firstPart)
@@ -1317,6 +1309,8 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                         }
                                         _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, windowSamples, targetPoints)
                                     }
+                                } else {
+                                    triggerRingBase = -1
                                 }
                             }
                             // Only fall back to scrolling after 300ms of no locked frame
