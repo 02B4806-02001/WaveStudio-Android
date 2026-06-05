@@ -1264,58 +1264,53 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                         _publishedWaveformSpanMs.value = publishedSpanMs.coerceAtLeast(_windowMs.value)
                         markWaveformPublished()
 
-                        // Simple trigger: uses a fixed ring buffer read position so the engine
-                        // sees the same physical samples every frame. This keeps lastAnchor,
-                        // lastPeriod, and lockCounter stable without needing seekAnchorTo().
+                        // Simple trigger: engine reads from uiFiltered (same fresh data as UI).
+                        // seekAnchorTo() keeps internal state coherent across frames.
+                        // On lock, _triggeredWindow is extracted from trigSrc (same data the
+                        // engine processed) aligned to the trigger anchor. Since trigSrc and
+                        // uiFiltered have the same length (windowSamples), the time span is
+                        // identical to the non-triggered view.
                         val triggerArmedNow = _triggerEnabled
                         if (triggerArmedNow || _pendingTimeWindowUpdate.value) {
                             _pendingTimeWindowUpdate.value = false
 
-                            val trigCfg = SimpleTriggerEngine.Config(
-                                mode = if (triggerArmedNow) SimpleTriggerEngine.Mode.RISING else SimpleTriggerEngine.Mode.OFF,
-                                sampleRateHz = sampleRate.toFloat(),
-                                preTriggerRatio = 0.30f,
-                            )
-
-                            // Use the current fetchStart (same as UI display). Before processing,
-                            // map the last known ring buffer anchor into the current frame's local
-                            // coordinate space so the engine's internal state stays coherent.
-                            val trigSrc = uiFiltered.copyOfRange(0, windowSamples)
-                            if (triggerRingBase >= 0) {
-                                val localAnchor = ((triggerRingBase - fetchStart + ring.size) % ring.size)
-                                    .coerceAtMost(trigSrc.lastIndex.coerceAtLeast(0))
-                                triggerEngine.seekAnchorTo(localAnchor)
+                            if (triggerRingBase < 0) {
+                                triggerRingBase = fetchStart
                             }
 
-                            val res = try { triggerEngine.process(trigSrc, trigCfg) } catch (_: Throwable) { null }
-                            val now = SystemClock.elapsedRealtime()
-                            if (res != null && res.mode != SimpleTriggerEngine.Mode.OFF) {
-                                _triggerResult.value = res
-                                if (res.locked && res.periodSamples > 0) {
-                                    // Record the ring buffer position of this anchor
-                                    triggerRingBase = (fetchStart + res.anchorIndex) % ring.size
+                            if (triggerRingBase >= 0) {
+                                val trigCfg = SimpleTriggerEngine.Config(
+                                    mode = if (triggerArmedNow) SimpleTriggerEngine.Mode.RISING else SimpleTriggerEngine.Mode.OFF,
+                                    sampleRateHz = sampleRate.toFloat(),
+                                    preTriggerRatio = 0.30f,
+                                )
 
-                                    // Only update the displayed window on the first locked frame
-                                    // after a period of being unlocked.
-                                    if (lastGoodTriggerMs == 0L || now - lastGoodTriggerMs > 300L) {
+                                val trigSrc = uiFiltered.copyOfRange(0, windowSamples)
+                                val anchorOffset = ((triggerRingBase - fetchStart + ring.size) % ring.size)
+                                    .coerceAtMost(windowSamples - 1)
+                                triggerEngine.seekAnchorTo(anchorOffset)
+
+                                val res = try { triggerEngine.process(trigSrc, trigCfg) } catch (_: Throwable) { null }
+                                val now = SystemClock.elapsedRealtime()
+                                if (res != null && res.mode != SimpleTriggerEngine.Mode.OFF) {
+                                    _triggerResult.value = res
+                                    if (res.locked && res.periodSamples > 0) {
                                         lastGoodTriggerMs = now
+                                        triggerRingBase = (fetchStart + res.anchorIndex) % ring.size
+                                        // Extract windowSamples-wide window from ringFiltered
+                                        // (contiguous ring data). This avoids the discontinuity
+                                        // from wrapping within trigSrc (only windowSamples copy).
                                         val preCount = (windowSamples * trigCfg.preTriggerRatio).toInt().coerceIn(0, windowSamples - 1)
-                                        val ringStart = ((triggerRingBase - preCount + ring.size) % ring.size)
+                                        val trigRingStart = ((triggerRingBase - preCount + ring.size) % ring.size)
                                         val trigWin = FloatArray(windowSamples)
-                                        val firstPart = minOf(windowSamples, ring.size - ringStart)
-                                        ringFiltered.copyInto(trigWin, 0, ringStart, ringStart + firstPart)
+                                        val firstPart = minOf(windowSamples, ring.size - trigRingStart)
+                                        ringFiltered.copyInto(trigWin, 0, trigRingStart, trigRingStart + firstPart)
                                         if (firstPart < windowSamples) {
                                             ringFiltered.copyInto(trigWin, firstPart, 0, windowSamples - firstPart)
                                         }
                                         _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, windowSamples, targetPoints)
                                     }
-                                } else {
-                                    triggerRingBase = -1
                                 }
-                            }
-                            // Only fall back to scrolling after 300ms of no locked frame
-                            if (now - lastGoodTriggerMs > 300L) {
-                                _triggeredWindow.value = floatArrayOf()
                             }
                         }
                     }
@@ -1824,7 +1819,7 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                     sampleRateHz = sampleRate.toFloat(),
                                     preTriggerRatio = 0.30f,
                                 )
-                                val trigSrc2 = uiFiltered.copyOfRange(0, windowSamples)
+                                val trigSrc2 = uiFiltered.copyOfRange(0, fetchSamples)
                                 if (triggerRingAnchorBase >= 0 && trigSrc2.isNotEmpty()) {
                                     val localAnchor = ((triggerRingAnchorBase - fetchStart + ring.size) % ring.size)
                                         .coerceAtMost(trigSrc2.lastIndex.coerceAtLeast(0))
@@ -1837,19 +1832,18 @@ class AudioEngineViewModel(application: Application) : AndroidViewModel(applicat
                                     if (res2.locked && res2.periodSamples > 0) {
                                         lastGoodTriggerMs = now2
                                         triggerRingAnchorBase = (fetchStart + res2.anchorIndex) % ring.size
-                                        val preCount = (windowSamples * trigCfg2.preTriggerRatio).toInt().coerceIn(0, windowSamples - 1)
-                                        val ringStart = ((triggerRingAnchorBase - preCount + ring.size) % ring.size)
-                                        val trigWin = FloatArray(windowSamples)
-                                        val firstPart = minOf(windowSamples, ring.size - ringStart)
-                                        ringFiltered.copyInto(trigWin, 0, ringStart, ringStart + firstPart)
-                                        if (firstPart < windowSamples) {
-                                            ringFiltered.copyInto(trigWin, firstPart, 0, windowSamples - firstPart)
+                                        // Extract a fetchSamples-wide window from ring buffer to match
+                                        // the non-triggered display's time span (which also uses fetchSamples).
+                                        val fetchPreCount = (fetchSamples * trigCfg2.preTriggerRatio).toInt().coerceIn(0, fetchSamples - 1)
+                                        val fetchRingStart = ((triggerRingAnchorBase - fetchPreCount + ring.size) % ring.size)
+                                        val trigWin = FloatArray(fetchSamples)
+                                        val firstPart = minOf(fetchSamples, ring.size - fetchRingStart)
+                                        ringFiltered.copyInto(trigWin, 0, fetchRingStart, fetchRingStart + firstPart)
+                                        if (firstPart < fetchSamples) {
+                                            ringFiltered.copyInto(trigWin, firstPart, 0, fetchSamples - firstPart)
                                         }
-                                        _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, windowSamples, targetPoints)
+                                        _triggeredWindow.value = downsamplePeakFloatArray(trigWin, 0, fetchSamples, targetPoints)
                                     }
-                                }
-                                if (now2 - lastGoodTriggerMs > 300L) {
-                                    _triggeredWindow.value = floatArrayOf()
                                 }
                             }
                         }
