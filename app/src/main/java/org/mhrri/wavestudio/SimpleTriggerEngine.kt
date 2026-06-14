@@ -127,20 +127,10 @@ internal class SimpleTriggerEngine(
      * local coordinate space. Call before process() when the input buffer
      * represents a different slice of the ring buffer than the previous call,
      * so that lastAnchor/lastPeriod/lockCounter remain valid.
-     *
-     * When the anchor shifts by more than half a period, the old lastPeriod
-     * is no longer valid, so we reset lock state to force re-acquisition.
      */
     fun seekAnchorTo(localAnchor: Int) {
         if (localAnchor < 0) return
-        val shift = abs(localAnchor - lastAnchor)
         lastAnchor = localAnchor
-        // If the anchor jumped by more than half the expected period,
-        // the old period is unreliable — reset to force re-lock.
-        if (lastPeriod > 0 && shift > lastPeriod / 2) {
-            lastPeriod = 0
-            lockCounter = 0
-        }
     }
 
     /**

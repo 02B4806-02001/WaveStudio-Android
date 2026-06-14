@@ -236,8 +236,8 @@ fun ImmersiveScreen(
                 // Always show trigger status when trigger is on
                 if (triggerMode != SimpleTriggerEngine.Mode.OFF) {
                     val statusText = if (latestTriggerResult != null) {
-                        "${"%.1f".format(latestTriggerResult.freqHz)}Hz c=${"%.2f".format(latestTriggerResult.confidence)} ${if (latestTriggerResult.locked) "LOCK" else "..."}"
-                    } else "WAIT"
+                        "${"%.1f".format(latestTriggerResult.freqHz)}Hz c=${"%.2f".format(latestTriggerResult.confidence)} ${if (latestTriggerResult.locked) "LOCK" else "..."} a=${latestTriggerResult.anchorIndex} p=${latestTriggerResult.periodSamples} m=${latestTriggerResult.mode}"
+                    } else "WAIT (null)"
                     Text(
                         text = "TRG $statusText",
                         color = Color(0xFF4FC3F7),
